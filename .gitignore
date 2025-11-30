@@ -1,0 +1,36 @@
+# --- Build Artifacts (CMake) ---
+# Ignore all build directories (Debug, Release, etc.)
+cmake-build-*/
+build/
+bin/
+lib/
+
+# Ignore C++ Object files and executables
+*.o
+*.obj
+*.dylib
+*.so
+*.dll
+*.exe
+
+# The specific binary name for your project
+Termivue
+
+# CMake generation artifacts (if run in root)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# --- IDE Settings (CLion / JetBrains) ---
+# These contain your personal window layout and local paths
+.idea/
+
+# Visual Studio Code (in case you or a collaborator switch)
+.vscode/
+
+# --- macOS System Files ---
+.DS_Store
+
+# Ignore temporary test PDFs
+/samples
