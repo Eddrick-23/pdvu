@@ -1,13 +1,14 @@
 #include "parser.h"
+#include <vector>
+#include <filesystem>
 #include <iostream>
 
+
 Parser::Parser() {
-    // 1. Initialize the MuPDF Context
     // NULL, NULL = standard memory allocators
     // FZ_STORE_DEFAULT = default resource cache size
     ctx = fz_new_context(NULL, NULL, FZ_STORE_DEFAULT);
     doc = nullptr;
-    current_pixmap = nullptr;
 
     if (!ctx) {
         std::cerr << "CRITICAL: Failed to create MuPDF context." << std::endl;
@@ -16,6 +17,7 @@ Parser::Parser() {
 
     // 2. Register default document handlers (PDF, EPUB, etc.)
     fz_register_document_handlers(ctx);
+
 }
 
 void Parser::clear_doc() {
@@ -25,28 +27,18 @@ void Parser::clear_doc() {
     }
 }
 
-void Parser::clear_pixmap() {
-    if (current_pixmap) {
-        fz_drop_pixmap(ctx, current_pixmap);
-        current_pixmap = nullptr;
-    }
-}
 
 Parser::~Parser() {
     // Cleanup
     clear_doc();
-    clear_pixmap();
     if (ctx) {
         fz_drop_context(ctx);
         ctx = nullptr;
     }
 }
 
-void Parser::init_test() {
-    std::cout << "[System] MuPDF Context initialized successfully." << std::endl;
-    std::cout << "[System] Linker verification passed." << std::endl;
-}
 bool Parser::load_document(const std::string& filepath) {
+    clear_doc();
     fz_try(ctx) {
         doc = fz_open_document(ctx, filepath.c_str());
     }
@@ -54,8 +46,13 @@ bool Parser::load_document(const std::string& filepath) {
         std::cerr <<"ERROR: Could not open file: " << filepath << std::endl;
         return false;
     }
-    std::cout << "[System] Document loaded: " << filepath << std::endl;
+    std::filesystem::path p(filepath);
+    doc_name = p.filename().string();
     return true;
+}
+
+const std::string& Parser::get_document_name() const{
+    return doc_name;
 }
 
 int Parser::num_pages() const {
@@ -83,6 +80,7 @@ PageBounds Parser::get_page_dimensions(const int page_num) const{
         return {0,0,0,0};
     }
     fz_rect bounds = fz_bound_page(ctx, page);
+    fz_drop_page(ctx, page);
     return PageBounds(bounds.x0, bounds.y0, bounds.x1, bounds.y1);
 }
 
@@ -98,23 +96,65 @@ RawImage Parser::get_page(const int page_num, const float zoom, const float rota
     /* Compute a transformation matrix for the zoom and rotation desired. */
     /* default zoom is 100 -> 100% */
     /* The default resolution without scaling is 72 dpi. */
-
     fz_matrix ctm = fz_scale(zoom / 100, zoom / 100);
     ctm = fz_pre_rotate(ctm, rotate);
-    // Render page to an RGB pixmap
-    clear_pixmap(); // clear
+    fz_pixmap* raw_pix = nullptr;
+
     fz_try(ctx) {
-        current_pixmap = fz_new_pixmap_from_page(ctx, page, ctm, fz_device_rgb(ctx), 0);
+        raw_pix = fz_new_pixmap_from_page(ctx, page, ctm, fz_device_rgb(ctx), 0);
     }
     fz_catch(ctx) {
         std::cerr <<"ERROR: Failed to create pixmap." << std::endl;
         fz_drop_page(ctx, page);
         return RawImage{};
     }
-    unsigned char* raw_buffer = fz_pixmap_samples(ctx, current_pixmap);
-    const int width = fz_pixmap_width(ctx, current_pixmap);
-    const int height = fz_pixmap_height(ctx, current_pixmap);
-    const int stride = fz_pixmap_stride(ctx, current_pixmap);
-    return RawImage{raw_buffer, width, height, stride, stride * height};
+    fz_drop_page(ctx, page);
+    // creation of custom smart pointer
+    fz_context* captured_context = ctx;
+    auto deleter = [captured_context](fz_pixmap* p) {
+        if (p) {
+            fz_drop_pixmap(captured_context, p);
+        }
+    };
+    PixMapPtr smart_pixmap(raw_pix, deleter);
+
+    // make sure the struct owns the pixmap
+    return RawImage{
+        std::move(smart_pixmap),
+        fz_pixmap_samples(ctx, raw_pix),
+        fz_pixmap_width(ctx, raw_pix),
+        fz_pixmap_height(ctx, raw_pix),
+        fz_pixmap_stride(ctx, raw_pix),
+        static_cast<size_t>(fz_pixmap_stride(ctx, raw_pix)) * fz_pixmap_height(ctx, raw_pix),
+    };
+}
+
+Parser::Parser(Parser&& other) noexcept {
+    ctx = other.ctx;
+    doc = other.doc;
+    doc_name = other.doc_name;
+
+    other.ctx = nullptr;
+    other.doc = nullptr;
+    other.doc_name.clear();
+}
+
+Parser& Parser::operator=(Parser&& other) noexcept {
+    if (this != &other) {
+        // clear current processes
+        clear_doc();
+        if (ctx) {
+            fz_drop_context(ctx);
+        }
+
+        ctx = other.ctx;
+        doc = other.doc;
+        doc_name = other.doc_name;
+
+        other.ctx = nullptr;
+        other.doc = nullptr;
+        other.doc_name.clear();
+    }
+    return *this;
 }
 
