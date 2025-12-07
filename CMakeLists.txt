@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.31)
-project(Termivue)
+project(pdvu)
 
 set(CMAKE_CXX_STANDARD 23)
 
@@ -14,6 +14,8 @@ set(SOURCES
 )
 
 add_executable(pdvu ${SOURCES})
+
+target_include_directories(pdvu PRIVATE external) #CLI11
 
 set(MUPDF_ROOT "${CMAKE_SOURCE_DIR}/external/mupdf")
 
