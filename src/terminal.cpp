@@ -124,7 +124,7 @@ std::string Terminal::top_bar_string(const std::string& left, const std::string&
 
 std::string Terminal::bottom_bar_string() {
     TermSize ts = get_terminal_size();
-    const std::string text = " Search: ctrl/cmd + f | Page: <- -> | Help: ?";
+    const std::string text = " SEARCH: ctrl/cmd + f | NAVIGATE: <- -> | QUIT : q | Help: ?";
     int padding = ts.width - text.length();
     if (padding < 0) padding = 0;
 

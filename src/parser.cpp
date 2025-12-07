@@ -7,12 +7,20 @@
 Parser::Parser() {
     // NULL, NULL = standard memory allocators
     // FZ_STORE_DEFAULT = default resource cache size
-    ctx = fz_new_context(NULL, NULL, FZ_STORE_DEFAULT);
+    ctx = fz_new_context(NULL, NULL, FZ_STORE_DEFAULT/2);
     doc = nullptr;
 
     if (!ctx) {
         std::cerr << "CRITICAL: Failed to create MuPDF context." << std::endl;
         exit(EXIT_FAILURE);
+    }
+
+    // Disable ICC colour management for more speed
+    fz_try(ctx) {
+        fz_disable_icc(ctx);
+    }
+    fz_catch(ctx) {
+        std::cerr << "WARNING: Failed to configure ICC." << std::endl;
     }
 
     // 2. Register default document handlers (PDF, EPUB, etc.)
@@ -70,7 +78,7 @@ int Parser::num_pages() const {
     return count;
 }
 
-PageBounds Parser::get_page_dimensions(const int page_num) const{
+PageSpecs Parser::page_specs(const int page_num, const float zoom) const{
     fz_page* page = nullptr;
     fz_try(ctx) {
         page = fz_load_page(ctx, doc, page_num);
@@ -79,55 +87,106 @@ PageBounds Parser::get_page_dimensions(const int page_num) const{
         std::cerr <<"ERROR: Failed to load page." << std::endl;
         return {0,0,0,0};
     }
+    const fz_matrix ctm = fz_scale(zoom, zoom);
     fz_rect bounds = fz_bound_page(ctx, page);
+    bounds =  fz_transform_rect(bounds, ctm);
+    const fz_irect bbox = fz_round_rect(bounds);
     fz_drop_page(ctx, page);
-    return PageBounds(bounds.x0, bounds.y0, bounds.x1, bounds.y1);
+
+    const int w = bbox.x1 - bbox.x0;
+    const int h = bbox.y1 - bbox.y0;
+    const size_t size = w * 3 * h;
+    return PageSpecs(bbox.x0, bbox.y0, bbox.x1, bbox.y1, w, h, size);
 }
 
-RawImage Parser::get_page(const int page_num, const float zoom, const float rotate) {
+void Parser::write_page(const int page_num, const int w, const int h,
+                        const float zoom, const float rotate,
+                        unsigned char* buffer, size_t buffer_len) {
+    // write page to a custom buffer directly
     fz_page* page = nullptr;
     fz_try(ctx) {
         page = fz_load_page(ctx, doc, page_num);
     }
     fz_catch(ctx) {
         std::cerr <<"ERROR: Failed to load page." << std::endl;
-        return RawImage{};
     }
-    /* Compute a transformation matrix for the zoom and rotation desired. */
-    /* default zoom is 100 -> 100% */
-    /* The default resolution without scaling is 72 dpi. */
-    fz_matrix ctm = fz_scale(zoom / 100, zoom / 100);
-    ctm = fz_pre_rotate(ctm, rotate);
-    fz_pixmap* raw_pix = nullptr;
 
+    // check if buffer_len matches how much mupdf needs to write
+    size_t required_len = static_cast<size_t>(w) * 3 * h; // stride * height
+    if (required_len > buffer_len) {
+        std::cerr <<"ERROR: Buffer too small. Given: " << buffer_len << " Required: " << required_len << std::endl;
+        fz_drop_page(ctx, page);
+        return; // abort the write
+    }
+
+    fz_pixmap* pix = nullptr;
     fz_try(ctx) {
-        raw_pix = fz_new_pixmap_from_page(ctx, page, ctm, fz_device_rgb(ctx), 0);
+        fz_matrix ctm = fz_scale(zoom, zoom);
+        ctm = fz_pre_rotate(ctm, rotate);
+        pix = fz_new_pixmap_with_data(ctx, fz_device_rgb(ctx), w, h,
+                                                 NULL, 0, w * 3, buffer);
+        fz_clear_pixmap_with_value(ctx, pix, 255); // set white background
+        fz_device* dev = fz_new_draw_device(ctx, fz_identity, pix);
+        fz_run_page(ctx, page, dev, ctm, nullptr);
+
+        // free memory
+        fz_close_device(ctx, dev);
+        fz_drop_device(ctx, dev);
+        fz_drop_page(ctx, page);
+        fz_drop_pixmap(ctx, pix);
     }
     fz_catch(ctx) {
-        std::cerr <<"ERROR: Failed to create pixmap." << std::endl;
-        fz_drop_page(ctx, page);
-        return RawImage{};
-    }
-    fz_drop_page(ctx, page);
-    // creation of custom smart pointer
-    fz_context* captured_context = ctx;
-    auto deleter = [captured_context](fz_pixmap* p) {
-        if (p) {
-            fz_drop_pixmap(captured_context, p);
+        if (pix) {
+            fz_drop_pixmap(ctx, pix);
         }
-    };
-    PixMapPtr smart_pixmap(raw_pix, deleter);
-
-    // make sure the struct owns the pixmap
-    return RawImage{
-        std::move(smart_pixmap),
-        fz_pixmap_samples(ctx, raw_pix),
-        fz_pixmap_width(ctx, raw_pix),
-        fz_pixmap_height(ctx, raw_pix),
-        fz_pixmap_stride(ctx, raw_pix),
-        static_cast<size_t>(fz_pixmap_stride(ctx, raw_pix)) * fz_pixmap_height(ctx, raw_pix),
-    };
+        fz_drop_page(ctx, page);
+        std::cerr <<"ERROR: Failed to draw page." << std::endl;
+    }
 }
+// RawImage Parser::get_page(const int page_num, const float zoom, const float rotate) {
+//     fz_page* page = nullptr;
+//     fz_try(ctx) {
+//         page = fz_load_page(ctx, doc, page_num);
+//     }
+//     fz_catch(ctx) {
+//         std::cerr <<"ERROR: Failed to load page." << std::endl;
+//         return RawImage{};
+//     }
+//     /* Compute a transformation matrix for the zoom and rotation desired. */
+//     /* default zoom is 100 -> 100% */
+//     /* The default resolution without scaling is 72 dpi. */
+//     fz_matrix ctm = fz_scale(zoom, zoom);
+//     ctm = fz_pre_rotate(ctm, rotate);
+//     fz_pixmap* raw_pix = nullptr;
+//
+//     fz_try(ctx) {
+//         raw_pix = fz_new_pixmap_from_page(ctx, page, ctm, fz_device_rgb(ctx), 0);
+//     }
+//     fz_catch(ctx) {
+//         std::cerr <<"ERROR: Failed to create pixmap." << std::endl;
+//         fz_drop_page(ctx, page);
+//         return RawImage{};
+//     }
+//     fz_drop_page(ctx, page);
+//     // creation of custom smart pointer
+//     fz_context* captured_context = ctx;
+//     auto deleter = [captured_context](fz_pixmap* p) {
+//         if (p) {
+//             fz_drop_pixmap(captured_context, p);
+//         }
+//     };
+//     PixMapPtr smart_pixmap(raw_pix, deleter);
+//
+//     // make sure the struct owns the pixmap
+//     return RawImage{
+//         std::move(smart_pixmap),
+//         fz_pixmap_samples(ctx, raw_pix),
+//         fz_pixmap_width(ctx, raw_pix),
+//         fz_pixmap_height(ctx, raw_pix),
+//         fz_pixmap_stride(ctx, raw_pix),
+//         static_cast<size_t>(fz_pixmap_stride(ctx, raw_pix)) * fz_pixmap_height(ctx, raw_pix),
+//     };
+// }
 
 Parser::Parser(Parser&& other) noexcept {
     ctx = other.ctx;

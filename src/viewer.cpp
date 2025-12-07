@@ -36,21 +36,21 @@ float Viewer::calculate_zoom_factor(const TermSize& ts, int page_num, int ppr, i
    int max_h_pixels = available_rows * ppr;
    int max_w_pixels = available_cols * ppc;
 
-   PageBounds pb = parser.get_page_dimensions(page_num);
+   PageSpecs ps = parser.page_specs(page_num, 1.0); // default zoom
 
-   const float h_scale = max_w_pixels / pb.x1;
-   const float v_scale = max_h_pixels / pb.y1;
+   const float h_scale = static_cast<float>(max_w_pixels) / ps.width;
+   const float v_scale = static_cast<float>(max_h_pixels) / ps.height;
 
-   return std::min(h_scale, v_scale) * 100;
+   return std::min(h_scale, v_scale);
 }
 
-std::string Viewer::center_cursor(const RawImage& image, int ppr, int ppc, int rows, int cols,
+std::string Viewer::center_cursor(int w, int h, int ppr, int ppc, int rows, int cols,
                            int start_row, int start_col) {
    /* move cursor to appropriate position before rendering image
    so that final image is centered */
 
-   const int cols_used = static_cast<int>(std::ceil(static_cast<float>(image.width) / ppc));
-   const int rows_used = static_cast<int>(std::ceil(static_cast<float>(image.height) / ppr));
+   const int cols_used = static_cast<int>(std::ceil(static_cast<float>(w) / ppc));
+   const int rows_used = static_cast<int>(std::ceil(static_cast<float>(h) / ppr));
 
    int top_margin = (rows - rows_used) / 2;
    int left_margin = (cols - cols_used) / 2;
@@ -65,29 +65,34 @@ void Viewer::render_page(int page_num) {
    std::string frame_buffer = term.reset_screen_and_cursor_string(); // store sequence flush once at the end
    const TermSize ts = term.get_terminal_size();
 
-   if (ts.height < MIN_ROWS || ts.width < MIN_COLS) {
+   if (ts.height < MIN_ROWS || ts.width < MIN_COLS) { // guard for window size
       frame_buffer += guard_message(ts);
       std::cout << frame_buffer << std::flush;
       return;
    }
+
    const float zoom_factor = calculate_zoom_factor(ts, page_num, ts.pixels_per_row, ts.pixels_per_col);
-   const RawImage image = parser.get_page(page_num, zoom_factor, 0);
+   PageSpecs ps = parser.page_specs(page_num, zoom_factor);
    std::string image_sequence;
    if (shm_supported) {
-      auto new_shm = std::make_unique<SharedMemory>(image.len);
-      new_shm->write_data(image.pixels, image.len);
-      new_shm->close_mem();
+      auto new_shm = std::make_unique<SharedMemory>(ps.size);
       current_shared_mem = std::move(new_shm);
-      image_sequence = get_image_sequence(current_shared_mem->name(), image.width, image.height, "shm");
+
+      // write directly to shared memory buffer
+      parser.write_page(page_num, ps.width, ps.height, zoom_factor, 0,
+                        static_cast<unsigned char* >(current_shared_mem->data()), ps.size);
+      image_sequence = get_image_sequence(current_shared_mem->name(), ps.width, ps.height, "shm");
    } else {
-      auto new_temp = std::make_unique<Tempfile>();
-      new_temp->write_data(image.pixels, image.len);
+      auto new_temp = std::make_unique<Tempfile>(ps.size);
+      // write directly to tempfile buffer
+      parser.write_page(page_num, ps.width, ps.height, zoom_factor, 0,
+                        static_cast<unsigned char* >(new_temp->data()), ps.size);
       current_temp_file = std::move(new_temp);
-      image_sequence = get_image_sequence(current_temp_file->path(), image.width, image.height, "tempfile");
+      image_sequence = get_image_sequence(current_temp_file->path(), ps.width, ps.height, "tempfile");
    }
 
    // centralise cursor and print image
-   frame_buffer += center_cursor(image, ts.pixels_per_row, ts.pixels_per_col, ts.height - 2, ts.width, 2, 1);
+   frame_buffer += center_cursor(ps.width, ps.height, ts.pixels_per_row, ts.pixels_per_col, ts.height - 2, ts.width, 2, 1);
    frame_buffer += image_sequence;
 
    // Add bottom bar
@@ -116,33 +121,46 @@ std::string Viewer::guard_message(const TermSize& ts) {
    std::string result;
    const std::string red ="\033[1;31m";
    const std::string green ="\033[1;32m";
-   std::string title = "Terminal size too small: ";
-   std::string current_dimensions = "Width = " +  std::to_string(ts.width) + " Height = " +  std::to_string(ts.height);
+   std::string title = "Terminal size too small";
+   std::string current_dimensions = (ts.width >= MIN_COLS ? green : red) + "Width = " +  std::to_string(ts.width)
+                                    + (ts.height >= MIN_ROWS ? green : red) + " Height = " +  std::to_string(ts.height);
    std::string required_dimensions = "Needed: " + std::to_string(MIN_COLS) + " x " + std::to_string(MIN_ROWS);
 
    // centre the text
-   auto add_centered = [&](int r, const std::string& text) {
-      int c = (ts.width - text.length()) / 2;
+   auto add_centered = [&](int r, const std::string& text, const int text_len) {
+      int c = (ts.width - text_len) / 2;
       if (c < 1) c = 1;
       result += "\033[" + std::to_string(r) + ";" + std::to_string(c) + "H" + text;
    };
 
-   // D. Draw the Warning Box (centered vertically)
    int center_row = ts.height / 2;
 
-   // Use ANSI colors to mimic btop (Gray bg for title, etc)
-   // result += "\033[1;47;30m"; // White BG, Black Text (Bold)
-   result += "\033[1;31m";      // Bold, red foreground
-   result += "\033[1;32m";      // Bold, green foreground
-   add_centered(center_row - 2, " " + title + " ");
-   // result += "\033[0m";       // Reset
+   add_centered(center_row - 2, title, title.length());
+   add_centered(center_row, current_dimensions, visible_length(current_dimensions));
 
-   add_centered(center_row, current_dimensions);
-
-   result += "\033[1;31m";      // Bold, red foreground
-   add_centered(center_row + 2, required_dimensions);
+   result += green;
+   add_centered(center_row + 2, required_dimensions, required_dimensions.length());
    result += "\033[0m";       // Reset
    return result;
+}
+
+int Viewer::visible_length(const std::string &s) {
+   int count = 0;
+   bool in_escape = false;
+   for (size_t i = 0; i < s.length(); ++i) {
+      if (!in_escape) {
+         if (s[i] == '\033') {
+            in_escape = true;
+         } else {
+            count++;
+         }
+      } else {
+         if (s[i] == 'm') {
+            in_escape = false;
+         }
+      }
+   }
+   return count;
 }
 
 int Viewer::read_key() {

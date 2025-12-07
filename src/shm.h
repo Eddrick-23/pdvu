@@ -4,7 +4,7 @@
 
 class SharedMemory {
 public:
-    SharedMemory(const int& image_size);
+    explicit SharedMemory(size_t image_size);
     ~SharedMemory();
 
     // delete copy constructors, ownership must be unique
@@ -19,7 +19,6 @@ public:
     const size_t& size() const;
     void* data() const;
     void close_mem();
-    void write_data(const unsigned char* data, const size_t& len);
 
 private:
     int shm_fd = -1; // shared memory file descriptor

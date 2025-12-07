@@ -30,7 +30,7 @@ int is_shm_supported() {
 // shm_unlink() - Remove the object (when last process is done)
 
 //constructor
-SharedMemory::SharedMemory(const int& image_size) {
+SharedMemory::SharedMemory(size_t image_size) {
     shm_size = image_size;
     // generate unique name using PID and timestamp
     const auto time_now = std::chrono::high_resolution_clock::now();
@@ -80,10 +80,6 @@ void* SharedMemory::data() const {
     return mapped_ptr;
 }
 
-void SharedMemory::write_data(const unsigned char* data, const size_t& len) {
-    memcpy(mapped_ptr, data, len);
-}
-
 void SharedMemory::close_mem() {
     if (shm_fd != -1) {
         close(shm_fd);
@@ -126,6 +122,3 @@ SharedMemory& SharedMemory::operator=(SharedMemory &&other) noexcept {
     }
     return *this;
 }
-
-// TO DO
-// logic for rewriting to existing shm instead of allocating a new one

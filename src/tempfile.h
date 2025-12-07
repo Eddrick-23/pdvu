@@ -1,9 +1,9 @@
 #pragma once
 #include <string>
-
+#include <sys/mman.h>
 class Tempfile {
 public:
-    Tempfile();
+    explicit Tempfile(size_t size);
     ~Tempfile();
 
     //delete copy constructors, ownership must be unique
@@ -16,8 +16,10 @@ public:
 
     void close_file();
     const std::string& path() const;
-    bool write_data(const unsigned char* data, size_t len);
+    void* data() const;
 private:
     std::string fp;
     int fd;
+    void* mapped_ptr = MAP_FAILED;
+    size_t file_size;
 };
