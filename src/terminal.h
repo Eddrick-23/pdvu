@@ -33,7 +33,7 @@ public:
     std::string move_cursor(int row, int col) const;
     std::string reset_screen_and_cursor_string();
     std::string get_input(const std::string& prompt);
-    InputEvent read_input();
+    InputEvent read_input(int timeout_ms);
 private:
     termios orig_termios;
     bool raw_mode = false;

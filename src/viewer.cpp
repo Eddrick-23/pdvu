@@ -3,18 +3,14 @@
 #include <chrono>
 #include <unistd.h>
 #include <sys/poll.h>
+#include <cctype>
+#include <charconv>
 
 #include "terminal.h"
 #include "parser.h"
 #include "renderer.h"
 #include "shm.h"
 #include "ram_usage.h"
-// enum Key {
-//    ARROW_LEFT = 1000,
-//    ARROW_RIGHT,
-//    ARROW_UP,
-//    ARROW_DOWN
-// };
 
 Viewer::Viewer(const std::string& file_path, const bool use_ICC) : term{}, parser {use_ICC}{
    setup(file_path, use_ICC);
@@ -116,10 +112,6 @@ void Viewer::render_page(int page_num) {
 
 std::string Viewer::guard_message(const TermSize& ts) {
 
-   // TO DO
-   // modify text colouring. If width is too small colour red, else green
-   // same for height
-
    std::string result;
    const std::string red ="\033[1;31m";
    const std::string green ="\033[1;32m";
@@ -166,7 +158,7 @@ int Viewer::visible_length(const std::string &s) {
 }
 
 void Viewer::process_keypress() {
-   InputEvent input = term.read_input();
+   InputEvent input = term.read_input(100);
 
    if (input.key == key_none ) return; // handle interrupt, do nothing
    switch (input.key) {
@@ -191,11 +183,42 @@ void Viewer::process_keypress() {
             break;
          }
          if (input.char_value == 'g') { // go to page
-            term.get_input("Go to page: ");
-            render_page(current_page);
+            handle_go_to_page();
             break;
          }
       default: // do nothing for the rest
+   }
+}
+
+void Viewer::handle_go_to_page() {
+   bool running = true;
+   bool page_change = false;
+   auto is_whole_number = [](const std::string& s) {
+      unsigned long value;
+      auto result = std::from_chars(s.data(), s.data() + s.size(), value);
+      // no error code + ptr reach end of string
+      return result.ec == std::errc() && result.ptr == s.data() + s.size();
+   };
+
+   while (running) {
+      std::string input = term.get_input("Go to page: ");
+      if (input.empty()) {
+         running = false;
+      } else if (is_whole_number(input)) {
+         running = false;
+         int new_page = std::stoi(input) - 1; // we start counting from 1
+         new_page = new_page < 0 ? 0 : new_page;
+         new_page = new_page >= total_pages ? total_pages - 1 : new_page;
+         page_change = new_page != current_page;
+         current_page = new_page;
+      }
+      // else keep prompting until user presses esc
+      // TO DO maybe add a text to notify non string inputs?
+   }
+   if (page_change) {
+      render_page(current_page);
+   } else {
+      std::cout << term.bottom_bar_string() << std::flush;
    }
 }
 

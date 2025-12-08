@@ -211,8 +211,9 @@ std::string Terminal::get_input(const std::string& prompt) {
         std::cout << move_cursor(ts.height, screen_col) << std::flush;
     };
     InputEvent c;
+    redraw();
     while (true) {
-        c = read_input();
+        c = read_input(100);
         // break when we get esc and clear buffer
         if (c.key == key_escape) {
             buffer.clear();
@@ -258,7 +259,16 @@ std::string Terminal::get_input(const std::string& prompt) {
     return buffer;
 }
 
-InputEvent Terminal::read_input() {
+InputEvent Terminal::read_input(int timeout_ms) {
+    pollfd pfd;
+    pfd.fd = STDIN_FILENO;
+    pfd.events = POLLIN;
+
+    int ret = poll(&pfd, 1, timeout_ms);
+    if (ret <= 0) {
+        return InputEvent{key_none};
+    }
+
     char c;
     int nread = read(STDIN_FILENO, &c, 1);
     if (nread == -1) {
