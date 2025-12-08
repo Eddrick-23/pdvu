@@ -20,15 +20,6 @@ int is_shm_supported() {
     return 1;
 }
 
-// The typical workflow is:
-// shm_open() - Create/open shared memory object
-// ftruncate() - Set its size
-// mmap() - Map it into your address space
-// Use the memory
-// munmap() - Unmap when done
-// close() - Close the file descriptor
-// shm_unlink() - Remove the object (when last process is done)
-
 //constructor
 SharedMemory::SharedMemory(size_t image_size) {
     shm_size = image_size;

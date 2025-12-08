@@ -31,7 +31,7 @@ struct PageSpecs {
 
 class Parser {
 public:
-    Parser();
+    explicit Parser(bool use_ICC);
     ~Parser();
 
     // delete copy constructors

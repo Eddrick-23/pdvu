@@ -4,7 +4,7 @@
 #include <iostream>
 
 
-Parser::Parser() {
+Parser::Parser(const bool use_ICC) {
     // NULL, NULL = standard memory allocators
     // FZ_STORE_DEFAULT = default resource cache size
     ctx = fz_new_context(NULL, NULL, FZ_STORE_DEFAULT/2);
@@ -15,15 +15,25 @@ Parser::Parser() {
         exit(EXIT_FAILURE);
     }
 
-    // Disable ICC colour management for more speed
-    fz_try(ctx) {
-        fz_disable_icc(ctx);
-    }
-    fz_catch(ctx) {
-        std::cerr << "WARNING: Failed to configure ICC." << std::endl;
+    // Disable ICC colour management for performance
+    if (!use_ICC) {
+        fz_try(ctx) {
+            fz_disable_icc(ctx);
+        }
+        fz_catch(ctx) {
+            std::cerr << "WARNING: Failed to configure ICC." << std::endl;
+        }
     }
 
-    // 2. Register default document handlers (PDF, EPUB, etc.)
+    // fz_try(ctx) { // configuring anti-aliasing level
+    //     // fz_set_aa_level(ctx, 0);
+    //     fz_set_text_aa_level(ctx, 0);
+    //     fz_set_graphics_aa_level(ctx, 0);
+    // }
+    // fz_catch(ctx) {
+    //     std::cerr << "WARNING: Failed to configure AAC." << std::endl;
+    // }
+
     fz_register_document_handlers(ctx);
 
 }
@@ -216,4 +226,3 @@ Parser& Parser::operator=(Parser&& other) noexcept {
     }
     return *this;
 }
-

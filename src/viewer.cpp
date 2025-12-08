@@ -2,23 +2,25 @@
 #include <iostream>
 #include <chrono>
 #include <unistd.h>
+#include <sys/poll.h>
+
 #include "terminal.h"
 #include "parser.h"
 #include "renderer.h"
 #include "shm.h"
 #include "ram_usage.h"
-enum Key {
-   ARROW_LEFT = 1000,
-   ARROW_RIGHT,
-   ARROW_UP,
-   ARROW_DOWN
-};
+// enum Key {
+//    ARROW_LEFT = 1000,
+//    ARROW_RIGHT,
+//    ARROW_UP,
+//    ARROW_DOWN
+// };
 
-Viewer::Viewer(const std::string& file_path) {
-   setup(file_path);
+Viewer::Viewer(const std::string& file_path, const bool use_ICC) : term{}, parser {use_ICC}{
+   setup(file_path, use_ICC);
 }
 
-void Viewer::setup(const std::string& file_path) {
+void Viewer::setup(const std::string& file_path, bool use_ICC) {
    // setup terminal and parser engines
    if (!parser.load_document(file_path)) {
       throw std::runtime_error("failed to load document");
@@ -73,6 +75,7 @@ void Viewer::render_page(int page_num) {
 
    const float zoom_factor = calculate_zoom_factor(ts, page_num, ts.pixels_per_row, ts.pixels_per_col);
    PageSpecs ps = parser.page_specs(page_num, zoom_factor);
+
    std::string image_sequence;
    if (shm_supported) {
       auto new_shm = std::make_unique<SharedMemory>(ps.size);
@@ -109,7 +112,6 @@ void Viewer::render_page(int page_num) {
                               stats);
 
    std::cout << frame_buffer << std::flush; // one flush at the end
-
 }
 
 std::string Viewer::guard_message(const TermSize& ts) {
@@ -163,65 +165,73 @@ int Viewer::visible_length(const std::string &s) {
    return count;
 }
 
-int Viewer::read_key() {
-   int nread;
-   char c;
-   while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
-      if (nread == -1 && errno != EAGAIN) {
-         term.die("read");
-      }
-   }
-   if (c == '\x1b') { // check for arrow key press
-      char seq[3];
-      if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
-      if (read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';
-
-      if (seq[0] == '[') {
-         switch (seq[1]) {
-            case 'A' : return ARROW_UP;
-            case 'B' : return ARROW_DOWN;
-            case 'C' : return ARROW_RIGHT;
-            case 'D' : return ARROW_LEFT;
-         }
-      }
-      return '\x1b';
-   }
-   return c;
-}
-
 void Viewer::process_keypress() {
-   int c = read_key();
-   switch (c) {
-      case static_cast<int>('q'):
-         running = false;
-         break;
-      case ARROW_RIGHT:
-         if (current_page >= total_pages -1) {
-            current_page = total_pages - 1; // don't rerender
+   InputEvent input = term.read_input();
+
+   if (input.key == key_none ) return; // handle interrupt, do nothing
+   switch (input.key) {
+      case key_right_arrow:
+         if (current_page >= total_pages - 1) {
+            current_page = total_pages - 1;
          } else {
             current_page++;
             render_page(current_page);
          }
          break;
-      case ARROW_LEFT:
-         if (current_page <= 0) {
-            current_page = 0; // don't rerender
-         } else {
+      case key_left_arrow:
+         if (current_page <= 0) current_page = 0;
+         else {
             current_page--;
             render_page(current_page);
          }
          break;
+      case key_char:
+         if (input.char_value == 'q') { // quit
+            running = false;
+            break;
+         }
+         if (input.char_value == 'g') { // go to page
+            term.get_input("Go to page: ");
+            render_page(current_page);
+            break;
+         }
+      default: // do nothing for the rest
    }
-
 }
+
+// void Viewer::print_terminal_details() { // keep for debugging zoom scaling in the future
+//    TermSize ts = term.get_terminal_size();
+//    std::cout << ts.width << "x" << ts.height << std::endl;
+//    std::cout << ts.x << " " << ts.y << std::endl;
+// }
 
 void Viewer::run() {
    running = true;
    term.enter_raw_mode();
    term.enter_alt_screen();
+   term.setup_resize_handler();
    term.hide_cursor();
    render_page(current_page);
+
+
+   using Clock = std::chrono::steady_clock;
+   auto start = Clock::now();
+   bool resizing = false;
    while (running) {
       process_keypress();
+
+      if (term.was_resized()) {
+         start = Clock::now();
+         resizing = true;
+      }
+
+      if (resizing) {
+         auto now = Clock::now();
+         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
+         if (duration.count() > 75) { // wait 75ms from last signal
+            render_page(current_page);
+            resizing = false;
+         }
+      }
    }
 }

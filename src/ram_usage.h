@@ -18,7 +18,7 @@ inline std::size_t getCurrentRSS() {
                   }
     return info.resident_size;
 }
-
+/* only tested on mac so far */
 #elif defined(__linux__)
 
 #include <unistd.h>

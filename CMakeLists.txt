@@ -16,6 +16,7 @@ set(SOURCES
 add_executable(pdvu ${SOURCES})
 
 target_include_directories(pdvu PRIVATE external) #CLI11
+target_precompile_headers(pdvu PRIVATE <CLI11.hpp>)
 
 set(MUPDF_ROOT "${CMAKE_SOURCE_DIR}/external/mupdf")
 
