@@ -30,6 +30,7 @@ public:
                                const std::string& mid,
                                const std::string& right);
     std::string bottom_bar_string();
+    std::string help_ui_string();
     std::string move_cursor(int row, int col) const;
     std::string reset_screen_and_cursor_string();
     std::string get_input(const std::string& prompt);
@@ -39,5 +40,7 @@ private:
     bool raw_mode = false;
     int width, height;
     int x_pixels, y_pixels;
+    int drawable_x_pixels, drawable_y_pixels;
     int pixels_per_row, pixels_per_col;
+
 };

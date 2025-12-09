@@ -100,13 +100,15 @@ PageSpecs Parser::page_specs(const int page_num, const float zoom) const{
     const fz_matrix ctm = fz_scale(zoom, zoom);
     fz_rect bounds = fz_bound_page(ctx, page);
     bounds =  fz_transform_rect(bounds, ctm);
+    float acc_height = bounds.y1 - bounds.y0;
+    float acc_width = bounds.x1 - bounds.x0;
     const fz_irect bbox = fz_round_rect(bounds);
     fz_drop_page(ctx, page);
 
     const int w = bbox.x1 - bbox.x0;
     const int h = bbox.y1 - bbox.y0;
     const size_t size = w * 3 * h;
-    return PageSpecs(bbox.x0, bbox.y0, bbox.x1, bbox.y1, w, h, size);
+    return PageSpecs(bbox.x0, bbox.y0, bbox.x1, bbox.y1, w, h, size, acc_width, acc_height);
 }
 
 void Parser::write_page(const int page_num, const int w, const int h,

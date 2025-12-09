@@ -48,7 +48,7 @@ bool Terminal::was_resized() {
 
 TermSize Terminal::get_terminal_size() {
     winsize ws{};
-    if (window_resized == 0) { // not resized, used cached
+    if (window_resized == 0) { // not resized, use cached
         return TermSize(width, height, x_pixels, y_pixels, pixels_per_row, pixels_per_col);
     }
     if (ioctl(STDIN_FILENO, TIOCGWINSZ, &ws) == 0) {
@@ -56,17 +56,16 @@ TermSize Terminal::get_terminal_size() {
         height = ws.ws_row;
         x_pixels = ws.ws_xpixel;
         y_pixels = ws.ws_ypixel;
-        pixels_per_row = ws.ws_ypixel / ws.ws_row;
-        pixels_per_col = ws.ws_xpixel / ws.ws_col;
-        const int rem_y = ws.ws_ypixel % ws.ws_row;
-        if (rem_y + ws.ws_row < pixels_per_row - 1) { // prevent bottom row cutting
-            pixels_per_row--;
-        }
+        // account dead spacing
+        drawable_x_pixels = ws.ws_xpixel - (ws.ws_xpixel % ws.ws_col);
+        drawable_y_pixels = ws.ws_ypixel - (ws.ws_ypixel % ws.ws_row);
+        pixels_per_row = drawable_y_pixels / ws.ws_row;
+        pixels_per_col = drawable_x_pixels / ws.ws_col;
+
         return TermSize(ws.ws_col, ws.ws_row, ws.ws_xpixel, ws.ws_ypixel, pixels_per_row, pixels_per_col);
-    } else {
-        std::cerr << "Failed to get terminal size" << std::endl;
-        return TermSize(24, 80, 0, 0, 0, 0);
     }
+    std::cerr << "Failed to get terminal size" << std::endl;
+    return TermSize(24, 80, 0, 0, 0, 0);
 }
 
 void Terminal::enter_raw_mode() {
@@ -175,6 +174,18 @@ std::string Terminal::bottom_bar_string() {
     result += text; // text for bottom bar
     result += std::string(padding, ' ');
     result += "\033[0m"; // Reset colors
+    return result;
+}
+
+std::string Terminal::help_ui_string() {
+    TermSize ts = get_terminal_size();
+    std::string result;
+    // set to black background green foreground
+    result += std::format("\x1b[38;5;{}m", 15);
+    result += std::format("\x1b[48;5;{}m", 16);
+    result += move_cursor(2, 10);
+    result += "testing";
+    result += "\033[0m"; // reset colors
     return result;
 }
 

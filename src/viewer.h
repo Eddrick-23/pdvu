@@ -18,7 +18,7 @@ void render_page(int page_num);
 void handle_go_to_page();
 void run(); // main loop
 
-void print_terminal_details();
+void print_terminal_details(PageSpecs ps, float zoom_factor);
 private:
     // sub systems
     Terminal term; // terminal data and raw mode

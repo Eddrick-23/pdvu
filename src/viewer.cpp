@@ -1,11 +1,7 @@
 #include "viewer.h"
 #include <iostream>
 #include <chrono>
-#include <unistd.h>
-#include <sys/poll.h>
-#include <cctype>
 #include <charconv>
-
 #include "terminal.h"
 #include "parser.h"
 #include "renderer.h"
@@ -27,17 +23,16 @@ void Viewer::setup(const std::string& file_path, bool use_ICC) {
 
 float Viewer::calculate_zoom_factor(const TermSize& ts, int page_num, int ppr, int ppc) {
    //calculate required zoom factor to render image
-   int available_rows = ts.height - 2; // top and bottom bar
-   int available_cols = ts.width;
+   const int available_rows = ts.height - 2; // top and bottom bar
+   const int available_cols = ts.width;
 
-   // calculate horizontal scale
-   int max_h_pixels = available_rows * ppr;
-   int max_w_pixels = available_cols * ppc;
+   const int max_h_pixels = available_rows * ppr;
+   const int max_w_pixels = available_cols * ppc;
 
-   PageSpecs ps = parser.page_specs(page_num, 1.0); // default zoom
+   const PageSpecs ps = parser.page_specs(page_num, 1.0); // default zoom
 
-   const float h_scale = static_cast<float>(max_w_pixels) / ps.width;
-   const float v_scale = static_cast<float>(max_h_pixels) / ps.height;
+   const float h_scale = static_cast<float>(max_w_pixels) / ps.acc_width;
+   const float v_scale = static_cast<float>(max_h_pixels) / ps.acc_height;
 
    return std::min(h_scale, v_scale);
 }
@@ -186,6 +181,10 @@ void Viewer::process_keypress() {
             handle_go_to_page();
             break;
          }
+         if (input.char_value == '?') {
+            std::cout << term.help_ui_string() << std::flush;
+            break;
+         }
       default: // do nothing for the rest
    }
 }
@@ -221,12 +220,6 @@ void Viewer::handle_go_to_page() {
       std::cout << term.bottom_bar_string() << std::flush;
    }
 }
-
-// void Viewer::print_terminal_details() { // keep for debugging zoom scaling in the future
-//    TermSize ts = term.get_terminal_size();
-//    std::cout << ts.width << "x" << ts.height << std::endl;
-//    std::cout << ts.x << " " << ts.y << std::endl;
-// }
 
 void Viewer::run() {
    running = true;

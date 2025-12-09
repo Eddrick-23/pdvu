@@ -28,8 +28,13 @@ std::string base64_encode(const std::string& input) {
 std::string get_image_sequence(const std::string& filepath,
                                int img_width, int img_height,
                                const std::string& transmission_medium) {
-    std::string result = std::format("\033_Ga=T,t={},f=24,C=1,z=-1,s={},v={};{}\033\\",
+    // z-index below INT32_MIN / 2 to render under background colours
+    // This allows rendering text over the image
+    constexpr int32_t UNDER_BG_Z = INT32_MIN/2 -1;
+
+    std::string result = std::format("\033_Ga=T,t={},f=24,C=1,z={},s={},v={};{}\033\\",
                                  transmission_medium == "shm" ? "s" : "f" ,
+                                 UNDER_BG_Z,
                                  img_width,
                                  img_height,
                                  base64_encode(filepath));
