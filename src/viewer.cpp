@@ -7,6 +7,7 @@
 #include "renderer.h"
 #include "shm.h"
 #include "ram_usage.h"
+#include "tui.h"
 
 Viewer::Viewer(const std::string& file_path, const bool use_ICC) : term{}, parser {use_ICC}{
    setup(file_path, use_ICC);
@@ -50,16 +51,16 @@ std::string Viewer::center_cursor(int w, int h, int ppr, int ppc, int rows, int 
 
    top_margin = top_margin > 0 ? top_margin : 0;
    left_margin = left_margin > 0 ? left_margin : 0;
-   return term.move_cursor(top_margin + start_row, left_margin + start_col);
+   return terminal::move_cursor(top_margin + start_row, left_margin + start_col);
 }
 
 void Viewer::render_page(int page_num) {
    auto start = std::chrono::high_resolution_clock::now();
-   std::string frame_buffer = term.reset_screen_and_cursor_string(); // store sequence flush once at the end
+   std::string frame_buffer = terminal::reset_screen_and_cursor_string(); // store sequence flush once at the end
    const TermSize ts = term.get_terminal_size();
 
-   if (ts.height < MIN_ROWS || ts.width < MIN_COLS) { // guard for window size
-      frame_buffer += guard_message(ts);
+   if (ts.height < TUI::MIN_ROWS || ts.width < TUI::MIN_COLS) { // guard for window size
+      frame_buffer += TUI::guard_message(ts);
       std::cout << frame_buffer << std::flush;
       return;
    }
@@ -90,7 +91,7 @@ void Viewer::render_page(int page_num) {
    frame_buffer += image_sequence;
 
    // Add bottom bar
-   frame_buffer += term.bottom_bar_string();
+   frame_buffer += TUI::bottom_bar(ts);
 
    // Add top bar
    auto end = std::chrono::high_resolution_clock::now();
@@ -98,58 +99,11 @@ void Viewer::render_page(int page_num) {
    auto mem_bytes = getCurrentRSS();
    double mem_usage_mb = mem_bytes / (1024.0 * 1024.0);
    std::string stats = std::to_string(duration.count()) + "ms | " + std::format("{:.1f}MB", mem_usage_mb);
-   frame_buffer += term.top_bar_string(parser.get_document_name(),
+   frame_buffer += TUI::top_bar(ts,parser.get_document_name(),
                               std::to_string(current_page + 1) + "/" + std::to_string(total_pages),
                               stats);
 
    std::cout << frame_buffer << std::flush; // one flush at the end
-}
-
-std::string Viewer::guard_message(const TermSize& ts) {
-
-   std::string result;
-   const std::string red ="\033[1;31m";
-   const std::string green ="\033[1;32m";
-   std::string title = "Terminal size too small";
-   std::string current_dimensions = (ts.width >= MIN_COLS ? green : red) + "Width = " +  std::to_string(ts.width)
-                                    + (ts.height >= MIN_ROWS ? green : red) + " Height = " +  std::to_string(ts.height);
-   std::string required_dimensions = "Needed: " + std::to_string(MIN_COLS) + " x " + std::to_string(MIN_ROWS);
-
-   // centre the text
-   auto add_centered = [&](int r, const std::string& text, const int text_len) {
-      int c = (ts.width - text_len) / 2;
-      if (c < 1) c = 1;
-      result += "\033[" + std::to_string(r) + ";" + std::to_string(c) + "H" + text;
-   };
-
-   int center_row = ts.height / 2;
-
-   add_centered(center_row - 2, title, title.length());
-   add_centered(center_row, current_dimensions, visible_length(current_dimensions));
-
-   result += green;
-   add_centered(center_row + 2, required_dimensions, required_dimensions.length());
-   result += "\033[0m";       // Reset
-   return result;
-}
-
-int Viewer::visible_length(const std::string &s) {
-   int count = 0;
-   bool in_escape = false;
-   for (size_t i = 0; i < s.length(); ++i) {
-      if (!in_escape) {
-         if (s[i] == '\033') {
-            in_escape = true;
-         } else {
-            count++;
-         }
-      } else {
-         if (s[i] == 'm') {
-            in_escape = false;
-         }
-      }
-   }
-   return count;
 }
 
 void Viewer::process_keypress() {
@@ -217,18 +171,17 @@ void Viewer::handle_go_to_page() {
    if (page_change) {
       render_page(current_page);
    } else {
-      std::cout << term.bottom_bar_string() << std::flush;
+      std::cout << TUI::bottom_bar(term.get_terminal_size()) << std::flush;
    }
 }
 
 void Viewer::run() {
    running = true;
+   terminal::enter_alt_screen();
+   terminal::hide_cursor();
    term.enter_raw_mode();
-   term.enter_alt_screen();
    term.setup_resize_handler();
-   term.hide_cursor();
    render_page(current_page);
-
 
    using Clock = std::chrono::steady_clock;
    auto start = Clock::now();

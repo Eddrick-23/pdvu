@@ -48,10 +48,8 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // const std::string file_path("samples/large_174mb.pdf");
     Viewer viewer(pdf_path, enable_ICC);
     viewer.run(); // start main loop
-    std::cout << enable_ICC << std::endl;
     return 0;
 
 }

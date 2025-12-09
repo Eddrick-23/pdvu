@@ -7,6 +7,27 @@
 #include <sys/poll.h>
 volatile sig_atomic_t Terminal::window_resized = 1;
 
+namespace terminal {
+    void hide_cursor() {
+        std::cout << "\033[?25l" << std::flush;
+    }
+    void show_cursor() {
+        std::cout << "\033[?25h" << std::flush;
+    }
+    void enter_alt_screen() {
+        std::cout << "\033[?1049h" << std::flush;
+    }
+    void exit_alt_screen() {
+        std::cout << "\033[?1049l" << std::flush;
+    }
+    std::string move_cursor(int row, int col) {
+        return std::format("\033[{};{}H", row, col);
+    }
+    std::string reset_screen_and_cursor_string() {
+        return "\033[H\033[2J";
+    }
+}
+
 Terminal::Terminal() {
 
 }
@@ -14,8 +35,8 @@ Terminal::Terminal() {
 Terminal::~Terminal() {
     //exit raw mode
     exit_raw_mode();
-    exit_alt_screen();
-    show_cursor();
+    terminal::exit_alt_screen();
+    terminal::show_cursor();
 
 }
 
@@ -94,96 +115,21 @@ void Terminal::exit_raw_mode() {
     }
 }
 
-void Terminal::hide_cursor() const {
-    std::cout << "\033[?25l" << std::flush;
-}
-
-void Terminal::show_cursor() const {
-    std::cout << "\033[?25h" << std::flush;
-}
-
-std::string Terminal::move_cursor(const int row, const int col) const {
-    return std::format("\033[{};{}H", row, col);
-}
-
-void Terminal::enter_alt_screen() const{
-    std::cout << "\033[?1049h" << std::flush;
-}
-
-void Terminal::exit_alt_screen() const{
-    std::cout << "\033[?1049l" << std::flush;
-}
 
 void Terminal::die(const char *s) {
     // clear_terminal();
-    std::cout << reset_screen_and_cursor_string() << std::flush;
+    std::cout << terminal::reset_screen_and_cursor_string() << std::flush;
     perror(s);
     exit(1);
 }
 
-std::string Terminal::reset_screen_and_cursor_string() {
-    return "\033[H\033[2J";
-}
-
-
-
-std::string Terminal::top_bar_string(const std::string& left, const std::string& mid, const std::string& right) {
-    TermSize ts = get_terminal_size();
-    std::string result;
-    result += move_cursor(1, 1);
-    result +=  "\033[2K\033[7m"; // invert colours
-
-    // each char takes a col, calculate indent
-    // split to three regions
-    // " "###" "###" "###" "
-    int region_width = (ts.width - 4) / 3;
-    auto truncate = [region_width](const std::string& s) {
-        if (s.length() > region_width) {
-            return s.substr(0, region_width - 3) + "...";
-        }
-        return s;
-    };
-    const std::string left_text = truncate(left);
-    const std::string mid_text = truncate(mid);
-    const std::string right_text = truncate(right);
-
-    // add left text
-    result += " " + left_text + std::string(region_width - left_text.length(), ' ');
-
-    // add middle text
-    int mid_pad_left = (region_width - mid_text.length()) / 2;
-    int mid_pad_right = region_width - mid_text.length() - mid_pad_left;
-    result += " " + std::string(mid_pad_left, ' ') + mid_text + std::string(mid_pad_right, ' ');
-
-    // add right text
-    result += " " + std::string(region_width - right_text.length(), ' ') + right_text + " ";
-
-    result += "\033[0m"; // reset colours
-    return result;
-}
-
-std::string Terminal::bottom_bar_string() {
-    TermSize ts = get_terminal_size();
-    const std::string text = " SEARCH: ctrl/cmd + f | NAVIGATE: <- -> | QUIT : q | Help: ?";
-    int padding = ts.width - text.length();
-    if (padding < 0) padding = 0;
-
-    std::string result;
-    result += move_cursor(ts.height, 1);  // move to last row
-    result += "\033[2K\033[7m"; // clear line and invert colours
-    result += text; // text for bottom bar
-    result += std::string(padding, ' ');
-    result += "\033[0m"; // Reset colors
-    return result;
-}
-
-std::string Terminal::help_ui_string() {
+std::string Terminal::help_ui_string() { // TODO refactor to tui.cpp
     TermSize ts = get_terminal_size();
     std::string result;
     // set to black background green foreground
     result += std::format("\x1b[38;5;{}m", 15);
     result += std::format("\x1b[48;5;{}m", 16);
-    result += move_cursor(2, 10);
+    result += terminal::move_cursor(2, 10);
     result += "testing";
     result += "\033[0m"; // reset colors
     return result;
@@ -192,7 +138,7 @@ std::string Terminal::help_ui_string() {
 std::string Terminal::get_input(const std::string& prompt) {
     /* creates a bottom bar text input UI that takes user input */
     TermSize ts = get_terminal_size();
-    show_cursor();
+    terminal::show_cursor();
     std::string buffer;
 
     int available_width = ts.width - prompt.length();
@@ -212,14 +158,14 @@ std::string Terminal::get_input(const std::string& prompt) {
             visible_pos = buffer.length() - available_width;
         }
         // clear line and draw prompt
-        std::cout << move_cursor(ts.height, 1);
+        std::cout << terminal::move_cursor(ts.height, 1);
         std::cout << "\033[2K\033[7m"; // colour invert
 
         std::cout << prompt << buffer.substr(visible_pos) << std::flush;
 
         // move to proper position on screen
         size_t screen_col = cursor_pos - visible_pos + prompt.length() + 1;
-        std::cout << move_cursor(ts.height, screen_col) << std::flush;
+        std::cout << terminal::move_cursor(ts.height, screen_col) << std::flush;
     };
     InputEvent c;
     redraw();
@@ -266,7 +212,7 @@ std::string Terminal::get_input(const std::string& prompt) {
 
     // reset colours, hide cursor and return buffer
     std::cout << "\033[0m";
-    hide_cursor();
+    terminal::hide_cursor();
     return buffer;
 }
 

@@ -11,6 +11,7 @@ set(SOURCES
         src/viewer.cpp
         src/tempfile.cpp
         src/shm.cpp
+        src/tui.cpp
 )
 
 add_executable(pdvu ${SOURCES})

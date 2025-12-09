@@ -8,6 +8,15 @@ struct TermSize {
     int pixels_per_row, pixels_per_col;
 };
 
+namespace terminal {
+    void hide_cursor();
+    void show_cursor();
+    void enter_alt_screen();
+    void exit_alt_screen();
+    std::string move_cursor(int x, int y);
+    std::string reset_screen_and_cursor_string();
+}
+
 class Terminal {
 public:
     static volatile sig_atomic_t window_resized;
@@ -20,19 +29,9 @@ public:
 
     void enter_raw_mode();
     void exit_raw_mode();
-    void enter_alt_screen() const;
-    void exit_alt_screen() const;
-    void hide_cursor() const;
-    void show_cursor() const;
     void die(const char *s);
     TermSize get_terminal_size();
-    std::string top_bar_string(const std::string& left,
-                               const std::string& mid,
-                               const std::string& right);
-    std::string bottom_bar_string();
     std::string help_ui_string();
-    std::string move_cursor(int row, int col) const;
-    std::string reset_screen_and_cursor_string();
     std::string get_input(const std::string& prompt);
     InputEvent read_input(int timeout_ms);
 private:
