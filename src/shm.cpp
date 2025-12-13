@@ -4,6 +4,8 @@
 #include <cerrno>
 #include <sys/fcntl.h>
 #include <sys/mman.h>
+#include <atomic>
+static std::atomic<int> shm_sequence_id{0};
 
 int is_shm_supported() {
     int shm_fd = shm_open("/test_shm_support", O_CREAT | O_RDWR | O_EXCL, 0600);
@@ -24,9 +26,8 @@ int is_shm_supported() {
 SharedMemory::SharedMemory(size_t image_size) {
     shm_size = image_size;
     // generate unique name using PID and timestamp
-    const auto time_now = std::chrono::high_resolution_clock::now();
-    const auto time_stamp = time_now.time_since_epoch().count();
-    shm_name = std::format("/shm_pdvu_{}_{}",getpid(),time_stamp);
+    int id = shm_sequence_id.fetch_add(1);
+    shm_name = std::format("/pdvu_{}_{}",getpid(),id);
 
     shm_fd = shm_open(shm_name.c_str(), O_CREAT | O_RDWR | O_EXCL, 0600); // create memory
     if (shm_fd == -1) {
