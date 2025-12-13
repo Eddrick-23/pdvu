@@ -1,8 +1,7 @@
 #include "parser.h"
-#include <vector>
 #include <filesystem>
 #include <iostream>
-
+#include <tracy/Tracy.hpp>
 
 Parser::Parser(const bool use_ICC) {
     // NULL, NULL = standard memory allocators
@@ -24,6 +23,7 @@ Parser::Parser(const bool use_ICC) {
             std::cerr << "WARNING: Failed to configure ICC." << std::endl;
         }
     }
+    use_icc_profile = use_ICC;
 
     // fz_try(ctx) { // configuring anti-aliasing level
     //     // fz_set_aa_level(ctx, 0);
@@ -64,6 +64,7 @@ bool Parser::load_document(const std::string& filepath) {
         std::cerr <<"ERROR: Could not open file: " << filepath << std::endl;
         return false;
     }
+    full_filepath = filepath; // save path for duplicating
     std::filesystem::path p(filepath);
     doc_name = p.filename().string();
     return true;
@@ -89,6 +90,7 @@ int Parser::num_pages() const {
 }
 
 PageSpecs Parser::page_specs(const int page_num, const float zoom) const{
+    ZoneScoped;
     fz_page* page = nullptr;
     fz_try(ctx) {
         page = fz_load_page(ctx, doc, page_num);
@@ -114,6 +116,7 @@ PageSpecs Parser::page_specs(const int page_num, const float zoom) const{
 void Parser::write_page(const int page_num, const int w, const int h,
                         const float zoom, const float rotate,
                         unsigned char* buffer, size_t buffer_len) {
+    ZoneScoped;
     // write page to a custom buffer directly
     fz_page* page = nullptr;
     fz_try(ctx) {
@@ -155,50 +158,19 @@ void Parser::write_page(const int page_num, const int w, const int h,
         std::cerr <<"ERROR: Failed to draw page." << std::endl;
     }
 }
-// RawImage Parser::get_page(const int page_num, const float zoom, const float rotate) {
-//     fz_page* page = nullptr;
-//     fz_try(ctx) {
-//         page = fz_load_page(ctx, doc, page_num);
-//     }
-//     fz_catch(ctx) {
-//         std::cerr <<"ERROR: Failed to load page." << std::endl;
-//         return RawImage{};
-//     }
-//     /* Compute a transformation matrix for the zoom and rotation desired. */
-//     /* default zoom is 100 -> 100% */
-//     /* The default resolution without scaling is 72 dpi. */
-//     fz_matrix ctm = fz_scale(zoom, zoom);
-//     ctm = fz_pre_rotate(ctm, rotate);
-//     fz_pixmap* raw_pix = nullptr;
-//
-//     fz_try(ctx) {
-//         raw_pix = fz_new_pixmap_from_page(ctx, page, ctm, fz_device_rgb(ctx), 0);
-//     }
-//     fz_catch(ctx) {
-//         std::cerr <<"ERROR: Failed to create pixmap." << std::endl;
-//         fz_drop_page(ctx, page);
-//         return RawImage{};
-//     }
-//     fz_drop_page(ctx, page);
-//     // creation of custom smart pointer
-//     fz_context* captured_context = ctx;
-//     auto deleter = [captured_context](fz_pixmap* p) {
-//         if (p) {
-//             fz_drop_pixmap(captured_context, p);
-//         }
-//     };
-//     PixMapPtr smart_pixmap(raw_pix, deleter);
-//
-//     // make sure the struct owns the pixmap
-//     return RawImage{
-//         std::move(smart_pixmap),
-//         fz_pixmap_samples(ctx, raw_pix),
-//         fz_pixmap_width(ctx, raw_pix),
-//         fz_pixmap_height(ctx, raw_pix),
-//         fz_pixmap_stride(ctx, raw_pix),
-//         static_cast<size_t>(fz_pixmap_stride(ctx, raw_pix)) * fz_pixmap_height(ctx, raw_pix),
-//     };
-// }
+
+std::unique_ptr<Parser> Parser::duplicate() const {
+    auto clone = std::make_unique<Parser>(this -> use_icc_profile);
+    // TODO duplicate the context instead of making a fresh one
+    // might have to allow an optional context parameter in the constructor
+
+    if (!full_filepath.empty()) {
+        if (!clone->load_document(this->full_filepath)) {
+            throw std::runtime_error("Failed to load document for cloned parser");
+        }
+    }
+    return clone;
+}
 
 Parser::Parser(Parser&& other) noexcept {
     ctx = other.ctx;

@@ -33,7 +33,6 @@ Terminal::Terminal() {
 }
 
 Terminal::~Terminal() {
-    //exit raw mode
     exit_raw_mode();
     terminal::exit_alt_screen();
     terminal::show_cursor();
@@ -117,103 +116,13 @@ void Terminal::exit_raw_mode() {
 
 
 void Terminal::die(const char *s) {
-    // clear_terminal();
-    std::cout << terminal::reset_screen_and_cursor_string() << std::flush;
+    // cleanup
+    exit_raw_mode();
+    terminal::exit_alt_screen();
+    terminal::show_cursor();
+    // print error message
     perror(s);
     exit(1);
-}
-
-std::string Terminal::help_ui_string() { // TODO refactor to tui.cpp
-    TermSize ts = get_terminal_size();
-    std::string result;
-    // set to black background green foreground
-    result += std::format("\x1b[38;5;{}m", 15);
-    result += std::format("\x1b[48;5;{}m", 16);
-    result += terminal::move_cursor(2, 10);
-    result += "testing";
-    result += "\033[0m"; // reset colors
-    return result;
-}
-
-std::string Terminal::get_input(const std::string& prompt) {
-    /* creates a bottom bar text input UI that takes user input */
-    TermSize ts = get_terminal_size();
-    terminal::show_cursor();
-    std::string buffer;
-
-    int available_width = ts.width - prompt.length();
-    available_width = available_width < 1 ? 1 : available_width;
-    size_t cursor_pos = 0; // cursor index in the buffer
-    size_t visible_pos = 0; // index of first visible char in buffer
-
-    auto redraw = [&]() { // helper to redraw the whole line on input
-        if (cursor_pos < visible_pos) { // scrolled left off screen
-            visible_pos = cursor_pos;
-        } else if (cursor_pos >= visible_pos + available_width) { // scrolled right off screen
-            visible_pos = cursor_pos - available_width + 1;
-        }
-
-        // If buffer is longer than screen, always show the rightmost portion
-        if (buffer.length() > available_width) {
-            visible_pos = buffer.length() - available_width;
-        }
-        // clear line and draw prompt
-        std::cout << terminal::move_cursor(ts.height, 1);
-        std::cout << "\033[2K\033[7m"; // colour invert
-
-        std::cout << prompt << buffer.substr(visible_pos) << std::flush;
-
-        // move to proper position on screen
-        size_t screen_col = cursor_pos - visible_pos + prompt.length() + 1;
-        std::cout << terminal::move_cursor(ts.height, screen_col) << std::flush;
-    };
-    InputEvent c;
-    redraw();
-    while (true) {
-        c = read_input(100);
-        // break when we get esc and clear buffer
-        if (c.key == key_escape) {
-            buffer.clear();
-            break ;
-        }
-        // break when we get enter
-        if (c.key == key_enter) {
-            break;
-        }
-        if (c.key == key_backspace) {
-            if (!buffer.empty()) {
-                buffer.erase(cursor_pos - 1, cursor_pos > 0 ? 1 : 0);
-                cursor_pos--;
-                redraw();
-            }
-        } else if (c.key == key_alt_backspace) {
-            if (!buffer.empty()) { // clear all input
-                buffer = buffer.substr(cursor_pos);
-                cursor_pos = 0;
-                visible_pos = 0;
-                redraw();
-            }
-        } else if (c.key == key_char) { // printable chars
-            buffer.insert(cursor_pos, 1, c.char_value);
-            cursor_pos++;
-            redraw();
-        } else if (c.key == key_right_arrow) {
-            if (cursor_pos < buffer.length()) {
-                cursor_pos++;
-                redraw();
-            }
-        } else if (c.key == key_left_arrow) {
-            if (cursor_pos > 0) {
-                cursor_pos--;
-                redraw();
-            }
-        }
-    }
-
-    // reset colours, hide cursor and return buffer
-    std::cout << "\033[0m";
-    terminal::hide_cursor();
-    return buffer;
 }
 
 InputEvent Terminal::read_input(int timeout_ms) {

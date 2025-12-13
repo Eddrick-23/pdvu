@@ -34,9 +34,12 @@ public:
     void write_page(int page_num, int w, int h,
                     float zoom, float rotate,
                     unsigned char* buffer, size_t buffer_len);
+    std::unique_ptr<Parser> duplicate() const;
 
 private:
     fz_context* ctx;
     fz_document* doc;
     std::string doc_name;
+    std::string full_filepath;
+    bool use_icc_profile;
 };

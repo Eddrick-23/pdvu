@@ -1,6 +1,9 @@
 #include <iostream>
 #include "viewer.h"
 #include <CLI11.hpp>
+#include "renderer.h"
+#include "tui.h"
+
 int main(int argc, char** argv) {
     CLI::App app("pdvu");
 
@@ -50,6 +53,7 @@ int main(int argc, char** argv) {
 
     Viewer viewer(pdf_path, enable_ICC);
     viewer.run(); // start main loop
+
     return 0;
 
 }

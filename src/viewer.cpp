@@ -8,6 +8,7 @@
 #include "shm.h"
 #include "ram_usage.h"
 #include "tui.h"
+#include <tracy/Tracy.hpp>
 
 Viewer::Viewer(const std::string& file_path, const bool use_ICC) : term{}, parser {use_ICC}{
    setup(file_path, use_ICC);
@@ -55,6 +56,7 @@ std::string Viewer::center_cursor(int w, int h, int ppr, int ppc, int rows, int 
 }
 
 void Viewer::render_page(int page_num) {
+   ZoneScoped;
    auto start = std::chrono::high_resolution_clock::now();
    std::string frame_buffer = terminal::reset_screen_and_cursor_string(); // store sequence flush once at the end
    const TermSize ts = term.get_terminal_size();
@@ -98,7 +100,7 @@ void Viewer::render_page(int page_num) {
    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
    auto mem_bytes = getCurrentRSS();
    double mem_usage_mb = mem_bytes / (1024.0 * 1024.0);
-   std::string stats = std::to_string(duration.count()) + "ms | " + std::format("{:.1f}MB", mem_usage_mb);
+   std::string stats = std::to_string(duration.count()) + std::format("ms {} ",TUI::symbols::box_single_line.at(179)) + std::format("{:.1f}MB", mem_usage_mb);
    frame_buffer += TUI::top_bar(ts,parser.get_document_name(),
                               std::to_string(current_page + 1) + "/" + std::to_string(total_pages),
                               stats);
@@ -108,6 +110,15 @@ void Viewer::render_page(int page_num) {
 
 void Viewer::process_keypress() {
    InputEvent input = term.read_input(100);
+
+   // if guard message is being displayed, only allow q to quit
+   TermSize ts = term.get_terminal_size();
+   if (ts.width < TUI::MIN_COLS || ts.height < TUI::MIN_ROWS) {
+      if (input.key == key_char && input.char_value == 'q') { // quit
+         running = false;
+         return;
+      }
+   }
 
    if (input.key == key_none ) return; // handle interrupt, do nothing
    switch (input.key) {
@@ -127,7 +138,7 @@ void Viewer::process_keypress() {
          }
          break;
       case key_char:
-         if (input.char_value == 'q') { // quit
+         if (input.char_value == 'q') { // go to page
             running = false;
             break;
          }
@@ -136,7 +147,7 @@ void Viewer::process_keypress() {
             break;
          }
          if (input.char_value == '?') {
-            std::cout << term.help_ui_string() << std::flush;
+            handle_help_page();
             break;
          }
       default: // do nothing for the rest
@@ -154,7 +165,8 @@ void Viewer::handle_go_to_page() {
    };
 
    while (running) {
-      std::string input = term.get_input("Go to page: ");
+      std::string input = TUI::bottom_input_bar(term, "Go to page: ",
+                              [&](){render_page(current_page);});
       if (input.empty()) {
          running = false;
       } else if (is_whole_number(input)) {
@@ -173,6 +185,63 @@ void Viewer::handle_go_to_page() {
    } else {
       std::cout << TUI::bottom_bar(term.get_terminal_size()) << std::flush;
    }
+}
+
+void Viewer::handle_help_page() {
+
+   auto clear_overlay = [](int start_row, int end_row, int width) {
+      std::string sequence;
+      sequence += clear_dim_layer();
+      const std::string blank_line = std::string(width, ' ');
+      for (int row = start_row; row <= end_row; row++) {
+         sequence += terminal::move_cursor(row, 1);
+         sequence += blank_line;
+      }
+      sequence += terminal::move_cursor(1,1);
+      return sequence;
+   };
+
+   TermSize last_terminal_size = term.get_terminal_size();
+   std::cout << TUI::help_overlay(last_terminal_size) << std::flush;
+   using Clock = std::chrono::steady_clock;
+   auto start = Clock::now();
+   bool was_resized = false;
+   bool resizing = false;
+
+   while (true) {
+      InputEvent input = term.read_input(50);
+      if (term.was_resized()) {
+         last_terminal_size = term.get_terminal_size();
+         start = Clock::now();
+         resizing = true;
+      }
+      if (resizing) {
+         auto now = Clock::now();
+         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
+         if (duration.count() > 75) {
+            was_resized = true;
+            std::cout << clear_overlay(1, last_terminal_size.height, last_terminal_size.width) << std::flush;
+            last_terminal_size = term.get_terminal_size();
+            std::cout << TUI::help_overlay(last_terminal_size) << std::flush;
+            resizing = false;
+         }
+      }
+      if (input.key == key_escape && !(last_terminal_size.width < TUI::MIN_COLS
+                                       || last_terminal_size.height < TUI:: MIN_ROWS)) {
+         break;
+      }
+      if (input.key == key_char && input.char_value == 'q') { // allow quit
+         running = false;
+         return;
+      }
+   }
+   if (was_resized) {
+      render_page(current_page);
+      return;
+   }
+   std::string sequence;
+   sequence += clear_overlay(2, last_terminal_size.height - 1, last_terminal_size.width);
+   std::cout << sequence << std::flush;
 }
 
 void Viewer::run() {

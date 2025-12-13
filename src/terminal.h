@@ -13,7 +13,7 @@ namespace terminal {
     void show_cursor();
     void enter_alt_screen();
     void exit_alt_screen();
-    std::string move_cursor(int x, int y);
+    std::string move_cursor(int row, int col);
     std::string reset_screen_and_cursor_string();
 }
 
@@ -31,8 +31,6 @@ public:
     void exit_raw_mode();
     void die(const char *s);
     TermSize get_terminal_size();
-    std::string help_ui_string();
-    std::string get_input(const std::string& prompt);
     InputEvent read_input(int timeout_ms);
 private:
     termios orig_termios;
