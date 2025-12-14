@@ -5,7 +5,7 @@
 #include <fstream>
 #include <signal.h>
 #include <sys/poll.h>
-volatile sig_atomic_t Terminal::window_resized = 1;
+volatile sig_atomic_t Terminal::window_resized = 1; // set as 1 so terminal caches the dimensions on startup
 
 namespace terminal {
     void hide_cursor() {

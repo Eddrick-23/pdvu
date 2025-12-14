@@ -3,33 +3,13 @@
 #include "parser.h"
 #include "tempfile.h"
 #include "shm.h"
-
-// struct RenderRequest {
-//     int page_num;
-//     int width;
-//     int height;
-//     float zoom;
-//     // We use a generation ID to ignore results from old requests if needed
-//     size_t req_id;
-// };
-//
-// struct RenderResult {
-//     size_t req_id;
-//     int page_num;
-//     std::string image_sequence;
-//     std::string status_bar_stats;
-//
-//     // This will be moved to the viewer class attributes in the main thread
-//     std::unique_ptr<SharedMemory> shm;
-//     std::unique_ptr<Tempfile> temp;
-// };
+#include "render_engine.h"
 
 
 class Viewer {
 public:
 Viewer(const std::string& file_path, bool use_ICC); // constructor
-void setup(const std::string& file_path, bool use_ICC);
-int read_key();
+void setup(const std::string& file_path);
 void process_keypress();
 float calculate_zoom_factor(const TermSize& ts, int page_num, int ppr, int ppc);
 std::string center_cursor(int w, int h, int ppr, int ppc,
@@ -37,21 +17,22 @@ std::string center_cursor(int w, int h, int ppr, int ppc,
 void render_page(int page_num);
 void handle_go_to_page();
 void handle_help_page();
+bool fetch_latest_frame();
+void display_latest_frame();
 void run(); // main loop
 
 private:
     // sub systems
     Terminal term; // terminal data and raw mode
     Parser parser; // parsing pdfs
+    // hold a pointer because parser must be loaded fully before creating renderer
+    std::unique_ptr<RenderEngine> renderer; // loading page frames
 
     // current state
-    std::unique_ptr<Tempfile> current_temp_file = nullptr;
-    std::unique_ptr<SharedMemory> current_shared_mem = nullptr;
     int current_page = 0;
     int total_pages = 0;
     float zoom = 100;
     bool running = false;
     bool shm_supported = false;
-
-
+    RenderResult latest_frame;
 };

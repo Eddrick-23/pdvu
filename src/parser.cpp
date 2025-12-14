@@ -1,8 +1,11 @@
 #include "parser.h"
 #include <filesystem>
 #include <iostream>
+#ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
-
+#else
+#define ZoneScoped
+#endif
 Parser::Parser(const bool use_ICC) {
     // NULL, NULL = standard memory allocators
     // FZ_STORE_DEFAULT = default resource cache size
@@ -116,7 +119,7 @@ PageSpecs Parser::page_specs(const int page_num, const float zoom) const{
 void Parser::write_page(const int page_num, const int w, const int h,
                         const float zoom, const float rotate,
                         unsigned char* buffer, size_t buffer_len) {
-    ZoneScoped;
+    // ZoneScoped;
     // write page to a custom buffer directly
     fz_page* page = nullptr;
     fz_try(ctx) {

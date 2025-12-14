@@ -3,15 +3,18 @@ project(pdvu)
 
 set(CMAKE_CXX_STANDARD 23)
 
+option(ENABLE_TRACY "Enable Tracy profiler" OFF)
+
 set(SOURCES
         src/main.cpp
         src/terminal.cpp
-        src/renderer.cpp
+        src/kitty.cpp
         src/parser.cpp
         src/viewer.cpp
         src/tempfile.cpp
         src/shm.cpp
         src/tui.cpp
+        src/render_engine.cpp
 )
 
 add_executable(pdvu ${SOURCES})
@@ -35,7 +38,8 @@ target_link_libraries(pdvu PRIVATE
 # --- TRACY PROFILER CONFIGURATION ---
 
 # Enable for Debug OR RelWithDebInfo (Optimized + Symbols is best for profiling)
-if(CMAKE_BUILD_TYPE MATCHES "Debug|RelWithDebInfo")
+if(ENABLE_TRACY)
+    message(STATUS "Tracy profiling ENABLED")
 
     # 1. Define the macro globally
     add_compile_definitions(TRACY_ENABLE)

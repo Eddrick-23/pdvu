@@ -1,5 +1,5 @@
 #include <format>
-#include "renderer.h"
+#include "kitty.h"
 
 // encode 3 bytes of data per chunk into 4 bytes
 // divide 24 bits into 4 groups of 6

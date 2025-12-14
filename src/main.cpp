@@ -1,7 +1,7 @@
 #include <iostream>
 #include "viewer.h"
 #include <CLI11.hpp>
-#include "renderer.h"
+#include "kitty.h"
 #include "tui.h"
 
 int main(int argc, char** argv) {

@@ -3,7 +3,7 @@
 #include <chrono>
 #include <string>
 #include "terminal.h"
-#include "renderer.h"
+#include "kitty.h"
 
 namespace TUI::helplist {
     const std::vector<std::array<std::string, 2>> help_text = {
@@ -52,12 +52,7 @@ namespace { // utility function
         }
         return count;
     }
-    std::string add_centered(int row, int term_width, const std::string& text, int text_length) {
-        /* returns string which centres text within the terminal window when printed */
-        int col = (term_width - text_length) / 2;
-        col = col < 1 ? 1 : col;
-        return "\033[" + std::to_string(row) + ";" + std::to_string(col) + "H" + text;
-    }
+
     std::string centre_with_space(int width, const std::string& text) {
         /* return a string centred in a given width, with spaced padding on its sides */
         std::string result;
@@ -112,6 +107,12 @@ namespace { // utility function
 
 
 namespace TUI {
+    std::string add_centered(int row, int term_width, const std::string& text, int text_length) {
+        /* returns string which centres text within the terminal window when printed */
+        int col = (term_width - text_length) / 2;
+        col = col < 1 ? 1 : col;
+        return "\033[" + std::to_string(row) + ";" + std::to_string(col) + "H" + text;
+    }
     std::string top_bar(const TermSize& ts, const std::string& left, const std::string& mid, const std::string& right) {
         std::string result;
         result += terminal::move_cursor(1, 1);
@@ -251,7 +252,7 @@ namespace TUI {
         return result;
     };
 
-    std::string bottom_input_bar(Terminal& term, const std::string& prompt, std::function<void()> on_resize) {
+    std::string bottom_input_bar(Terminal& term, const std::string& prompt, const std::function<void()> &on_resize) {
         /* creates a single row text input UI that takes user input */
         // Might be a better way to handle resizing but for now we pass in a callback function
 
@@ -307,7 +308,7 @@ namespace TUI {
                 if (duration.count() > 75) { // exit and rerender
                     current_term_size = term.get_terminal_size(); // update before rerender
                     resizing = false;
-                    on_resize();
+                    on_resize(); // under new implementation, callback must automatically render as well
                     redraw();
                     continue;
                 }
@@ -321,7 +322,11 @@ namespace TUI {
                 }
                 continue; // block inputs if guard message is displayed
             }
-
+            if (c.key == key_none) { // no input, check for new frame to display
+                on_resize();
+                // redraw();
+                continue;
+            }
             // break when we get esc and clear buffer
             if (c.key == key_escape) {
                 buffer.clear();

@@ -37,9 +37,10 @@ namespace TUI {
     // min dimensions for displaying guard message
     inline constexpr int MIN_ROWS = 40;
     inline constexpr int MIN_COLS = 40;
+    std::string add_centered(int row, int term_width, const std::string& text, int text_length);
     std::string top_bar(const TermSize& ts, const std::string& left, const std::string& mid, const std::string& right);
     std::string bottom_bar(const TermSize& ts);
     std::string guard_message(const TermSize& ts);
     std::string help_overlay(const TermSize& ts);
-    std::string bottom_input_bar(Terminal& term, const std::string& prompt, std::function<void()>on_resize);
+    std::string bottom_input_bar(Terminal& term, const std::string& prompt, const std::function<void()> &on_resize);
 }

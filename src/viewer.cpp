@@ -4,23 +4,27 @@
 #include <charconv>
 #include "terminal.h"
 #include "parser.h"
-#include "renderer.h"
+#include "kitty.h"
 #include "shm.h"
 #include "ram_usage.h"
 #include "tui.h"
+#ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
-
+#else
+#define ZoneScoped
+#endif
 Viewer::Viewer(const std::string& file_path, const bool use_ICC) : term{}, parser {use_ICC}{
-   setup(file_path, use_ICC);
+   setup(file_path);
 }
 
-void Viewer::setup(const std::string& file_path, bool use_ICC) {
-   // setup terminal and parser engines
+void Viewer::setup(const std::string& file_path) {
+   // setup terminal, main parser, render engine
    if (!parser.load_document(file_path)) {
       throw std::runtime_error("failed to load document");
    }
    total_pages = parser.num_pages();
    shm_supported = is_shm_supported();
+   renderer = std::make_unique<RenderEngine>(parser);
 }
 
 float Viewer::calculate_zoom_factor(const TermSize& ts, int page_num, int ppr, int ppc) {
@@ -56,60 +60,20 @@ std::string Viewer::center_cursor(int w, int h, int ppr, int ppc, int rows, int 
 }
 
 void Viewer::render_page(int page_num) {
-   ZoneScoped;
-   auto start = std::chrono::high_resolution_clock::now();
-   std::string frame_buffer = terminal::reset_screen_and_cursor_string(); // store sequence flush once at the end
+   // sends a request to our render engine to render the page, no blocking
    const TermSize ts = term.get_terminal_size();
-
-   if (ts.height < TUI::MIN_ROWS || ts.width < TUI::MIN_COLS) { // guard for window size
-      frame_buffer += TUI::guard_message(ts);
-      std::cout << frame_buffer << std::flush;
+   if (ts.width < TUI::MIN_COLS || ts.height < TUI::MIN_ROWS) {
+      // Just update the guard text, don't bother the engine
+      std::cout << terminal::reset_screen_and_cursor_string()
+                << TUI::guard_message(ts) << std::flush;
       return;
    }
-
    const float zoom_factor = calculate_zoom_factor(ts, page_num, ts.pixels_per_row, ts.pixels_per_col);
-   PageSpecs ps = parser.page_specs(page_num, zoom_factor);
-
-   std::string image_sequence;
-   if (shm_supported) {
-      auto new_shm = std::make_unique<SharedMemory>(ps.size);
-      current_shared_mem = std::move(new_shm);
-
-      // write directly to shared memory buffer
-      parser.write_page(page_num, ps.width, ps.height, zoom_factor, 0,
-                        static_cast<unsigned char* >(current_shared_mem->data()), ps.size);
-      image_sequence = get_image_sequence(current_shared_mem->name(), ps.width, ps.height, "shm");
-   } else {
-      auto new_temp = std::make_unique<Tempfile>(ps.size);
-      // write directly to tempfile buffer
-      parser.write_page(page_num, ps.width, ps.height, zoom_factor, 0,
-                        static_cast<unsigned char* >(new_temp->data()), ps.size);
-      current_temp_file = std::move(new_temp);
-      image_sequence = get_image_sequence(current_temp_file->path(), ps.width, ps.height, "tempfile");
-   }
-
-   // centralise cursor and print image
-   frame_buffer += center_cursor(ps.width, ps.height, ts.pixels_per_row, ts.pixels_per_col, ts.height - 2, ts.width, 2, 1);
-   frame_buffer += image_sequence;
-
-   // Add bottom bar
-   frame_buffer += TUI::bottom_bar(ts);
-
-   // Add top bar
-   auto end = std::chrono::high_resolution_clock::now();
-   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-   auto mem_bytes = getCurrentRSS();
-   double mem_usage_mb = mem_bytes / (1024.0 * 1024.0);
-   std::string stats = std::to_string(duration.count()) + std::format("ms {} ",TUI::symbols::box_single_line.at(179)) + std::format("{:.1f}MB", mem_usage_mb);
-   frame_buffer += TUI::top_bar(ts,parser.get_document_name(),
-                              std::to_string(current_page + 1) + "/" + std::to_string(total_pages),
-                              stats);
-
-   std::cout << frame_buffer << std::flush; // one flush at the end
+   renderer->request_page(page_num, zoom_factor, shm_supported ? "shm" : "tempfile");
 }
 
 void Viewer::process_keypress() {
-   InputEvent input = term.read_input(100);
+   InputEvent input = term.read_input(16); // 60fps
 
    // if guard message is being displayed, only allow q to quit
    TermSize ts = term.get_terminal_size();
@@ -164,9 +128,23 @@ void Viewer::handle_go_to_page() {
       return result.ec == std::errc() && result.ptr == s.data() + s.size();
    };
 
+   TermSize last_term_size = term.get_terminal_size();
+
+   auto callback = [&]() {
+      TermSize ts = term.get_terminal_size();
+      // only request new page if dimensions change
+      if (last_term_size.width != ts.width || last_term_size.height != ts.height) {
+         render_page(current_page);
+         last_term_size = ts;
+      }
+      // if not we just check if there is a new frame to render
+      if (fetch_latest_frame()) {
+         display_latest_frame();
+      }
+   };
    while (running) {
       std::string input = TUI::bottom_input_bar(term, "Go to page: ",
-                              [&](){render_page(current_page);});
+                              callback);
       if (input.empty()) {
          running = false;
       } else if (is_whole_number(input)) {
@@ -178,11 +156,11 @@ void Viewer::handle_go_to_page() {
          current_page = new_page;
       }
       // else keep prompting until user presses esc
-      // TO DO maybe add a text to notify non string inputs?
+      // TODO maybe add a text to notify non string inputs?
    }
    if (page_change) {
       render_page(current_page);
-   } else {
+   } else { // restore bottom bar only if nothing changed
       std::cout << TUI::bottom_bar(term.get_terminal_size()) << std::flush;
    }
 }
@@ -244,12 +222,53 @@ void Viewer::handle_help_page() {
    std::cout << sequence << std::flush;
 }
 
+bool Viewer::fetch_latest_frame() {
+   std::optional<RenderResult> result_opt = renderer->get_result();
+   if (!result_opt) {
+      return false;
+   }
+   auto& result = result_opt.value();
+   if (result.req_id == latest_frame.req_id) { // check if frame is new
+      return false;
+   }
+   if (!result.error_message.empty()) { // check if there was a render error
+      const TermSize ts = term.get_terminal_size();
+      std::cout << TUI::add_centered(ts.height / 2, ts.width, result.error_message,
+                     result.error_message.length()) << std::flush;
+      return false;
+   }
+   latest_frame = std::move(result_opt.value()); // store latest frame
+   return true;
+}
+void Viewer::display_latest_frame() {
+   const TermSize ts = term.get_terminal_size();
+   std::string frame = terminal::reset_screen_and_cursor_string();
+   frame += center_cursor(latest_frame.page_width, latest_frame.page_height, ts.pixels_per_row, ts.pixels_per_col,
+                        ts.height - 2, ts.width, 2, 1);
+
+   std::string filepath = latest_frame.transmission == "shm" ? latest_frame.shm->name() : latest_frame.tempfile->path();
+   frame +=  get_image_sequence(filepath, latest_frame.page_width, latest_frame.page_height,
+            shm_supported ? "shm" : "tempfile");
+
+   frame += TUI::bottom_bar(ts);
+   size_t mem_bytes = getCurrentRSS();
+   double mem_usage_mb = mem_bytes / (1024.0 * 1024.0);
+   std::string stats = std::to_string(latest_frame.render_time_ms)
+                        + std::format("ms {} ",TUI::symbols::box_single_line.at(179))
+                        + std::format("{:.1f}MB", mem_usage_mb);
+   frame += TUI::top_bar(ts, parser.get_document_name(),
+                     std::format("{}/{}", current_page + 1, total_pages), stats);
+
+   std::cout << frame << std::flush; // single flush at the end
+}
+
 void Viewer::run() {
    running = true;
    terminal::enter_alt_screen();
    terminal::hide_cursor();
    term.enter_raw_mode();
    term.setup_resize_handler();
+   term.was_resized(); // force fetch initial sizes and set flag to 0
    render_page(current_page);
 
    using Clock = std::chrono::steady_clock;
@@ -270,6 +289,9 @@ void Viewer::run() {
             render_page(current_page);
             resizing = false;
          }
+      }
+      if (fetch_latest_frame()) {
+         display_latest_frame();
       }
    }
 }

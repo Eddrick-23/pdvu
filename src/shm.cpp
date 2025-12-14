@@ -5,6 +5,11 @@
 #include <sys/fcntl.h>
 #include <sys/mman.h>
 #include <atomic>
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#else
+#define ZoneScoped
+#endif
 static std::atomic<int> shm_sequence_id{0};
 
 int is_shm_supported() {
@@ -24,6 +29,7 @@ int is_shm_supported() {
 
 //constructor
 SharedMemory::SharedMemory(size_t image_size) {
+    ZoneScoped;
     shm_size = image_size;
     // generate unique name using PID and timestamp
     int id = shm_sequence_id.fetch_add(1);
