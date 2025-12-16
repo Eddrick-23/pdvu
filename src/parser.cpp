@@ -6,10 +6,14 @@
 #else
 #define ZoneScoped
 #endif
-Parser::Parser(const bool use_ICC) {
+Parser::Parser(const bool use_ICC, fz_context* cloned_ctx) {
     // NULL, NULL = standard memory allocators
     // FZ_STORE_DEFAULT = default resource cache size
-    ctx = fz_new_context(NULL, NULL, FZ_STORE_DEFAULT/2);
+    if (cloned_ctx) { // optional param to use a cloned context for duplicating
+        ctx = std::move(cloned_ctx);
+    } else {
+        ctx = fz_new_context(NULL, NULL, FZ_STORE_DEFAULT/2);
+    }
     doc = nullptr;
 
     if (!ctx) {
@@ -119,7 +123,7 @@ PageSpecs Parser::page_specs(const int page_num, const float zoom) const{
 void Parser::write_page(const int page_num, const int w, const int h,
                         const float zoom, const float rotate,
                         unsigned char* buffer, size_t buffer_len) {
-    // ZoneScoped;
+    ZoneScoped;
     // write page to a custom buffer directly
     fz_page* page = nullptr;
     fz_try(ctx) {
@@ -138,6 +142,13 @@ void Parser::write_page(const int page_num, const int w, const int h,
     }
 
     fz_pixmap* pix = nullptr;
+    // this is a set of instructions of what to draw
+    fz_display_list* dlist;
+    {
+        ZoneScoped
+        dlist = fz_new_display_list_from_page(ctx, page);
+    }
+
     fz_try(ctx) {
         fz_matrix ctm = fz_scale(zoom, zoom);
         ctm = fz_pre_rotate(ctm, rotate);
@@ -145,12 +156,13 @@ void Parser::write_page(const int page_num, const int w, const int h,
                                                  NULL, 0, w * 3, buffer);
         fz_clear_pixmap_with_value(ctx, pix, 255); // set white background
         fz_device* dev = fz_new_draw_device(ctx, fz_identity, pix);
-        fz_run_page(ctx, page, dev, ctm, nullptr);
+        fz_run_display_list(ctx, dlist, dev, ctm, fz_infinite_rect, NULL);
 
         // free memory
         fz_close_device(ctx, dev);
         fz_drop_device(ctx, dev);
         fz_drop_page(ctx, page);
+        fz_drop_display_list(ctx, dlist);
         fz_drop_pixmap(ctx, pix);
     }
     fz_catch(ctx) {
@@ -158,14 +170,49 @@ void Parser::write_page(const int page_num, const int w, const int h,
             fz_drop_pixmap(ctx, pix);
         }
         fz_drop_page(ctx, page);
+        fz_drop_display_list(ctx, dlist);
+        std::cerr <<"ERROR: Failed to draw page." << std::endl;
+    }
+}
+
+void Parser::write_section(int page_num, int w, int h, float zoom, float rotate,
+                            fz_display_list* dlist, unsigned char* buffer, fz_rect clip) {
+    /* dlist is created by another thread. That thread will be responsible for dropping it
+     * clip is which portion of the dlist we are reading from. it must match with w and h
+     * The input buffer must be shifted such that the first pixel drawn is at its correct position
+     * This allows multiple threads to write to the buffer in parallel all to different sections at once
+     */
+    if (w != clip.x1 - clip.x0 || h != clip.y1 - clip.x0) {
+        std::cerr << "ERROR: clip dimensions do not match w and h." << std::endl;
+        // fz_drop_page(ctx, page);
+        return;
+    }
+    fz_pixmap* pix = nullptr;
+    fz_try(ctx) {
+        fz_matrix ctm = fz_scale(zoom, zoom);
+        ctm = fz_pre_rotate(ctm, rotate);
+        pix = fz_new_pixmap_with_data(ctx, fz_device_rgb(ctx), w, h,
+                                                 NULL, 0, w * 3, buffer);
+        fz_clear_pixmap_with_value(ctx, pix, 255); // set white background
+        fz_device* dev = fz_new_draw_device(ctx, fz_identity, pix);
+        fz_run_display_list(ctx, dlist, dev, ctm, clip, NULL);
+
+        // free memory
+        fz_close_device(ctx, dev);
+        fz_drop_device(ctx, dev);
+        fz_drop_pixmap(ctx, pix);
+    }
+    fz_catch(ctx) {
+        if (pix) {
+            fz_drop_pixmap(ctx, pix);
+        }
         std::cerr <<"ERROR: Failed to draw page." << std::endl;
     }
 }
 
 std::unique_ptr<Parser> Parser::duplicate() const {
-    auto clone = std::make_unique<Parser>(this -> use_icc_profile);
-    // TODO duplicate the context instead of making a fresh one
-    // might have to allow an optional context parameter in the constructor
+    fz_context* clone_ctx = fz_clone_context(ctx);
+    auto clone = std::make_unique<Parser>(this -> use_icc_profile, clone_ctx);
 
     if (!full_filepath.empty()) {
         if (!clone->load_document(this->full_filepath)) {

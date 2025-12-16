@@ -23,9 +23,7 @@ struct RenderResult {
     int page_height;
     std::string error_message; // empty if successful
     int render_time_ms;
-
-    std::unique_ptr<SharedMemory> shm;
-    std::unique_ptr<Tempfile> tempfile;
+    std::string path_to_data;
     std::string transmission;
 };
 
@@ -56,5 +54,7 @@ private:
 
     // variable to keep track of latest result;
     std::optional<RenderResult> latest_result;
+    std::unique_ptr<SharedMemory> current_shm;
+    std::unique_ptr<Tempfile> current_tempfile;
 };
 

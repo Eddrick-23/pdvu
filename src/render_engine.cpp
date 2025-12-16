@@ -4,9 +4,6 @@
 RenderEngine::RenderEngine(const Parser &prototype_parser) {
     parser = prototype_parser.duplicate();
     worker = std::thread(&RenderEngine::worker_loop, this);
-    // TODO implement a triple buffer pool of shm or tempfiles to reuse
-    // take advantage of hot paths and avoid creating new shm or tempfiles for every new page
-    // we need to add ensure_size for shm and tempfile classes to resize if needed
 }
 
 RenderEngine::~RenderEngine() {
@@ -40,6 +37,8 @@ void RenderEngine::worker_loop() {
      * we store the transmission object to pass on to viewer class
      * latest_result attribute stores the latest rendered frame
      */
+    // TODO find a way to render to the same buffer in parallel with multiple threads
+    // first move the page parsing to a separate function?
     while (running) {
         RenderRequest req;
         // wait for work
@@ -68,14 +67,16 @@ void RenderEngine::worker_loop() {
             PageSpecs ps = parser->page_specs(req.page_num, req.zoom);
             if (req.transmission == "shm") {
                 auto new_shm = std::make_unique<SharedMemory>(ps.size);
+                current_shm = std::move(new_shm);
                 parser->write_page(req.page_num, ps.width, ps.height, req.zoom, 0,
-                                    static_cast<unsigned char*>(new_shm->data()), ps.size);
-                result.shm = std::move(new_shm);
+                                    static_cast<unsigned char*>(current_shm->data()), ps.size);
+                result.path_to_data = current_shm->name();
             } else { // tempfile
                 auto new_temp = std::make_unique<Tempfile>(ps.size);
+                current_tempfile = std::move(new_temp);
                 parser->write_page(req.page_num, ps.width, ps.height, req.zoom, 0,
-                                    static_cast<unsigned char*>(new_temp->data()), ps.size);
-                result.tempfile = std::move(new_temp);
+                                    static_cast<unsigned char*>(current_tempfile->data()), ps.size);
+                result.path_to_data = current_tempfile->path();
             }
             result.page_width = ps.width;
             result.page_height = ps.height;

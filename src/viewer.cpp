@@ -246,8 +246,7 @@ void Viewer::display_latest_frame() {
    frame += center_cursor(latest_frame.page_width, latest_frame.page_height, ts.pixels_per_row, ts.pixels_per_col,
                         ts.height - 2, ts.width, 2, 1);
 
-   std::string filepath = latest_frame.transmission == "shm" ? latest_frame.shm->name() : latest_frame.tempfile->path();
-   frame +=  get_image_sequence(filepath, latest_frame.page_width, latest_frame.page_height,
+   frame +=  get_image_sequence(latest_frame.path_to_data, latest_frame.page_width, latest_frame.page_height,
             shm_supported ? "shm" : "tempfile");
 
    frame += TUI::bottom_bar(ts);

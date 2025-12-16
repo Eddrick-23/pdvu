@@ -15,7 +15,7 @@ struct PageSpecs {
 
 class Parser {
 public:
-    explicit Parser(bool use_ICC);
+    explicit Parser(bool use_ICC, fz_context* cloned_ctx = nullptr);
     ~Parser();
 
     // delete copy constructors
@@ -34,6 +34,9 @@ public:
     void write_page(int page_num, int w, int h,
                     float zoom, float rotate,
                     unsigned char* buffer, size_t buffer_len);
+    void write_section(int page_num, int w, int h, float zoom, float rotate,
+                        fz_display_list* dlist, unsigned char* buffer,
+                        fz_rect clip);
     std::unique_ptr<Parser> duplicate() const;
 
 private:
