@@ -1,6 +1,7 @@
 #include "tui.h"
-
+#include <functional>
 #include <chrono>
+#include <iostream>
 #include <string>
 #include "terminal.h"
 #include "kitty.h"

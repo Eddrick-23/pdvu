@@ -1,71 +1,48 @@
 cmake_minimum_required(VERSION 3.31)
 project(pdvu)
 
+# GoogleTest requires at least C++17
+include(CTest) # includes BUILD_TESTING option
+if(NOT DEFINED BUILD_TESTING)
+    set(BUILD_TESTING OFF CACHE BOOL "Build unit tests")
+endif()
+
 set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_subdirectory(src)
 
 option(ENABLE_TRACY "Enable Tracy profiler" OFF)
-
-set(SOURCES
-        src/main.cpp
-        src/terminal.cpp
-        src/kitty.cpp
-        src/parser.cpp
-        src/viewer.cpp
-        src/tempfile.cpp
-        src/shm.cpp
-        src/tui.cpp
-        src/render_engine.cpp
-)
-
-add_executable(pdvu ${SOURCES})
-
-target_include_directories(pdvu PRIVATE external) #CLI11
-target_precompile_headers(pdvu PRIVATE <CLI11.hpp>)
-
-set(MUPDF_ROOT "${CMAKE_SOURCE_DIR}/external/mupdf")
-
-target_include_directories(pdvu PRIVATE
-        src
-        "${MUPDF_ROOT}/include"
-)
-
-#Link against MuPdf library
-target_link_libraries(pdvu PRIVATE
-        "${MUPDF_ROOT}/build/release/libmupdf.a"
-        "${MUPDF_ROOT}/build/release/libmupdf-third.a"
-)
-
 # --- TRACY PROFILER CONFIGURATION ---
-
-# Enable for Debug OR RelWithDebInfo (Optimized + Symbols is best for profiling)
 if(ENABLE_TRACY)
     message(STATUS "Tracy profiling ENABLED")
 
-    # 1. Define the macro globally
-    add_compile_definitions(TRACY_ENABLE)
+    # Define macro for the library sources
+    target_compile_definitions(pdvu_core PUBLIC TRACY_ENABLE)
 
-    # 2. You only need THIS single file. It includes the others internally.
+    # Build Tracy Client
     set(TRACY_CLIENT_SRC "${CMAKE_SOURCE_DIR}/external/tracy/public/TracyClient.cpp")
-
-    # 3. Create the library
     add_library(TracyClient STATIC ${TRACY_CLIENT_SRC})
+    target_compile_definitions(TracyClient PUBLIC TRACY_ENABLE)
+    target_include_directories(TracyClient PUBLIC "${CMAKE_SOURCE_DIR}/external/tracy/public")
 
-    # 4. Include directories
-    target_include_directories(TracyClient PUBLIC
-            "${CMAKE_SOURCE_DIR}/external/tracy/public"
-    )
-
-    # 5. Link required system libraries (Pthread and dl are mandatory on Linux)
     find_package(Threads REQUIRED)
-    target_link_libraries(TracyClient PUBLIC
-            Threads::Threads
-            ${CMAKE_DL_LIBS} # This handles -ldl
-    )
+    target_link_libraries(TracyClient PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
 
-    # 6. Link Tracy to your executable
-    target_link_libraries(pdvu PRIVATE TracyClient)
-
-    message(STATUS "Tracy profiling ENABLED (Build Type: ${CMAKE_BUILD_TYPE})")
+    # Link Tracy to the core library
+    target_link_libraries(pdvu_core PUBLIC TracyClient)
 else()
     message(STATUS "Tracy profiling DISABLED")
 endif()
+
+add_executable(pdvu src/main.cpp)
+
+target_link_libraries(pdvu PRIVATE pdvu_core)
+
+# --- GoogleTest config ---
+if (BUILD_TESTING)
+    message(STATUS "Unit tests ENABLED")
+    add_subdirectory(tests)
+else ()
+    message(STATUS "Unit tests DISABLED")
+endif ()

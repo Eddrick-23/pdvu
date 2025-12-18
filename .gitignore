@@ -34,3 +34,6 @@ Makefile
 
 # Ignore temporary test PDFs
 /samples
+
+# Ignore unit test logs
+/Testing
