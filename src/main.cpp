@@ -50,8 +50,8 @@ int main(int argc, char** argv) {
         std::cerr << "Error: Pdf file must be provided" << std::endl;
         return 1;
     }
-
-    Viewer viewer(pdf_path, enable_ICC);
+    std::unique_ptr<IParser> parser = std::make_unique<Parser>(enable_ICC);
+    Viewer viewer((std::move(parser)), pdf_path, enable_ICC);
     viewer.run(); // start main loop
 
     return 0;

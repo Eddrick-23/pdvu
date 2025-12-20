@@ -8,8 +8,8 @@
 
 class Viewer {
 public:
-Viewer(const std::string& file_path, bool use_ICC); // constructor
-void setup(const std::string& file_path);
+Viewer(std::unique_ptr<IParser> main_parser, const std::string& file_path, bool use_ICC); // constructor
+void setup(const std::string& file_path, bool use_ICC);
 void process_keypress();
 float calculate_zoom_factor(const TermSize& ts, int page_num, int ppr, int ppc);
 std::string center_cursor(int w, int h, int ppr, int ppc,
@@ -24,7 +24,7 @@ void run(); // main loop
 private:
     // sub systems
     Terminal term; // terminal data and raw mode
-    Parser parser; // parsing pdfs
+    std::unique_ptr<IParser> parser; // parsing pdfs
     // hold a pointer because parser must be loaded fully before creating renderer
     std::unique_ptr<RenderEngine> renderer; // loading page frames
 

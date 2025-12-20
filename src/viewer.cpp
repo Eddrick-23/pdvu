@@ -13,18 +13,20 @@
 #else
 #define ZoneScoped
 #endif
-Viewer::Viewer(const std::string& file_path, const bool use_ICC) : term{}, parser {use_ICC}{
-   setup(file_path);
+Viewer::Viewer(std::unique_ptr<IParser> main_parser, const std::string& file_path, const bool use_ICC) {
+   parser = std::move(main_parser);
+   setup(file_path, use_ICC);
 }
 
-void Viewer::setup(const std::string& file_path) {
+void Viewer::setup(const std::string& file_path, bool use_ICC) {
    // setup terminal, main parser, render engine
-   if (!parser.load_document(file_path)) {
+   // parser = std::make_unique<Parser>(use_ICC);
+   if (!parser->load_document(file_path)) {
       throw std::runtime_error("failed to load document");
    }
-   total_pages = parser.num_pages();
+   total_pages = parser->num_pages();
    shm_supported = is_shm_supported();
-   renderer = std::make_unique<RenderEngine>(parser);
+   renderer = std::make_unique<RenderEngine>(*parser);
 }
 
 float Viewer::calculate_zoom_factor(const TermSize& ts, int page_num, int ppr, int ppc) {
@@ -35,7 +37,7 @@ float Viewer::calculate_zoom_factor(const TermSize& ts, int page_num, int ppr, i
    const int max_h_pixels = available_rows * ppr;
    const int max_w_pixels = available_cols * ppc;
 
-   const PageSpecs ps = parser.page_specs(page_num, 1.0); // default zoom
+   const PageSpecs ps = parser->page_specs(page_num, 1.0); // default zoom
 
    const float h_scale = static_cast<float>(max_w_pixels) / ps.acc_width;
    const float v_scale = static_cast<float>(max_h_pixels) / ps.acc_height;
@@ -255,7 +257,7 @@ void Viewer::display_latest_frame() {
    std::string stats = std::to_string(latest_frame.render_time_ms)
                         + std::format("ms {} ",TUI::symbols::box_single_line.at(179))
                         + std::format("{:.1f}MB", mem_usage_mb);
-   frame += TUI::top_bar(ts, parser.get_document_name(),
+   frame += TUI::top_bar(ts, parser->get_document_name(),
                      std::format("{}/{}", current_page + 1, total_pages), stats);
 
    std::cout << frame << std::flush; // single flush at the end

@@ -13,17 +13,18 @@ endif()
 FetchContent_MakeAvailable(googletest)
 
 add_executable(unit_tests
-#        test_shm.cpp
+        test_shm.cpp
+        test_tempfile.cpp
         test_kitty.cpp
+        test_threadpool.cpp
         # Add new test files here
 )
 
-# Link against GTest main (provides a default int main for tests)
-# And link against YOUR core library
 target_link_libraries(unit_tests
     PRIVATE
         pdvu_core
         GTest::gtest_main
+        GTest::gmock_main
 )
 
 include(GoogleTest)

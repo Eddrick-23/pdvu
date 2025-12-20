@@ -33,17 +33,16 @@ Tempfile::~Tempfile() {
         munmap(mapped_ptr, file_size);
     }
     close_file();
-    if (!fp.empty()) {
-        unlink(fp.c_str());
-    }
-
 }
 
-void Tempfile::close_file() { // close after writing
+void Tempfile::close_file() { // close and unlink
    if (fd != -1) {
        close(fd);
        fd = -1; // mark as closed
    }
+    if (!fp.empty()) {
+        unlink(fp.c_str());
+    }
 }
 
 const std::string& Tempfile::path() const{ // get path
@@ -68,7 +67,7 @@ Tempfile::Tempfile(Tempfile&& other) noexcept {
 
 Tempfile& Tempfile::operator=(Tempfile&& other) noexcept {
     if (this != &other) {
-        close_file();
+        close_file(); // close and unlink current file
 
         fd = other.fd;
         fp = other.fp;

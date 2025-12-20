@@ -1,7 +1,7 @@
 #include "render_engine.h"
 #include "kitty.h"
 
-RenderEngine::RenderEngine(const Parser &prototype_parser) {
+RenderEngine::RenderEngine(const IParser& prototype_parser) {
     parser = prototype_parser.duplicate();
     worker = std::thread(&RenderEngine::worker_loop, this);
 }

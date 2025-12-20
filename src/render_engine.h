@@ -29,7 +29,7 @@ struct RenderResult {
 
 class RenderEngine {
 public:
-    explicit RenderEngine(const Parser& prototype_parser);
+    explicit RenderEngine(const IParser& prototype_parser);
     ~RenderEngine();
 
     // main thread calls to request a page
@@ -40,7 +40,7 @@ private:
     void worker_loop();
 
     // core
-    std::unique_ptr<Parser> parser; // thread local parser
+    std::unique_ptr<IParser> parser; // thread local parser
     std::thread worker;
     std::atomic<bool> running = true;
     std::atomic<size_t> current_req_id = 0;

@@ -210,7 +210,7 @@ void Parser::write_section(int page_num, int w, int h, float zoom, float rotate,
     }
 }
 
-std::unique_ptr<Parser> Parser::duplicate() const {
+std::unique_ptr<IParser> Parser::duplicate() const {
     fz_context* clone_ctx = fz_clone_context(ctx);
     auto clone = std::make_unique<Parser>(this -> use_icc_profile, clone_ctx);
 
@@ -226,10 +226,12 @@ Parser::Parser(Parser&& other) noexcept {
     ctx = other.ctx;
     doc = other.doc;
     doc_name = other.doc_name;
+    use_icc_profile = other.use_icc_profile;
 
     other.ctx = nullptr;
     other.doc = nullptr;
     other.doc_name.clear();
+    other.use_icc_profile = false;
 }
 
 Parser& Parser::operator=(Parser&& other) noexcept {
@@ -243,10 +245,12 @@ Parser& Parser::operator=(Parser&& other) noexcept {
         ctx = other.ctx;
         doc = other.doc;
         doc_name = other.doc_name;
+        use_icc_profile = other.use_icc_profile;
 
         other.ctx = nullptr;
         other.doc = nullptr;
         other.doc_name.clear();
+        other.use_icc_profile = false;
     }
     return *this;
 }

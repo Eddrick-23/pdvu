@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.31)
 project(pdvu)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # GoogleTest requires at least C++17
 include(CTest) # includes BUILD_TESTING option
