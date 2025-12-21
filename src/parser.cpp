@@ -1,18 +1,39 @@
 #include "parser.h"
 #include <filesystem>
 #include <iostream>
+#include <mutex>
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
 #else
 #define ZoneScoped
 #endif
+
+struct MutexLocks {
+    std::mutex mutexes[FZ_LOCK_MAX];
+};
+
+static MutexLocks global_mu_locks;
+
+// Callback: Lock
+void lock_callback(void *user, int lock) {
+    static_cast<MutexLocks*>(user)->mutexes[lock].lock();
+}
+
+// Callback: Unlock
+void unlock_callback(void *user, int lock) {
+    static_cast<MutexLocks*>(user)->mutexes[lock].unlock();
+}
 Parser::Parser(const bool use_ICC, fz_context* cloned_ctx) {
-    // NULL, NULL = standard memory allocators
     // FZ_STORE_DEFAULT = default resource cache size
     if (cloned_ctx) { // optional param to use a cloned context for duplicating
         ctx = std::move(cloned_ctx);
     } else {
-        ctx = fz_new_context(NULL, NULL, FZ_STORE_DEFAULT/2);
+        static fz_locks_context locks_ctx;
+        locks_ctx.user = &global_mu_locks;
+        locks_ctx.lock = lock_callback;
+        locks_ctx.unlock = unlock_callback;
+        ctx = fz_new_context(NULL, &locks_ctx, FZ_STORE_DEFAULT/2);
+        fz_register_document_handlers(ctx);
     }
     doc = nullptr;
 
@@ -41,7 +62,6 @@ Parser::Parser(const bool use_ICC, fz_context* cloned_ctx) {
     //     std::cerr << "WARNING: Failed to configure AAC." << std::endl;
     // }
 
-    fz_register_document_handlers(ctx);
 
 }
 
@@ -120,9 +140,39 @@ PageSpecs Parser::page_specs(const int page_num, const float zoom) const{
     return PageSpecs(bbox.x0, bbox.y0, bbox.x1, bbox.y1, w, h, size, acc_width, acc_height);
 }
 
+std::vector<HorizontalBound> Parser::split_bounds(PageSpecs ps, int n) {
+    ZoneScoped;
+    // split the page into n horizontal strips represented by fz_rect
+    constexpr int pad = 3; // data is in rgb format
+    std::vector<HorizontalBound> bounds;
+    int y_step = ps.height / n;
+    int remainder = ps.height % n;
+    const int x0 = ps.x0;
+    const int x1 = ps.x1;
+    // only y0 and y1 will be shifted
+    int y0 = ps.y0;
+    int y1 = ps.y0 + y_step;
+    size_t offset = 0;
+    for (int i = 0; i < n - 1; i++) {
+        const size_t pixels = (x1 - x0) * (y1 - y0) * pad;
+        auto data = HorizontalBound{fz_make_rect(x0, y0, x1, y1),x1 - x0, y1 - y0, pixels, offset};
+        bounds.push_back(data);
+        y0 = y1;
+        y1 += y_step;
+        offset += pixels;
+    }
+    // last iteration
+    y1 += remainder;
+    const size_t pixels = (x1 - x0) * (y1 - y0) * pad;
+    const auto data = HorizontalBound{fz_make_rect(x0, y0, x1, y1), x1 - x0, y1 - y0,pixels, offset};
+    bounds.push_back(data);
+    return bounds;
+}
+
+
 void Parser::write_page(const int page_num, const int w, const int h,
                         const float zoom, const float rotate,
-                        unsigned char* buffer, size_t buffer_len) {
+                        unsigned char* buffer, fz_rect clip) {
     ZoneScoped;
     // write page to a custom buffer directly
     fz_page* page = nullptr;
@@ -133,36 +183,29 @@ void Parser::write_page(const int page_num, const int w, const int h,
         std::cerr <<"ERROR: Failed to load page." << std::endl;
     }
 
-    // check if buffer_len matches how much mupdf needs to write
-    size_t required_len = static_cast<size_t>(w) * 3 * h; // stride * height
-    if (required_len > buffer_len) {
-        std::cerr <<"ERROR: Buffer too small. Given: " << buffer_len << " Required: " << required_len << std::endl;
-        fz_drop_page(ctx, page);
-        return; // abort the write
+    if (w != clip.x1 - clip.x0 || h != clip.y1 - clip.y0) {
+        std::cerr << "ERROR: clip dimensions do not match w and h." << std::endl;
+        return;
     }
 
     fz_pixmap* pix = nullptr;
-    // this is a set of instructions of what to draw
-    fz_display_list* dlist;
-    {
-        ZoneScoped
-        dlist = fz_new_display_list_from_page(ctx, page);
-    }
 
     fz_try(ctx) {
         fz_matrix ctm = fz_scale(zoom, zoom);
         ctm = fz_pre_rotate(ctm, rotate);
         pix = fz_new_pixmap_with_data(ctx, fz_device_rgb(ctx), w, h,
                                                  NULL, 0, w * 3, buffer);
+        // set start points based on clip
+        pix->x = static_cast<int>(clip.x0);
+        pix->y = static_cast<int>(clip.y0);
         fz_clear_pixmap_with_value(ctx, pix, 255); // set white background
         fz_device* dev = fz_new_draw_device(ctx, fz_identity, pix);
-        fz_run_display_list(ctx, dlist, dev, ctm, fz_infinite_rect, NULL);
+        fz_run_page(ctx, page, dev, ctm, nullptr);
 
         // free memory
         fz_close_device(ctx, dev);
         fz_drop_device(ctx, dev);
         fz_drop_page(ctx, page);
-        fz_drop_display_list(ctx, dlist);
         fz_drop_pixmap(ctx, pix);
     }
     fz_catch(ctx) {
@@ -170,32 +213,67 @@ void Parser::write_page(const int page_num, const int w, const int h,
             fz_drop_pixmap(ctx, pix);
         }
         fz_drop_page(ctx, page);
-        fz_drop_display_list(ctx, dlist);
         std::cerr <<"ERROR: Failed to draw page." << std::endl;
     }
 }
 
+using DisplayListHandle = std::shared_ptr<fz_display_list>;
+DisplayListHandle Parser::get_display_list(int page_num) {
+    ZoneScoped;
+    fz_page* page = nullptr;
+    fz_display_list* raw_list = nullptr;
+    fz_try(ctx) {
+        page = fz_load_page(ctx, doc, page_num);
+    }
+    fz_catch(ctx) {
+        std::cerr << "Failed to load page" << std::endl;
+        return nullptr;
+    }
+    fz_try(ctx) {
+        raw_list = fz_new_display_list_from_page(ctx, page);
+        fz_drop_page(ctx, page);
+    }
+    fz_catch(ctx) {
+        if (page) {
+            fz_drop_page(ctx, page);
+        }
+        std::cerr << "Failed to create display list" << std::endl;
+        return nullptr; // coordinator will check if displaylist was created successfully
+    }
+    fz_context* captured_ctx = this->ctx; // capture for custom deleter
+    return DisplayListHandle(raw_list, [captured_ctx](fz_display_list* ptr) {
+        if (ptr) {
+            fz_drop_display_list(captured_ctx, ptr);
+        }
+    });
+}
+
+
 void Parser::write_section(int page_num, int w, int h, float zoom, float rotate,
-                            fz_display_list* dlist, unsigned char* buffer, fz_rect clip) {
+                            DisplayListHandle dlist, unsigned char* buffer, fz_rect clip) {
     /* dlist is created by another thread. That thread will be responsible for dropping it
      * clip is which portion of the dlist we are reading from. it must match with w and h
      * The input buffer must be shifted such that the first pixel drawn is at its correct position
      * This allows multiple threads to write to the buffer in parallel all to different sections at once
      */
-    if (w != clip.x1 - clip.x0 || h != clip.y1 - clip.x0) {
+    ZoneScoped;
+    if (w != clip.x1 - clip.x0 || h != clip.y1 - clip.y0) {
         std::cerr << "ERROR: clip dimensions do not match w and h." << std::endl;
-        // fz_drop_page(ctx, page);
         return;
     }
     fz_pixmap* pix = nullptr;
     fz_try(ctx) {
         fz_matrix ctm = fz_scale(zoom, zoom);
         ctm = fz_pre_rotate(ctm, rotate);
-        pix = fz_new_pixmap_with_data(ctx, fz_device_rgb(ctx), w, h,
-                                                 NULL, 0, w * 3, buffer);
+        // pix = fz_new_pixmap_with_data(ctx, fz_device_rgb(ctx), w, h,
+        //                                          NULL, 0, w * 3, buffer);
+        pix = fz_new_pixmap_with_bbox_and_data(ctx, fz_device_rgb(ctx),
+                fz_irect_from_rect(clip), NULL, 0, buffer);
+        pix->x = static_cast<int>(clip.x0);
+        pix->y = static_cast<int>(clip.y0);
         fz_clear_pixmap_with_value(ctx, pix, 255); // set white background
         fz_device* dev = fz_new_draw_device(ctx, fz_identity, pix);
-        fz_run_display_list(ctx, dlist, dev, ctm, clip, NULL);
+        fz_run_display_list(ctx, dlist.get(), dev, ctm, clip, NULL);
 
         // free memory
         fz_close_device(ctx, dev);
@@ -211,15 +289,16 @@ void Parser::write_section(int page_num, int w, int h, float zoom, float rotate,
 }
 
 std::unique_ptr<IParser> Parser::duplicate() const {
+
     fz_context* clone_ctx = fz_clone_context(ctx);
-    auto clone = std::make_unique<Parser>(this -> use_icc_profile, clone_ctx);
+    auto new_parser = std::make_unique<Parser>(this -> use_icc_profile, clone_ctx); // debug try without clone
 
     if (!full_filepath.empty()) {
-        if (!clone->load_document(this->full_filepath)) {
+        if (!new_parser->load_document(this->full_filepath)) {
             throw std::runtime_error("Failed to load document for cloned parser");
         }
     }
-    return clone;
+    return new_parser;
 }
 
 Parser::Parser(Parser&& other) noexcept {

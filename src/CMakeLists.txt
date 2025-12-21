@@ -3,8 +3,8 @@ set(CORE_SOURCES
         kitty.cpp
         parser.cpp
         viewer.cpp
-        tempfile.cpp
-        shm.cpp
+        utils/tempfile.cpp
+        utils/shm.cpp
         tui.cpp
         render_engine.cpp
         threadpool.cpp

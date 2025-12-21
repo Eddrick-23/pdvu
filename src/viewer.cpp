@@ -5,20 +5,19 @@
 #include "terminal.h"
 #include "parser.h"
 #include "kitty.h"
-#include "shm.h"
-#include "ram_usage.h"
+#include "utils/ram_usage.h"
 #include "tui.h"
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
 #else
 #define ZoneScoped
 #endif
-Viewer::Viewer(std::unique_ptr<IParser> main_parser, const std::string& file_path, const bool use_ICC) {
+Viewer::Viewer(std::unique_ptr<IParser> main_parser,int n_threads, const std::string& file_path, const bool use_ICC) {
    parser = std::move(main_parser);
-   setup(file_path, use_ICC);
+   setup(file_path, n_threads);
 }
 
-void Viewer::setup(const std::string& file_path, bool use_ICC) {
+void Viewer::setup(const std::string& file_path, int n_threads) {
    // setup terminal, main parser, render engine
    // parser = std::make_unique<Parser>(use_ICC);
    if (!parser->load_document(file_path)) {
@@ -26,7 +25,7 @@ void Viewer::setup(const std::string& file_path, bool use_ICC) {
    }
    total_pages = parser->num_pages();
    shm_supported = is_shm_supported();
-   renderer = std::make_unique<RenderEngine>(*parser);
+   renderer = std::make_unique<RenderEngine>(*parser, n_threads);
 }
 
 float Viewer::calculate_zoom_factor(const TermSize& ts, int page_num, int ppr, int ppc) {

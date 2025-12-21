@@ -10,10 +10,14 @@ int main(int argc, char** argv) {
     bool show_license = false;
     app.add_flag("--license", show_license, "Print license info");
 
-    // add new options and flags here
     bool enable_ICC = false;
     app.add_flag("--ICC",enable_ICC,
         "Enable ICC Colour management. May slow down parsing speed");
+
+    int n_threads = 1;
+    app.add_option("-j,--jobs,--threads", n_threads,
+        "Number of worker threads to use. Default 1.");
+    n_threads = n_threads <= 0 ? 1 : n_threads;
 
     std::filesystem::path pdf_path;
     app.add_option("pdf", pdf_path, "Path to PDF file")
@@ -50,10 +54,10 @@ int main(int argc, char** argv) {
         std::cerr << "Error: Pdf file must be provided" << std::endl;
         return 1;
     }
-    std::unique_ptr<IParser> parser = std::make_unique<Parser>(enable_ICC);
-    Viewer viewer((std::move(parser)), pdf_path, enable_ICC);
-    viewer.run(); // start main loop
 
+    std::unique_ptr<IParser> parser = std::make_unique<Parser>(enable_ICC);
+    Viewer viewer((std::move(parser)), n_threads, pdf_path, enable_ICC);
+    viewer.run(); // start main loop
     return 0;
 
 }

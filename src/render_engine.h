@@ -5,8 +5,9 @@
 #include <atomic>
 #include <optional>
 #include "parser.h"
-#include "shm.h"
-#include "tempfile.h"
+#include "utils/shm.h"
+#include "utils/tempfile.h"
+#include "threadpool.h"
 
 struct RenderRequest {
     int page_num;
@@ -29,7 +30,7 @@ struct RenderResult {
 
 class RenderEngine {
 public:
-    explicit RenderEngine(const IParser& prototype_parser);
+    explicit RenderEngine(const IParser& prototype_parser, int n_threads);
     ~RenderEngine();
 
     // main thread calls to request a page
@@ -38,12 +39,19 @@ public:
     std::optional<RenderResult> get_result();
 private:
     void worker_loop();
+    void coordinator_loop();
+    void dispatch_page_write(const RenderRequest& req);
+
 
     // core
     std::unique_ptr<IParser> parser; // thread local parser
     std::thread worker;
     std::atomic<bool> running = true;
     std::atomic<size_t> current_req_id = 0;
+
+    // threadpool for heavy work
+    int n_threads_;
+    std::unique_ptr<ThreadPool> thread_pool;
 
     // thread safety and synchronisation
     std::mutex state_mutex; // shared between cv_worker and actual worker

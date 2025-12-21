@@ -1,3 +1,4 @@
+#include <latch>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "threadpool.h"
@@ -9,11 +10,13 @@ public:
     MOCK_METHOD(bool, load_document, (const std::string&), (override));
     MOCK_METHOD(const std::string&, get_document_name, (), (const, override));
     MOCK_METHOD(PageSpecs, page_specs, (int, float), (const, override));
+    MOCK_METHOD(std::vector<HorizontalBound>, split_bounds, (PageSpecs, int), (override));
     MOCK_METHOD(int, num_pages, (), (const, override));
     MOCK_METHOD(void, write_page,
                 (int, int, int, float, float, unsigned char*, size_t), (override));
+    MOCK_METHOD(DisplayListHandle, get_display_list, (int), (override));
     MOCK_METHOD(void, write_section,
-                (int, int, int, float, float, fz_display_list*, unsigned char*, fz_rect), (override));
+                (int, int, int, float, float, DisplayListHandle, unsigned char*, fz_rect), (override));
     MOCK_METHOD(std::unique_ptr<IParser>, duplicate, (), (const, override));
 };
 
@@ -102,9 +105,11 @@ TEST(ThreadPoolTest, EnqueueTaskMultipleThreadsMultipleTasks) {
     }
     std::vector<std::function<std::string(IParser&)>> tasks;
     tasks.reserve(n_tasks);
+    std::latch sync_point(n_tasks);
     for (int i = 0; i < n_tasks; i++) {
-        auto task = [i, &results](IParser& parser) { // takes in an IParser reference
+        auto task = [i, &results, &sync_point](IParser& parser) { // takes in an IParser reference
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            sync_point.count_down();
             return results.at(i);
         };
         tasks.emplace_back(task);
@@ -119,6 +124,8 @@ TEST(ThreadPoolTest, EnqueueTaskMultipleThreadsMultipleTasks) {
         futures.push_back(std::move(fut)); // futures are move only
     }
     // check the results
+    sync_point.wait();
+
     for (int i = 0; i < n_tasks; i++) {
         EXPECT_EQ(futures.at(i).get(), results.at(i));
     }

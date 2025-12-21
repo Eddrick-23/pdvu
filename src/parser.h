@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <string>
+#include <vector>
 
 // Tell C++ compiler to treat these includes as C code
 extern "C" {
@@ -14,20 +15,30 @@ struct PageSpecs {
     float acc_width, acc_height;
 };
 
+struct HorizontalBound {
+    fz_rect rect;
+    int width;
+    int height;
+    size_t bytes;
+    size_t offset; // offset from start pointer of buffer
+};
+
 struct IParser {
 
     virtual ~IParser() = default;
     virtual void clear_doc() = 0;
     virtual bool load_document(const std::string& filepath) = 0;
     virtual const std::string& get_document_name() const = 0;
-
     virtual PageSpecs page_specs(int page, float zoom) const = 0;
+    virtual std::vector<HorizontalBound> split_bounds(PageSpecs, int n) = 0;
     virtual int num_pages() const = 0;
     virtual void write_page(int page_num, int w, int h,
                     float zoom, float rotate,
-                    unsigned char* buffer, size_t buffer_len) = 0;
+                    unsigned char* buffer, fz_rect clip) = 0;
+    using DisplayListHandle = std::shared_ptr<fz_display_list>;
+    virtual DisplayListHandle get_display_list(int page_num) = 0;
     virtual void write_section(int page_num, int w, int h, float zoom, float rotate,
-                        fz_display_list* dlist, unsigned char* buffer,
+                        DisplayListHandle dlist, unsigned char* buffer,
                         fz_rect clip) = 0;
     virtual std::unique_ptr<IParser> duplicate() const = 0;
 };
@@ -49,12 +60,15 @@ public:
     bool load_document(const std::string& filepath) override;
     const std::string& get_document_name() const override;
     [[nodiscard]] PageSpecs page_specs(int page, float zoom) const override;
+    [[nodiscard]] std::vector<HorizontalBound> split_bounds(PageSpecs ps, int n) override;
     int num_pages() const override;
     void write_page(int page_num, int w, int h,
                     float zoom, float rotate,
-                    unsigned char* buffer, size_t buffer_len) override;
+                    unsigned char* buffer, fz_rect clip) override;
+    using DisplayListHandle = std::shared_ptr<fz_display_list>;
+    [[nodiscard]] DisplayListHandle get_display_list(int page_num) override;
     void write_section(int page_num, int w, int h, float zoom, float rotate,
-                        fz_display_list* dlist, unsigned char* buffer,
+                        DisplayListHandle dlist, unsigned char* buffer,
                         fz_rect clip) override;
     [[nodiscard]] std::unique_ptr<IParser> duplicate() const override;
 

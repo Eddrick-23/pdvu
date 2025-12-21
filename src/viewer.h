@@ -1,15 +1,13 @@
 #pragma once
 #include "terminal.h"
 #include "parser.h"
-#include "tempfile.h"
-#include "shm.h"
 #include "render_engine.h"
 
 
 class Viewer {
 public:
-Viewer(std::unique_ptr<IParser> main_parser, const std::string& file_path, bool use_ICC); // constructor
-void setup(const std::string& file_path, bool use_ICC);
+Viewer(std::unique_ptr<IParser> main_parser, int n_threads, const std::string& file_path, bool use_ICC); // constructor
+void setup(const std::string& file_path, int n_threads);
 void process_keypress();
 float calculate_zoom_factor(const TermSize& ts, int page_num, int ppr, int ppc);
 std::string center_cursor(int w, int h, int ppr, int ppc,
