@@ -17,6 +17,7 @@ add_executable(unit_tests
         test_tempfile.cpp
         test_kitty.cpp
         test_threadpool.cpp
+        test_lru_cache.cpp
         # Add new test files here
 )
 

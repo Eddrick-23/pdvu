@@ -18,6 +18,9 @@ public:
     const std::string& name() const;
     const size_t& size() const;
     void* data() const;
+    void write_data(const unsigned char* data, size_t len);
+    void copy_data(void *dest, size_t len) const;
+
     void close_mem();
 
 private:

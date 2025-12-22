@@ -4,6 +4,8 @@
 #include "tempfile.h"
 
 
+// TODO add write data method
+
 Tempfile::Tempfile(size_t size) {
     file_size = size;
     char tmp_template[] = "/tmp/pdvu_XXXXXX";
@@ -51,6 +53,10 @@ const std::string& Tempfile::path() const{ // get path
 
 void* Tempfile::data() const{
     return mapped_ptr;
+}
+
+void Tempfile::write_data(unsigned char* data, size_t len) {
+    memcpy(mapped_ptr,data, len);
 }
 
 Tempfile::Tempfile(Tempfile&& other) noexcept {

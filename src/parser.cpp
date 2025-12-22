@@ -34,7 +34,7 @@ MuPDFParser::MuPDFParser(const bool use_ICC, fz_context* cloned_ctx) {
         locks_ctx.user = &global_mu_locks;
         locks_ctx.lock = lock_callback;
         locks_ctx.unlock = unlock_callback;
-        ctx = fz_new_context(NULL, &locks_ctx, FZ_STORE_DEFAULT/2);
+        ctx = fz_new_context(NULL, &locks_ctx, FZ_STORE_DEFAULT);
         fz_register_document_handlers(ctx);
     }
     doc = nullptr;
@@ -250,7 +250,6 @@ DisplayListHandle MuPDFParser::get_display_list(int page_num) {
     });
 }
 
-
 void MuPDFParser::write_section(int page_num, int w, int h, float zoom, float rotate,
                             DisplayListHandle dlist, unsigned char* buffer, fz_rect clip) {
     /* dlist is created by another thread. That thread will be responsible for dropping it
@@ -267,8 +266,6 @@ void MuPDFParser::write_section(int page_num, int w, int h, float zoom, float ro
     fz_try(ctx) {
         fz_matrix ctm = fz_scale(zoom, zoom);
         ctm = fz_pre_rotate(ctm, rotate);
-        // pix = fz_new_pixmap_with_data(ctx, fz_device_rgb(ctx), w, h,
-        //                                          NULL, 0, w * 3, buffer);
         pix = fz_new_pixmap_with_bbox_and_data(ctx, fz_device_rgb(ctx),
                 fz_irect_from_rect(clip), NULL, 0, buffer);
         pix->x = static_cast<int>(clip.x0);
@@ -302,6 +299,8 @@ std::unique_ptr<Parser> MuPDFParser::duplicate() const {
     }
     return new_parser;
 }
+
+
 
 MuPDFParser::MuPDFParser(MuPDFParser&& other) noexcept {
     ctx = other.ctx;

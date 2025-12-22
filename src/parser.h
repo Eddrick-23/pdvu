@@ -37,9 +37,9 @@ namespace pdf {
         // virtual void write_page(int page_num, int w, int h,
         //                 float zoom, float rotate,
         //                 unsigned char* buffer, fz_rect clip) = 0;
-        virtual pdf::DisplayListHandle get_display_list(int page_num) = 0;
+        virtual DisplayListHandle get_display_list(int page_num) = 0;
         virtual void write_section(int page_num, int w, int h, float zoom, float rotate,
-                            pdf::DisplayListHandle dlist, unsigned char* buffer,
+                            DisplayListHandle dlist, unsigned char* buffer,
                             fz_rect clip) = 0;
         virtual std::unique_ptr<Parser> duplicate() const = 0;
     };

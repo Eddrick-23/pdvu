@@ -5,12 +5,15 @@
 #include <sys/fcntl.h>
 #include <sys/mman.h>
 #include <atomic>
+#include <cassert>
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
 #else
 #define ZoneScoped
 #endif
 static std::atomic<int> shm_sequence_id{0};
+
+// TODO add write data method
 
 int is_shm_supported() {
     int shm_fd = shm_open("/test_shm_support", O_CREAT | O_RDWR | O_EXCL, 0600);
@@ -76,6 +79,16 @@ const size_t& SharedMemory::size() const {
 
 void* SharedMemory::data() const {
     return mapped_ptr;
+}
+
+void SharedMemory::write_data(const unsigned char* data, const size_t len) {
+    assert(len <= shm_size);
+    memcpy(mapped_ptr, data, len);
+}
+
+void SharedMemory::copy_data(void* dest, size_t len) const {
+    assert(len <= shm_size);
+    std::memcpy(dest, mapped_ptr, len);
 }
 
 void SharedMemory::close_mem() {

@@ -2,6 +2,8 @@
 #include <gtest/gtest.h>
 #include <sys/fcntl.h>
 
+// TODO test write_data
+
 bool shm_exists(const char* name) {
     int fd = shm_open(name, O_RDONLY, 0);
     if (fd == -1) {
