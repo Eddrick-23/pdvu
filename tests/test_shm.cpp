@@ -1,4 +1,4 @@
-#include <utils/shm.h>
+#include <shm.h>
 #include <gtest/gtest.h>
 #include <sys/fcntl.h>
 
