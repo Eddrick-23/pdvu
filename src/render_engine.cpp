@@ -1,10 +1,7 @@
 #include "render_engine.h"
-
-#include <sys/stat.h>
-
 #include "kitty.h"
 
-RenderEngine::RenderEngine(const IParser& prototype_parser, int n_threads) {
+RenderEngine::RenderEngine(const pdf::Parser& prototype_parser, int n_threads) {
     // parser created first because during shutdown, any context from parser must be cleared after threadpool shutdown
     parser = prototype_parser.duplicate();
     worker = std::thread(&RenderEngine::coordinator_loop, this);
@@ -142,7 +139,7 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
                 }
                 return;
             }
-            PageSpecs ps = parser->page_specs(req.page_num, req.zoom);
+            pdf::PageSpecs ps = parser->page_specs(req.page_num, req.zoom);
             auto bounds = parser->split_bounds(ps, n_threads_);
             std::vector<std::future<void>> futures;
             if (req.transmission == "shm") {
@@ -150,7 +147,7 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
                 current_shm = std::move(new_shm);
                 for (auto h_bound : bounds) {
                     auto fut = thread_pool->enqueue_with_future(
-                    [this, h_bound, req, dlist](IParser& parser) mutable  {
+                    [this, h_bound, req, dlist](pdf::Parser& parser) mutable  {
                         parser.write_section(req.page_num, h_bound.width, h_bound.height, req.zoom, 0, dlist,
                             static_cast<unsigned char*>(current_shm->data()) + h_bound.offset, h_bound.rect);
                     });
@@ -162,7 +159,7 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
                 current_tempfile = std::move(new_temp);
                 for (auto h_bound : bounds) {
                     auto fut = thread_pool->enqueue_with_future(
-                    [this, h_bound, req, dlist](IParser& parser) mutable  {
+                    [this, h_bound, req, dlist](pdf::Parser& parser) mutable  {
                         parser.write_section(req.page_num, h_bound.width, h_bound.height, req.zoom, 0, dlist,
                             static_cast<unsigned char*>(current_tempfile->data()) + h_bound.offset, h_bound.rect);
                     });
@@ -190,3 +187,7 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
             latest_result = std::move(result);
         }
 }
+
+// void RenderEngine::fetch_display_list(int page_num) {
+//
+// }

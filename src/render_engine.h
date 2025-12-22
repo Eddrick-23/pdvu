@@ -30,7 +30,7 @@ struct RenderResult {
 
 class RenderEngine {
 public:
-    explicit RenderEngine(const IParser& prototype_parser, int n_threads);
+    explicit RenderEngine(const pdf::Parser& prototype_parser, int n_threads);
     ~RenderEngine();
 
     // main thread calls to request a page
@@ -41,10 +41,11 @@ private:
     void worker_loop();
     void coordinator_loop();
     void dispatch_page_write(const RenderRequest& req);
+    std::optional<pdf::DisplayListHandle> fetch_display_list(int page_num);
 
 
     // core
-    std::unique_ptr<IParser> parser; // thread local parser
+    std::unique_ptr<pdf::Parser> parser; // thread local parser
     std::thread worker;
     std::atomic<bool> running = true;
     std::atomic<size_t> current_req_id = 0;

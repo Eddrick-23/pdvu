@@ -3,6 +3,7 @@
 #include <CLI11.hpp>
 #include "kitty.h"
 #include "tui.h"
+#include "utils/lru_cache.h"
 
 int main(int argc, char** argv) {
     CLI::App app("pdvu");
@@ -55,9 +56,25 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::unique_ptr<IParser> parser = std::make_unique<Parser>(enable_ICC);
+    std::unique_ptr<pdf::Parser> parser = std::make_unique<pdf::MuPDFParser>(enable_ICC);
     Viewer viewer((std::move(parser)), n_threads, pdf_path, enable_ICC);
     viewer.run(); // start main loop
+    // auto lru_cache = LRUCache<std::string, int>(3);
+    // lru_cache.put("first", 1);
+    // lru_cache.put("second", 2);
+    // lru_cache.put("third", 3);
+    // for (auto e : lru_cache.get_entries()) {
+    //     std::cout << e.key << " " << e.value << std::endl;
+    // }
+    // lru_cache.put("fourth", 4);
+    // for (auto e : lru_cache.get_entries()) {
+    //     std::cout << e.key << " " << e.value << std::endl;
+    // }
+    // lru_cache.get("second");
+    // for (auto e : lru_cache.get_entries()) {
+    //     std::cout << e.key << " " << e.value << std::endl;
+    // }
+
     return 0;
 
 }

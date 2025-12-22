@@ -4,7 +4,9 @@
 #include "threadpool.h"
 #include "parser.h"
 
-class MockParser : public IParser{
+using namespace pdf;
+
+class MockParser : public Parser{
 public:
     MOCK_METHOD(void, clear_doc, (), (override));
     MOCK_METHOD(bool, load_document, (const std::string&), (override));
@@ -12,12 +14,12 @@ public:
     MOCK_METHOD(PageSpecs, page_specs, (int, float), (const, override));
     MOCK_METHOD(std::vector<HorizontalBound>, split_bounds, (PageSpecs, int), (override));
     MOCK_METHOD(int, num_pages, (), (const, override));
-    MOCK_METHOD(void, write_page,
-                (int, int, int, float, float, unsigned char*, size_t), (override));
+    // MOCK_METHOD(void, write_page,
+    //             (int, int, int, float, float, unsigned char*, size_t), (override));
     MOCK_METHOD(DisplayListHandle, get_display_list, (int), (override));
     MOCK_METHOD(void, write_section,
                 (int, int, int, float, float, DisplayListHandle, unsigned char*, fz_rect), (override));
-    MOCK_METHOD(std::unique_ptr<IParser>, duplicate, (), (const, override));
+    MOCK_METHOD(std::unique_ptr<Parser>, duplicate, (), (const, override));
 };
 
 TEST(ThreadPoolTest, CreatePool) {
@@ -27,7 +29,7 @@ TEST(ThreadPoolTest, CreatePool) {
 }
 
 TEST(ThreadPoolTest, EnqueueTaskSingleThread) {
-    auto task = [](IParser& parser) { // takes in an IParser reference
+    auto task = [](Parser& parser) { // takes in an Parser reference
         return parser.get_document_name();
     };
     auto mock = std::make_unique<MockParser>();
@@ -50,10 +52,10 @@ TEST(TheadPoolTest, EnqueueTaskSingleThreadMultipleTasks) {
     for (int i = 0; i < 10; i++) {
         results.push_back(std::format("result from task:{}", i));
     }
-    std::vector<std::function<std::string(IParser&)>> tasks;
+    std::vector<std::function<std::string(Parser&)>> tasks;
     tasks.reserve(10);
     for (int i = 0; i < 10; i++) {
-        auto task = [i, &results](IParser& parser) { // takes in an IParser reference
+        auto task = [i, &results](Parser& parser) { // takes in an Parser reference
             return results.at(i);
         };
         tasks.emplace_back(task);
@@ -76,7 +78,7 @@ TEST(TheadPoolTest, EnqueueTaskSingleThreadMultipleTasks) {
 TEST(ThreadPoolTest, EnqueueTaskMultipleThreads) {
     const int n_threads = 3;
 
-    auto task = [](IParser& parser) { // takes in an IParser reference
+    auto task = [](Parser& parser) { // takes in an Parser reference
         return parser.get_document_name();
     };
     auto mock = std::make_unique<MockParser>();
@@ -103,11 +105,11 @@ TEST(ThreadPoolTest, EnqueueTaskMultipleThreadsMultipleTasks) {
     for (int i = 0; i < n_tasks; i++) {
         results.push_back(std::format("result from task:{}", i));
     }
-    std::vector<std::function<std::string(IParser&)>> tasks;
+    std::vector<std::function<std::string(Parser&)>> tasks;
     tasks.reserve(n_tasks);
     std::latch sync_point(n_tasks);
     for (int i = 0; i < n_tasks; i++) {
-        auto task = [i, &results, &sync_point](IParser& parser) { // takes in an IParser reference
+        auto task = [i, &results, &sync_point](Parser& parser) { // takes in an Parser reference
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
             sync_point.count_down();
             return results.at(i);

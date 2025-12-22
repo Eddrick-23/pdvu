@@ -6,7 +6,7 @@
 
 class Viewer {
 public:
-Viewer(std::unique_ptr<IParser> main_parser, int n_threads, const std::string& file_path, bool use_ICC); // constructor
+Viewer(std::unique_ptr<pdf::Parser> main_parser, int n_threads, const std::string& file_path, bool use_ICC); // constructor
 void setup(const std::string& file_path, int n_threads);
 void process_keypress();
 float calculate_zoom_factor(const TermSize& ts, int page_num, int ppr, int ppc);
@@ -22,7 +22,7 @@ void run(); // main loop
 private:
     // sub systems
     Terminal term; // terminal data and raw mode
-    std::unique_ptr<IParser> parser; // parsing pdfs
+    std::unique_ptr<pdf::Parser> parser; // parsing pdfs
     // hold a pointer because parser must be loaded fully before creating renderer
     std::unique_ptr<RenderEngine> renderer; // loading page frames
 

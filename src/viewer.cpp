@@ -12,7 +12,7 @@
 #else
 #define ZoneScoped
 #endif
-Viewer::Viewer(std::unique_ptr<IParser> main_parser,int n_threads, const std::string& file_path, const bool use_ICC) {
+Viewer::Viewer(std::unique_ptr<pdf::Parser> main_parser,int n_threads, const std::string& file_path, const bool use_ICC) {
    parser = std::move(main_parser);
    setup(file_path, n_threads);
 }
@@ -36,7 +36,7 @@ float Viewer::calculate_zoom_factor(const TermSize& ts, int page_num, int ppr, i
    const int max_h_pixels = available_rows * ppr;
    const int max_w_pixels = available_cols * ppc;
 
-   const PageSpecs ps = parser->page_specs(page_num, 1.0); // default zoom
+   const pdf::PageSpecs ps = parser->page_specs(page_num, 1.0); // default zoom
 
    const float h_scale = static_cast<float>(max_w_pixels) / ps.acc_width;
    const float v_scale = static_cast<float>(max_h_pixels) / ps.acc_height;

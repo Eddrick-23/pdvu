@@ -1,6 +1,6 @@
 #include "threadpool.h"
 
-ThreadPool::ThreadPool(const IParser& prototype_parser, const int n) {
+ThreadPool::ThreadPool(const pdf::Parser& prototype_parser, const int n) {
     for (int i = 0; i < n; i ++) {
         // use fresh parser classes so they don't share caches
         auto worker_parser = prototype_parser.duplicate();
@@ -20,7 +20,7 @@ ThreadPool::~ThreadPool() {
     }
 }
 
-void ThreadPool::worker_loop(IParser& parser) {
+void ThreadPool::worker_loop(pdf::Parser& parser) {
     while (true) {
         Task task;
         {
