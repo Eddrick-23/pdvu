@@ -1,9 +1,15 @@
 #include <iostream>
+
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#else
+#define ZoneScoped
+#define ZoneScopedN
+#endif
 #include "viewer.h"
 #include <CLI11.hpp>
 #include "kitty.h"
 #include "tui.h"
-#include "utils/lru_cache.h"
 
 int main(int argc, char** argv) {
     CLI::App app("pdvu");
@@ -56,9 +62,27 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::unique_ptr<pdf::Parser> parser = std::make_unique<pdf::MuPDFParser>(enable_ICC);
-    Viewer viewer((std::move(parser)), n_threads, pdf_path, enable_ICC);
+    // 1) Set up parser and load in document
+    std::unique_ptr<pdf::Parser> parser = nullptr;
+    {
+        ZoneScopedN("Parser setup");
+        parser = std::make_unique<pdf::MuPDFParser>(enable_ICC);
+        if (!parser->load_document(pdf_path)) {
+            throw std::runtime_error("failed to load document");
+        }
+    }
+
+    // 2) setup render engine
+    std::unique_ptr<RenderEngine> render_engine = nullptr;
+    {
+        ZoneScopedN("Render engine setup");
+        render_engine = std::make_unique<RenderEngine>(*parser, n_threads);
+    }
+
+    //3) set up viewer and run
+    Viewer viewer(std::move(parser), std::move(render_engine), n_threads, pdf_path);
     viewer.run(); // start main loop
+
     return 0;
 
 }

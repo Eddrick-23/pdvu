@@ -12,10 +12,28 @@ namespace pdf {
     using DisplayListHandle = std::shared_ptr<fz_display_list>;
 
     struct PageSpecs {
+        float base_x0, base_y0, base_x1, base_y1; // store for manual scaling
         int x0, y0, x1, y1;
         int width, height;
         size_t size;
         float acc_width, acc_height;
+
+        PageSpecs scale(float new_zoom) const {
+            // manual scaling without calling fz_bound_page again
+            float x0 = base_x0 * new_zoom;
+            float y0 = base_y0 * new_zoom;
+            float x1 = base_x1 * new_zoom;
+            float y1 = base_y1 * new_zoom;
+
+            fz_irect rect = fz_round_rect({x0, y0, x1, y1});
+            const int w = rect.x1 - rect.x0;
+            const int h = rect.y1 - rect.y0;
+            const size_t size = w * 3 * h;
+
+            return PageSpecs(x0, y0, x1, y1,
+                rect.x0, rect.y0, rect.x1, rect.y1, w, h, size);
+
+        }
     };
 
     struct HorizontalBound {
@@ -31,7 +49,7 @@ namespace pdf {
         virtual void clear_doc() = 0;
         virtual bool load_document(const std::string& filepath) = 0;
         virtual const std::string& get_document_name() const = 0;
-        virtual PageSpecs page_specs(int page, float zoom) const = 0;
+        virtual PageSpecs page_specs(int page) const = 0;
         virtual std::vector<HorizontalBound> split_bounds(PageSpecs, int n) = 0;
         virtual int num_pages() const = 0;
         // virtual void write_page(int page_num, int w, int h,
@@ -60,7 +78,7 @@ namespace pdf {
         void clear_doc() override;
         bool load_document(const std::string& filepath) override;
         const std::string& get_document_name() const override;
-        [[nodiscard]] PageSpecs page_specs(int page, float zoom) const override;
+        [[nodiscard]] PageSpecs page_specs(int page) const override;
         [[nodiscard]] std::vector<HorizontalBound> split_bounds(PageSpecs ps, int n) override;
         int num_pages() const override;
         // void write_page(int page_num, int w, int h,

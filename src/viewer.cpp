@@ -11,24 +11,30 @@
 #include <tracy/Tracy.hpp>
 #else
 #define ZoneScoped
+#define ZoneScopedN
 #endif
-Viewer::Viewer(std::unique_ptr<pdf::Parser> main_parser,int n_threads, const std::string& file_path, const bool use_ICC) {
+Viewer::Viewer(std::unique_ptr<pdf::Parser> main_parser,
+               std::unique_ptr<RenderEngine> render_engine,
+               int n_threads, const std::string& file_path) {
+   ZoneScopedN("Viewer setup");
+   renderer = std::move(render_engine);
    parser = std::move(main_parser);
-   setup(file_path, n_threads);
-}
-
-void Viewer::setup(const std::string& file_path, int n_threads) {
-   // setup terminal, main parser, render engine
-   // parser = std::make_unique<Parser>(use_ICC);
-   if (!parser->load_document(file_path)) {
-      throw std::runtime_error("failed to load document");
-   }
+   // setup(file_path, n_threads);
    total_pages = parser->num_pages();
    shm_supported = is_shm_supported();
-   renderer = std::make_unique<RenderEngine>(*parser, n_threads);
 }
 
-float Viewer::calculate_zoom_factor(const TermSize& ts, int page_num, int ppr, int ppc) {
+// void Viewer::setup(const std::string& file_path, int n_threads) {
+//    total_pages = parser->num_pages();
+//    shm_supported = is_shm_supported();
+//    // renderer = std::make_unique<RenderEngine>(*parser, n_threads);
+// }
+
+void Viewer::load_first_page() {
+   // load first page into frame using main thread
+}
+
+float Viewer::calculate_zoom_factor(const TermSize& ts,const pdf::PageSpecs& ps, int page_num, int ppr, int ppc) {
    //calculate required zoom factor to render image
    const int available_rows = ts.height - 2; // top and bottom bar
    const int available_cols = ts.width;
@@ -36,7 +42,7 @@ float Viewer::calculate_zoom_factor(const TermSize& ts, int page_num, int ppr, i
    const int max_h_pixels = available_rows * ppr;
    const int max_w_pixels = available_cols * ppc;
 
-   const pdf::PageSpecs ps = parser->page_specs(page_num, 1.0); // default zoom
+   // const pdf::PageSpecs ps = parser->page_specs(page_num, 1.0); // default zoom
 
    const float h_scale = static_cast<float>(max_w_pixels) / ps.acc_width;
    const float v_scale = static_cast<float>(max_h_pixels) / ps.acc_height;
@@ -69,8 +75,9 @@ void Viewer::render_page(int page_num) {
                 << TUI::guard_message(ts) << std::flush;
       return;
    }
-   const float zoom_factor = calculate_zoom_factor(ts, page_num, ts.pixels_per_row, ts.pixels_per_col);
-   renderer->request_page(page_num, zoom_factor, shm_supported ? "shm" : "tempfile");
+   const pdf::PageSpecs ps = parser->page_specs(page_num); // using default zoom
+   const float zoom_factor = calculate_zoom_factor(ts, ps, page_num, ts.pixels_per_row, ts.pixels_per_col);
+   renderer->request_page(page_num, zoom_factor, ps.scale(zoom_factor), shm_supported ? "shm" : "tempfile");
 }
 
 void Viewer::process_keypress() {
@@ -264,10 +271,13 @@ void Viewer::display_latest_frame() {
 
 void Viewer::run() {
    running = true;
-   terminal::enter_alt_screen();
-   terminal::hide_cursor();
-   term.enter_raw_mode();
-   term.setup_resize_handler();
+   {
+      ZoneScopedN("Terminal setup");
+      terminal::enter_alt_screen();
+      terminal::hide_cursor();
+      term.enter_raw_mode();
+      term.setup_resize_handler();
+   }
    term.was_resized(); // force fetch initial sizes and set flag to 0
    render_page(current_page);
 

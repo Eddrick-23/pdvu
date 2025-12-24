@@ -118,9 +118,10 @@ int MuPDFParser::num_pages() const {
     return count;
 }
 
-PageSpecs MuPDFParser::page_specs(const int page_num, const float zoom) const{
+PageSpecs MuPDFParser::page_specs(const int page_num) const{
     ZoneScoped;
     fz_page* page = nullptr;
+    constexpr float base_zoom = 1.0;
     fz_try(ctx) {
         page = fz_load_page(ctx, doc, page_num);
     }
@@ -128,18 +129,26 @@ PageSpecs MuPDFParser::page_specs(const int page_num, const float zoom) const{
         std::cerr <<"ERROR: Failed to load page." << std::endl;
         return {0,0,0,0};
     }
-    const fz_matrix ctm = fz_scale(zoom, zoom);
-    fz_rect bounds = fz_bound_page(ctx, page);
-    bounds =  fz_transform_rect(bounds, ctm);
-    float acc_height = bounds.y1 - bounds.y0;
-    float acc_width = bounds.x1 - bounds.x0;
-    const fz_irect bbox = fz_round_rect(bounds);
+    const fz_matrix ctm = fz_scale(base_zoom, base_zoom);
+    // raw data
+    fz_rect raw_bounds = fz_bound_page(ctx, page);
+    raw_bounds =  fz_transform_rect(raw_bounds, ctm);
+
+    // round to int
+    const fz_irect bbox = fz_round_rect(raw_bounds);
     fz_drop_page(ctx, page);
 
+    // dimensions
     const int w = bbox.x1 - bbox.x0;
     const int h = bbox.y1 - bbox.y0;
     const size_t size = w * 3 * h;
-    return PageSpecs(bbox.x0, bbox.y0, bbox.x1, bbox.y1, w, h, size, acc_width, acc_height);
+    float acc_height = raw_bounds.y1 - raw_bounds.y0;
+    float acc_width = raw_bounds.x1 - raw_bounds.x0;
+
+    return PageSpecs(
+        raw_bounds.x0, raw_bounds.y0, raw_bounds.x1, raw_bounds.y1, // Base
+        bbox.x0, bbox.y0, bbox.x1, bbox.y1, // ints
+        w, h, size, acc_width, acc_height); // dims
 }
 
 std::vector<HorizontalBound> MuPDFParser::split_bounds(PageSpecs ps, int n) {

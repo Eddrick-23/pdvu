@@ -8,6 +8,7 @@
 #include <tracy/Tracy.hpp>
 #else
 #define ZoneScoped
+#define ZoneScopedN
 #endif
 RenderEngine::RenderEngine(const pdf::Parser& prototype_parser, int n_threads) {
     // parser created first because during shutdown, any context from parser must be cleared after threadpool shutdown
@@ -23,12 +24,12 @@ RenderEngine::~RenderEngine() {
     if (worker.joinable()) worker.join(); // join back to main loop
 }
 
-void RenderEngine::request_page(int page_num, float zoom, const std::string& transmission) {
+void RenderEngine::request_page(int page_num, float zoom, pdf::PageSpecs ps, const std::string& transmission) {
     {
         std::lock_guard<std::mutex> lock(state_mutex);
         ++current_req_id;
         pending_request = RenderRequest{
-            page_num, zoom, current_req_id, transmission
+            page_num, zoom, ps, current_req_id, transmission
         };
     }
     cv_worker.notify_one(); // wake worker to render page
@@ -176,7 +177,8 @@ std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock:
                 }
                 return;
             }
-            pdf::PageSpecs ps = parser->page_specs(req.page_num, req.zoom);
+            // pdf::PageSpecs ps = parser->page_specs(req.page_num, req.zoom);
+            pdf::PageSpecs ps = req.scaled_page_specs;
             auto bounds = parser->split_bounds(ps, n_threads_);
             std::vector<std::future<void>> futures;
             auto start_parse = std::chrono::steady_clock::now();

@@ -36,6 +36,7 @@ struct PageCacheData {
 struct RenderRequest {
     int page_num;
     float zoom;
+    pdf::PageSpecs scaled_page_specs;
     // We use a generation ID to ignore results from old requests if needed
     size_t req_id;
     std::string transmission;
@@ -59,7 +60,7 @@ public:
     ~RenderEngine();
 
     // main thread calls to request a page
-    void request_page(int page_num, float zoom, const std::string& transmission);
+    void request_page(int page_num, float zoom, pdf::PageSpecs, const std::string& transmission);
     // main thread calls to check if a result is ready
     std::optional<RenderResult> get_result();
 private:

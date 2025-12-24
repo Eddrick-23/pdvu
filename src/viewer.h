@@ -6,10 +6,13 @@
 
 class Viewer {
 public:
-Viewer(std::unique_ptr<pdf::Parser> main_parser, int n_threads, const std::string& file_path, bool use_ICC); // constructor
-void setup(const std::string& file_path, int n_threads);
+Viewer(std::unique_ptr<pdf::Parser> main_parser,
+       std::unique_ptr<RenderEngine> render_engine,
+       int n_threads, const std::string& file_path); // constructor
+// void setup(const std::string& file_path, int n_threads);
+void load_first_page();
 void process_keypress();
-float calculate_zoom_factor(const TermSize& ts, int page_num, int ppr, int ppc);
+float calculate_zoom_factor(const TermSize& ts,const pdf::PageSpecs& ps, int page_num, int ppr, int ppc);
 std::string center_cursor(int w, int h, int ppr, int ppc,
                     int rows, int cols, int start_row, int start_col);
 void render_page(int page_num);
@@ -32,5 +35,5 @@ private:
     float zoom = 100;
     bool running = false;
     bool shm_supported = false;
-    RenderResult latest_frame;
+    RenderResult latest_frame = RenderResult{};
 };

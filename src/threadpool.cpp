@@ -1,6 +1,12 @@
 #include "threadpool.h"
-
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#else
+#define ZoneScoped
+#define ZoneScopedN
+#endif
 ThreadPool::ThreadPool(const pdf::Parser& prototype_parser, const int n) {
+    ZoneScopedN("threadpool setup");
     for (int i = 0; i < n; i ++) {
         // use fresh parser classes so they don't share caches
         auto worker_parser = prototype_parser.duplicate();
