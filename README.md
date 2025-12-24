@@ -1,42 +1,61 @@
-## pdvu
-A fast and lightweight terminal based pdf viewer
 
-### Build instructions
-Optional Build Flags (Off by default)
-- __DENABLE_TRACY__ Enable tracy profiling
-- __DBUILD_TESTING__ Build unit tests
-#### Debug
-```
-# Configure
-cmake -S . -B build/debug -DCMAKE_BUILD_TYPE=Debug
+# pdvu
 
-# Build
-cmake --build build/debug
+<u>__This is project is still in progress, large changes to the codebase expected__</u>
 
-# Run
-./build/debug/pvdu <path to pdf>
-```
-#### Profiling with Tracy
-```
-# Configure
-cmake -S . -B build/profiling -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_TRACY=ON
+**pdvu** is a high-performance, terminal-based PDF viewer written in C++. 
 
-# Build (using all CPU cores)
-cmake --build build/profiling
+Designed with a strict focus on memory efficiency, pdvu uses a prefetchless approach with on demand page loading.
+Targeting a mininmal memory footprint compared to other pdf viewers.
 
-# Run
-./build/profiling/pdvu <path to pdf>
-```
-#### Release
-```
-# Configure
-cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
+![License](https://img.shields.io/badge/license-AGPL%20v3-blue)
+![Language](https://img.shields.io/badge/language-C%2B%2B23-orange)
 
-# Build
-cmake --build build/release
+## Requirements
 
-# Run
-./build/release/pdvu <path to pdf>
-```
+* MacOS (have not tested on linux platform yet)
+* **C++23 Compiler** (GCC 10+ or Clang 10+)
+* **CMake** 3.15+
+* **MuPDF** (Built as a static library)
+* **Terminal Emulator** with Kitty Graphics Protocol support. E.g. Kitty, Ghostty, Wezterm...
 
-### Unit Tests
+## Installation & Build
+
+`pdvu` links statically against MuPDF. You must have the MuPDF source available in the `external` directory.
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/Eddrick-23/pdvu.git
+    cd pdvu
+    ```
+
+2.  **Prepare MuPDF:**
+    Place the MuPDF source code in `external/mupdf` and build the static libraries (`libmupdf.a`, `libmupdf-third.a`).
+    ```bash
+    mkdir external && cd external
+    git clone --recursive https://git.ghostscript.com/mupdf.git
+    cd mupdf
+    make HAVE_X11=no HAVE_GLUT=no prefix=./build/release install
+    ```
+
+3.  **Build pdvu:**
+    ```bash
+    #Run from project root
+    cd ../.. 
+    
+    # Configure
+    cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
+
+    # Build
+    cmake --build build/release
+
+    # Run
+    ./build/release/pdvu <path to pdf>
+    ```
+
+## Benchmarks
+
+## Roadmap
+Future updates are planned for the following features
+- Page Zooming and Panning
+- "Ctrl f" for word searching
