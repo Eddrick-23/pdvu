@@ -21,6 +21,14 @@ int main(int argc, char** argv) {
     app.add_flag("--ICC",enable_ICC,
         "Enable ICC Colour management. May slow down parsing speed");
 
+    bool use_shm = false;
+    app.add_flag("--shm", use_shm,
+        "Use Posix Shared Memory image transmission. Default uses temp file");
+
+    bool enable_cache = true;
+    app.add_flag("--nocache{false}", enable_cache,
+        "Disable PDVU caching of rendered pages and display lists. (MuPDF cache unaffected)");
+
     int n_threads = 1;
     app.add_option("-j,--jobs,--threads", n_threads,
         "Number of worker threads to use. Default 1.");
@@ -76,11 +84,11 @@ int main(int argc, char** argv) {
     std::unique_ptr<RenderEngine> render_engine = nullptr;
     {
         ZoneScopedN("Render engine setup");
-        render_engine = std::make_unique<RenderEngine>(*parser, n_threads);
+        render_engine = std::make_unique<RenderEngine>(*parser, n_threads, enable_cache);
     }
 
     //3) set up viewer and run
-    Viewer viewer(std::move(parser), std::move(render_engine), n_threads, pdf_path);
+    Viewer viewer(std::move(parser), std::move(render_engine), use_shm);
     viewer.run(); // start main loop
 
     return 0;

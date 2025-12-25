@@ -8,9 +8,7 @@ class Viewer {
 public:
 Viewer(std::unique_ptr<pdf::Parser> main_parser,
        std::unique_ptr<RenderEngine> render_engine,
-       int n_threads, const std::string& file_path); // constructor
-// void setup(const std::string& file_path, int n_threads);
-void load_first_page();
+       bool use_shm); // constructor
 void process_keypress();
 float calculate_zoom_factor(const TermSize& ts,const pdf::PageSpecs& ps, int page_num, int ppr, int ppc);
 std::string center_cursor(int w, int h, int ppr, int ppc,

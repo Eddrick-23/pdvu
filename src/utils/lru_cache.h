@@ -1,7 +1,13 @@
 #include <algorithm>
 #include <vector>
 #include <mutex>
-#include <memory>
+
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#else
+#define ZoneScoped
+#define ZoneScopedN
+#endif
 
 #pragma once
 
@@ -16,8 +22,8 @@ public:
         entries.reserve(size);
     };
 
-    // get - check cache for hit, else return empty
     std::optional<Value> get(Key key) {
+        ZoneScopedN("cache get");
         std::lock_guard<std::mutex> lock(mut);
         // linear search vector, on hit, we shift that entry to front, and slide the rest back
         for (size_t i = 0; i < entries.size(); i++) {
@@ -32,6 +38,7 @@ public:
     }
 
     void put(Key key, Value val) {
+        ZoneScopedN("cache put");
         // put current pair at the front, the last element is pushed out
         std::lock_guard<std::mutex> lock(mut);
         for (size_t i = 0; i < entries.size(); i++) {
@@ -49,6 +56,7 @@ public:
     }
 
     const auto& get_entries() {
+        // for testing to read the storage vector
         return entries;
     }
 

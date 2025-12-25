@@ -15,23 +15,13 @@
 #endif
 Viewer::Viewer(std::unique_ptr<pdf::Parser> main_parser,
                std::unique_ptr<RenderEngine> render_engine,
-               int n_threads, const std::string& file_path) {
+               bool use_shm) {
    ZoneScopedN("Viewer setup");
    renderer = std::move(render_engine);
    parser = std::move(main_parser);
    // setup(file_path, n_threads);
    total_pages = parser->num_pages();
-   shm_supported = is_shm_supported();
-}
-
-// void Viewer::setup(const std::string& file_path, int n_threads) {
-//    total_pages = parser->num_pages();
-//    shm_supported = is_shm_supported();
-//    // renderer = std::make_unique<RenderEngine>(*parser, n_threads);
-// }
-
-void Viewer::load_first_page() {
-   // load first page into frame using main thread
+   shm_supported = use_shm && is_shm_supported();
 }
 
 float Viewer::calculate_zoom_factor(const TermSize& ts,const pdf::PageSpecs& ps, int page_num, int ppr, int ppc) {

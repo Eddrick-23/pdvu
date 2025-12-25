@@ -23,10 +23,6 @@ struct PageDetails {
 
 struct PageCacheData {
     std::string transmission;
-    // TODO store the bytes in a raw vector and memcpy into it
-    // shm is destroyed after terminal reads from it so we can't cache the pointer
-    // size_t size; // store size, we will memcpy to the buffer for both tempfile and shm
-    // std::shared_ptr<SharedMemory> shm_data;
     std::vector<unsigned char> shm_buffer;
     std::shared_ptr<Tempfile> tempfile_data;
     int page_width;
@@ -56,7 +52,7 @@ struct RenderResult {
 
 class RenderEngine {
 public:
-    explicit RenderEngine(const pdf::Parser& prototype_parser, int n_threads);
+    RenderEngine(const pdf::Parser& prototype_parser, int n_threads, bool use_cache);
     ~RenderEngine();
 
     // main thread calls to request a page
@@ -64,7 +60,6 @@ public:
     // main thread calls to check if a result is ready
     std::optional<RenderResult> get_result();
 private:
-    void worker_loop();
     void coordinator_loop();
     void dispatch_page_write(const RenderRequest& req);
     void cache_page(int page_num, float zoom,
@@ -73,7 +68,7 @@ private:
                     const std::string &transmission, int page_width, int page_height);
 
     std::optional<PageCacheData> try_page_cache(const RenderRequest &req, std::shared_ptr<SharedMemory> &shm_ptr,
-                        std::shared_ptr<Tempfile> tempfile_ptr);
+                        std::shared_ptr<Tempfile>& tempfile_ptr);
 
     std::optional<pdf::DisplayListHandle> fetch_display_list(int page_num);
 
@@ -100,6 +95,7 @@ private:
     std::shared_ptr<SharedMemory> current_shm;
     std::shared_ptr<Tempfile> current_tempfile;
 
+    bool use_cache = true;
     // lru_cache to cache heavy display lists
     const int dlist_cache_size = 10;
     const std::chrono::milliseconds dlist_cache_time_limit = std::chrono::milliseconds(100);
