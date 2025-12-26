@@ -63,7 +63,7 @@ TEST(TempfileTest, MoveAssignmentTransfersOwnership) {
     EXPECT_FALSE(std::filesystem::exists(tempfile_path_source));
 }
 
-TEST(TempfileTest, WriteData) {
+TEST(TempfileTest, ManualWriteData) {
     std::string data = "test data";
     std::string tempfile_path;
     {
@@ -79,4 +79,19 @@ TEST(TempfileTest, WriteData) {
     EXPECT_FALSE(std::filesystem::exists(tempfile_path));
 }
 
+TEST(TempfileTest, WriteData) {
+    std::string s = "test data";
+    std::string tempfile_path;
+    {
+        auto test = Tempfile(1000);
+        tempfile_path = test.path();
 
+        test.write_data(reinterpret_cast<const unsigned char*>(s.data()), s.size());
+
+        void* raw = test.data();
+        const char* bytes = static_cast<const char*>(raw);
+        std::string stored(bytes, s.size());
+        EXPECT_EQ(stored, s);
+    }
+    EXPECT_FALSE(std::filesystem::exists(tempfile_path));
+}

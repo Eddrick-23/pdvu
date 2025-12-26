@@ -74,7 +74,7 @@ TEST(ShmTest, MoveAssignmentTransfersOwnership) {
     EXPECT_FALSE(shm_exists(shm_name_source.c_str()));
 }
 
-TEST(ShmTest, WriteData) {
+TEST(ShmTest, ManualWriteData) {
     std::string data = "test data";
     std::string shm_name;
     {
@@ -85,6 +85,24 @@ TEST(ShmTest, WriteData) {
         auto read_string = std::string(static_cast<char*>(test_shm.data()), data.size());
 
         EXPECT_EQ(read_string, data);
+    }
+    EXPECT_FALSE(shm_exists(shm_name.c_str()));
+}
+
+TEST(ShmTest, WriteData) {
+    std::string s = "test data";
+    std::string shm_name;
+    {
+        auto test_shm = SharedMemory(1000);
+        shm_name = test_shm.name();
+
+        test_shm.write_data(reinterpret_cast<const unsigned char*>(s.data()), s.size());
+
+        void* raw = test_shm.data();
+
+        const char* bytes = static_cast<const char*>(raw);
+        std::string stored(bytes, s.size());
+        EXPECT_EQ(stored, s);
     }
     EXPECT_FALSE(shm_exists(shm_name.c_str()));
 }

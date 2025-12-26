@@ -55,7 +55,7 @@ void* Tempfile::data() const{
     return mapped_ptr;
 }
 
-void Tempfile::write_data(unsigned char* data, size_t len) {
+void Tempfile::write_data(const unsigned char* data, size_t len) {
     memcpy(mapped_ptr,data, len);
 }
 

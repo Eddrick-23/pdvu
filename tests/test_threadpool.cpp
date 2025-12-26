@@ -11,11 +11,9 @@ public:
     MOCK_METHOD(void, clear_doc, (), (override));
     MOCK_METHOD(bool, load_document, (const std::string&), (override));
     MOCK_METHOD(const std::string&, get_document_name, (), (const, override));
-    MOCK_METHOD(PageSpecs, page_specs, (int, float), (const, override));
+    MOCK_METHOD(PageSpecs, page_specs, (int), (const, override));
     MOCK_METHOD(std::vector<HorizontalBound>, split_bounds, (PageSpecs, int), (override));
     MOCK_METHOD(int, num_pages, (), (const, override));
-    // MOCK_METHOD(void, write_page,
-    //             (int, int, int, float, float, unsigned char*, size_t), (override));
     MOCK_METHOD(DisplayListHandle, get_display_list, (int), (override));
     MOCK_METHOD(void, write_section,
                 (int, int, int, float, float, DisplayListHandle, unsigned char*, fz_rect), (override));

@@ -17,7 +17,7 @@ public:
     void close_file();
     const std::string& path() const;
     void* data() const;
-    void write_data(unsigned char* data, size_t len);
+    void write_data(const unsigned char* data, size_t len);
 private:
     std::string fp;
     int fd;
