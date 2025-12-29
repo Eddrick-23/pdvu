@@ -10,7 +10,7 @@ Viewer(std::unique_ptr<pdf::Parser> main_parser,
        std::unique_ptr<RenderEngine> render_engine,
        bool use_shm); // constructor
 void process_keypress();
-float calculate_zoom_factor(const TermSize& ts,const pdf::PageSpecs& ps, int page_num, int ppr, int ppc);
+float calculate_zoom_factor(const TermSize& ts,const pdf::PageSpecs& ps, int ppr, int ppc);
 std::string center_cursor(int w, int h, int ppr, int ppc,
                     int rows, int cols, int start_row, int start_col);
 void render_page(int page_num);

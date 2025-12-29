@@ -1,5 +1,5 @@
-#include <iostream>
-
+#include <print>
+#include <cstdio>
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
 #else
@@ -41,32 +41,32 @@ int main(int argc, char** argv) {
     CLI11_PARSE(app, argc, argv);
     if (show_license) {
         if (show_license) {
-            std::cout << "OPEN SOURCE LICENSES\n";
-            std::cout << "====================\n\n";
+            std::println("OPEN SOURCE LICENSES");
+            std::print("====================\n\n");
 
-            std::cout << "1. CLI11\n";
-            std::cout << "   - License: 3-Clause BSD\n";
-            std::cout << "   - Copyright (c) 2017-2024 University of Cincinnati\n\n";
+            std::println("1. CLI11");
+            std::println("   - License: 3-Clause BSD");
+            std::print("   - Copyright (c) 2017-2024 University of Cincinnati\n\n");
 
-            std::cout << "2. Tracy Profiler\n";
-            std::cout << "   - License: 3-Clause BSD\n";
-            std::cout << "   - Copyright (c) 2017-2025 Bartosz Taudul\n\n";
+            std::println("2. Tracy Profiler");
+            std::println("   - License: 3-Clause BSD");
+            std::print("   - Copyright (c) 2017-2025 Bartosz Taudul\n\n");
 
-            std::cout << "3. MuPDF\n";
-            std::cout << "   - License: GNU Affero General Public License (AGPL v3)\n";
-            std::cout << "   - Copyright (c) 2006-2025 Artifex Software, Inc.\n";
-            std::cout << "   - NOTE: Because this software links against MuPDF, this entire\n";
-            std::cout << "     application is provided under the AGPL v3 license.\n\n";
+            std::println("3. MuPDF");
+            std::println("   - License: GNU Affero General Public License (AGPL v3)");
+            std::println("   - Copyright (c) 2006-2025 Artifex Software, Inc.");
+            std::println("   - NOTE: Because this software links against MuPDF, this entire");
+            std::print("     application is provided under the AGPL v3 license.\n\n");
 
-            std::cout << "For full license texts, please read LICENSE-3RD-PARTY.txt included\n";
-            std::cout << "with this distribution or visit: https://github.com/Eddrick-23/pdvu\n";
+            std::println("For full license texts, please read LICENSE-3RD-PARTY.txt included");
+            std::println("with this distribution or visit: https://github.com/Eddrick-23/pdvu");
 
             return 0;
         }
     }
 
     if (pdf_path.extension() != ".pdf") {
-        std::cerr << "Error: Pdf file must be provided" << std::endl;
+        std::println(stderr, "Error: Pdf file must be provided");
         return 1;
     }
 

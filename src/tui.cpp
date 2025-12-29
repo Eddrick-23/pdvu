@@ -1,7 +1,8 @@
 #include "tui.h"
 #include <functional>
 #include <chrono>
-#include <iostream>
+#include <print>
+#include <cstdio>
 #include <string>
 #include "terminal.h"
 #include "kitty.h"
@@ -265,7 +266,8 @@ namespace TUI {
 
         auto redraw = [&]() { // helper to redraw the whole line on input
             if (current_term_size.width < MIN_COLS || current_term_size.height < MIN_ROWS) {
-                std::cout << guard_message(current_term_size) << std::flush;
+                std::print("{}", guard_message(current_term_size));
+                std::fflush(stdout);
                 return;
             }
             int available_width = current_term_size.width - prompt.length();
@@ -283,14 +285,16 @@ namespace TUI {
             }
             // clear line and draw prompt
             terminal::show_cursor();
-            std::cout << terminal::move_cursor(current_term_size.height, 1);
-            std::cout << "\x1b[2K\x1b[7m"; // colour invert
-
-            std::cout << prompt << buffer.substr(visible_pos) << std::flush;
+            std::print("{}{}{}{}", terminal::move_cursor(current_term_size.height, 1),
+                                      "\x1b[2K\x1b[7m",
+                                      prompt,
+                                      buffer.substr(visible_pos));
+            std::fflush(stdout);
 
             // move to proper position on screen
             size_t screen_col = cursor_pos - visible_pos + prompt.length() + 1;
-            std::cout << terminal::move_cursor(current_term_size.height, screen_col) << std::flush;
+            std::print("{}", terminal::move_cursor(current_term_size.height, screen_col));
+            std::fflush(stdout);
         };
         InputEvent c;
         redraw();
@@ -368,7 +372,7 @@ namespace TUI {
         }
 
         // reset colours, hide cursor and return buffer
-        std::cout << "\x1b[0m";
+        std::print("{}", "\x1b[0m");
         terminal::hide_cursor();
         return buffer;
     }

@@ -1,7 +1,8 @@
 #include "viewer.h"
-#include <iostream>
 #include <chrono>
 #include <charconv>
+#include <print>
+#include <cstdio>
 #include "terminal.h"
 #include "parser.h"
 #include "kitty.h"
@@ -24,15 +25,13 @@ Viewer::Viewer(std::unique_ptr<pdf::Parser> main_parser,
    shm_supported = use_shm && is_shm_supported();
 }
 
-float Viewer::calculate_zoom_factor(const TermSize& ts,const pdf::PageSpecs& ps, int page_num, int ppr, int ppc) {
+float Viewer::calculate_zoom_factor(const TermSize& ts,const pdf::PageSpecs& ps, int ppr, int ppc) {
    //calculate required zoom factor to render image
    const int available_rows = ts.height - 2; // top and bottom bar
    const int available_cols = ts.width;
 
    const int max_h_pixels = available_rows * ppr;
    const int max_w_pixels = available_cols * ppc;
-
-   // const pdf::PageSpecs ps = parser->page_specs(page_num, 1.0); // default zoom
 
    const float h_scale = static_cast<float>(max_w_pixels) / ps.acc_width;
    const float v_scale = static_cast<float>(max_h_pixels) / ps.acc_height;
@@ -61,12 +60,12 @@ void Viewer::render_page(int page_num) {
    const TermSize ts = term.get_terminal_size();
    if (ts.width < TUI::MIN_COLS || ts.height < TUI::MIN_ROWS) {
       // Just update the guard text, don't bother the engine
-      std::cout << terminal::reset_screen_and_cursor_string()
-                << TUI::guard_message(ts) << std::flush;
+      std::print("{}{}", terminal::reset_screen_and_cursor_string(), TUI::guard_message(ts));
+      std::fflush(stdout);
       return;
    }
    const pdf::PageSpecs ps = parser->page_specs(page_num); // using default zoom
-   const float zoom_factor = calculate_zoom_factor(ts, ps, page_num, ts.pixels_per_row, ts.pixels_per_col);
+   const float zoom_factor = calculate_zoom_factor(ts, ps, ts.pixels_per_row, ts.pixels_per_col);
    renderer->request_page(page_num, zoom_factor, ps.scale(zoom_factor), shm_supported ? "shm" : "tempfile");
 }
 
@@ -159,7 +158,8 @@ void Viewer::handle_go_to_page() {
    if (page_change) {
       render_page(current_page);
    } else { // restore bottom bar only if nothing changed
-      std::cout << TUI::bottom_bar(term.get_terminal_size()) << std::flush;
+      std::print("{}",TUI::bottom_bar(term.get_terminal_size()));
+      std::fflush(stdout);
    }
 }
 
@@ -178,7 +178,8 @@ void Viewer::handle_help_page() {
    };
 
    TermSize last_terminal_size = term.get_terminal_size();
-   std::cout << TUI::help_overlay(last_terminal_size) << std::flush;
+   std::print("{}", TUI::help_overlay(last_terminal_size));
+   std::fflush(stdout);
    using Clock = std::chrono::steady_clock;
    auto start = Clock::now();
    bool was_resized = false;
@@ -196,9 +197,11 @@ void Viewer::handle_help_page() {
          auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
          if (duration.count() > 75) {
             was_resized = true;
-            std::cout << clear_overlay(1, last_terminal_size.height, last_terminal_size.width) << std::flush;
+            std::print("{}", clear_overlay(1, last_terminal_size.height, last_terminal_size.width));
+            std::fflush(stdout);
             last_terminal_size = term.get_terminal_size();
-            std::cout << TUI::help_overlay(last_terminal_size) << std::flush;
+            std::print("{}", TUI::help_overlay(last_terminal_size));
+            std::fflush(stdout);
             resizing = false;
          }
       }
@@ -217,7 +220,8 @@ void Viewer::handle_help_page() {
    }
    std::string sequence;
    sequence += clear_overlay(2, last_terminal_size.height - 1, last_terminal_size.width);
-   std::cout << sequence << std::flush;
+   std::print("{}",sequence);
+   std::fflush(stdout);
 }
 
 bool Viewer::fetch_latest_frame() {
@@ -231,8 +235,10 @@ bool Viewer::fetch_latest_frame() {
    }
    if (!result.error_message.empty()) { // check if there was a render error
       const TermSize ts = term.get_terminal_size();
-      std::cout << TUI::add_centered(ts.height / 2, ts.width, result.error_message,
-                     result.error_message.length()) << std::flush;
+      std::print("{}", TUI::add_centered(ts.height / 2, ts.width,
+                              result.error_message,
+                              result.error_message.length()));
+      std::fflush(stdout);
       return false;
    }
    latest_frame = std::move(result_opt.value()); // store latest frame
@@ -256,7 +262,8 @@ void Viewer::display_latest_frame() {
    frame += TUI::top_bar(ts, parser->get_document_name(),
                      std::format("{}/{}", current_page + 1, total_pages), stats);
 
-   std::cout << frame << std::flush; // single flush at the end
+   std::print("{}", frame);
+   std::fflush(stdout);
 }
 
 void Viewer::run() {

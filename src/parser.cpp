@@ -1,6 +1,6 @@
 #include "parser.h"
 #include <filesystem>
-#include <iostream>
+#include <print>
 #include <mutex>
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
@@ -40,7 +40,7 @@ MuPDFParser::MuPDFParser(const bool use_ICC, fz_context* cloned_ctx) {
     doc = nullptr;
 
     if (!ctx) {
-        std::cerr << "CRITICAL: Failed to create MuPDF context." << std::endl;
+        std::println(stderr, "CRITICAL: Failed to create MuPDF context.");
         exit(EXIT_FAILURE);
     }
 
@@ -50,7 +50,7 @@ MuPDFParser::MuPDFParser(const bool use_ICC, fz_context* cloned_ctx) {
             fz_disable_icc(ctx);
         }
         fz_catch(ctx) {
-            std::cerr << "WARNING: Failed to configure ICC." << std::endl;
+            std::println(stderr, "WARNING: Failed to configure ICC.");
         }
     }
     use_icc_profile = use_ICC;
@@ -90,7 +90,7 @@ bool MuPDFParser::load_document(const std::string& filepath) {
         doc = fz_open_document(ctx, filepath.c_str());
     }
     fz_catch(ctx) {
-        std::cerr <<"ERROR: Could not open file: " << filepath << std::endl;
+        std::println(stderr, "ERROR: Could not open file: {}", filepath);
         return false;
     }
     full_filepath = filepath; // save path for duplicating
@@ -112,7 +112,7 @@ int MuPDFParser::num_pages() const {
         count = fz_count_pages(ctx, doc);
     }
     fz_catch(ctx) {
-        std::cerr <<"ERROR: Failed to count pages." << std::endl;
+        std::println(stderr, "ERROR: Failed to count pages.");
         return 0;
     }
     return count;
@@ -126,7 +126,7 @@ PageSpecs MuPDFParser::page_specs(const int page_num) const{
         page = fz_load_page(ctx, doc, page_num);
     }
     fz_catch(ctx) {
-        std::cerr <<"ERROR: Failed to load page." << std::endl;
+        std::println(stderr, "ERROR: Failed to load page");
         return {0,0,0,0};
     }
     const fz_matrix ctm = fz_scale(base_zoom, base_zoom);
@@ -237,7 +237,7 @@ DisplayListHandle MuPDFParser::get_display_list(int page_num) {
         page = fz_load_page(ctx, doc, page_num);
     }
     fz_catch(ctx) {
-        std::cerr << "Failed to load page" << std::endl;
+        std::println(stderr, "Failed to load page");
         return nullptr;
     }
     fz_try(ctx) {
@@ -248,7 +248,7 @@ DisplayListHandle MuPDFParser::get_display_list(int page_num) {
         if (page) {
             fz_drop_page(ctx, page);
         }
-        std::cerr << "Failed to create display list" << std::endl;
+        std::println(stderr, "Failed to create display list");
         return nullptr; // coordinator will check if displaylist was created successfully
     }
     fz_context* captured_ctx = this->ctx; // capture for custom deleter
@@ -268,7 +268,7 @@ void MuPDFParser::write_section(int page_num, int w, int h, float zoom, float ro
      */
     ZoneScoped;
     if (w != clip.x1 - clip.x0 || h != clip.y1 - clip.y0) {
-        std::cerr << "ERROR: clip dimensions do not match w and h." << std::endl;
+        std::println(stderr, "ERROR: clip dimensions do not match w and h");
         return;
     }
     fz_pixmap* pix = nullptr;
@@ -292,7 +292,7 @@ void MuPDFParser::write_section(int page_num, int w, int h, float zoom, float ro
         if (pix) {
             fz_drop_pixmap(ctx, pix);
         }
-        std::cerr <<"ERROR: Failed to draw page." << std::endl;
+        std::println(stderr, "ERROR: Failed to draw page.");
     }
 }
 

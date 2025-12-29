@@ -1,5 +1,6 @@
 #include "terminal.h"
-#include <iostream>
+#include <print>
+#include <cstdio>
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <fstream>
@@ -9,16 +10,20 @@ volatile sig_atomic_t Terminal::window_resized = 1; // set as 1 so terminal cach
 
 namespace terminal {
     void hide_cursor() {
-        std::cout << "\033[?25l" << std::flush;
+        std::print("{}", "\033[?25l");
+        std::fflush(stdout);
     }
     void show_cursor() {
-        std::cout << "\033[?25h" << std::flush;
+        std::print("{}", "\033[?25h");
+        std::fflush(stdout);
     }
     void enter_alt_screen() {
-        std::cout << "\033[?1049h" << std::flush;
+        std::print("{}", "\033[?1049h");
+        std::fflush(stdout);
     }
     void exit_alt_screen() {
-        std::cout << "\033[?1049l" << std::flush;
+        std::print("{}", "\033[?1049l");
+        std::fflush(stdout);
     }
     std::string move_cursor(int row, int col) {
         return std::format("\033[{};{}H", row, col);
@@ -84,7 +89,7 @@ TermSize Terminal::get_terminal_size() {
 
         return TermSize(ws.ws_col, ws.ws_row, ws.ws_xpixel, ws.ws_ypixel, pixels_per_row, pixels_per_col);
     }
-    std::cerr << "Failed to get terminal size" << std::endl;
+    std::println(stderr, "Failed to get terminal size");
     return TermSize(24, 80, 0, 0, 0, 0);
 }
 
