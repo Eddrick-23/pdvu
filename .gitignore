@@ -37,3 +37,6 @@ Makefile
 
 # Ignore unit test logs
 /Testing
+
+# Ignore benchmark csv output
+/benchmark/output
