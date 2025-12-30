@@ -9,92 +9,92 @@ extern "C" {
 }
 
 namespace pdf {
-    using DisplayListHandle = std::shared_ptr<fz_display_list>;
+using DisplayListHandle = std::shared_ptr<fz_display_list>;
 
-    struct PageSpecs {
-        float base_x0, base_y0, base_x1, base_y1; // store for manual scaling
-        int x0, y0, x1, y1;
-        int width, height;
-        size_t size;
-        float acc_width, acc_height;
+struct PageSpecs {
+  float base_x0, base_y0, base_x1, base_y1; // store for manual scaling
+  int x0, y0, x1, y1;
+  int width, height;
+  size_t size;
+  float acc_width, acc_height;
 
-        PageSpecs scale(float new_zoom) const {
-            // manual scaling without calling fz_bound_page again
-            float x0 = base_x0 * new_zoom;
-            float y0 = base_y0 * new_zoom;
-            float x1 = base_x1 * new_zoom;
-            float y1 = base_y1 * new_zoom;
+  PageSpecs scale(float new_zoom) const {
+    // manual scaling without calling fz_bound_page again
+    float x0 = base_x0 * new_zoom;
+    float y0 = base_y0 * new_zoom;
+    float x1 = base_x1 * new_zoom;
+    float y1 = base_y1 * new_zoom;
 
-            fz_irect rect = fz_round_rect({x0, y0, x1, y1});
-            const int w = rect.x1 - rect.x0;
-            const int h = rect.y1 - rect.y0;
-            const size_t size = w * 3 * h;
+    fz_irect rect = fz_round_rect({x0, y0, x1, y1});
+    const int w = rect.x1 - rect.x0;
+    const int h = rect.y1 - rect.y0;
+    const size_t size = w * 3 * h;
 
-            return PageSpecs(x0, y0, x1, y1,
-                rect.x0, rect.y0, rect.x1, rect.y1, w, h, size);
+    return PageSpecs(x0, y0, x1, y1, rect.x0, rect.y0, rect.x1, rect.y1, w, h,
+                     size);
+  }
+};
 
-        }
-    };
+struct HorizontalBound {
+  fz_rect rect;
+  int width;
+  int height;
+  size_t bytes;
+  size_t offset; // offset from start pointer of buffer
+};
+struct Parser {
 
-    struct HorizontalBound {
-        fz_rect rect;
-        int width;
-        int height;
-        size_t bytes;
-        size_t offset; // offset from start pointer of buffer
-    };
-    struct Parser {
+  virtual ~Parser() = default;
+  virtual void clear_doc() = 0;
+  virtual bool load_document(const std::string &filepath) = 0;
+  virtual const std::string &get_document_name() const = 0;
+  virtual PageSpecs page_specs(int page) const = 0;
+  virtual std::vector<HorizontalBound> split_bounds(PageSpecs, int n) = 0;
+  virtual int num_pages() const = 0;
+  // virtual void write_page(int page_num, int w, int h,
+  //                 float zoom, float rotate,
+  //                 unsigned char* buffer, fz_rect clip) = 0;
+  virtual DisplayListHandle get_display_list(int page_num) = 0;
+  virtual void write_section(int page_num, int w, int h, float zoom,
+                             float rotate, DisplayListHandle dlist,
+                             unsigned char *buffer, fz_rect clip) = 0;
+  virtual std::unique_ptr<Parser> duplicate() const = 0;
+};
 
-        virtual ~Parser() = default;
-        virtual void clear_doc() = 0;
-        virtual bool load_document(const std::string& filepath) = 0;
-        virtual const std::string& get_document_name() const = 0;
-        virtual PageSpecs page_specs(int page) const = 0;
-        virtual std::vector<HorizontalBound> split_bounds(PageSpecs, int n) = 0;
-        virtual int num_pages() const = 0;
-        // virtual void write_page(int page_num, int w, int h,
-        //                 float zoom, float rotate,
-        //                 unsigned char* buffer, fz_rect clip) = 0;
-        virtual DisplayListHandle get_display_list(int page_num) = 0;
-        virtual void write_section(int page_num, int w, int h, float zoom, float rotate,
-                            DisplayListHandle dlist, unsigned char* buffer,
-                            fz_rect clip) = 0;
-        virtual std::unique_ptr<Parser> duplicate() const = 0;
-    };
+class MuPDFParser : public Parser {
+public:
+  explicit MuPDFParser(bool use_ICC, fz_context *cloned_ctx = nullptr);
+  ~MuPDFParser() override;
 
-    class MuPDFParser : public Parser{
-    public:
-        explicit MuPDFParser(bool use_ICC, fz_context* cloned_ctx = nullptr);
-        ~MuPDFParser() override;
+  // delete copy constructors
+  MuPDFParser(const MuPDFParser &) = delete;
+  MuPDFParser &operator=(const MuPDFParser &) = delete;
 
-        // delete copy constructors
-        MuPDFParser(const MuPDFParser&) = delete;
-        MuPDFParser& operator=(const MuPDFParser&) = delete;
+  // move constructors
+  MuPDFParser(MuPDFParser &&other) noexcept;
+  MuPDFParser &operator=(MuPDFParser &&other) noexcept;
 
-        // move constructors
-        MuPDFParser(MuPDFParser&& other) noexcept;
-        MuPDFParser& operator=(MuPDFParser&& other) noexcept;
+  void clear_doc() override;
+  bool load_document(const std::string &filepath) override;
+  const std::string &get_document_name() const override;
+  [[nodiscard]] PageSpecs page_specs(int page) const override;
+  [[nodiscard]] std::vector<HorizontalBound> split_bounds(PageSpecs ps,
+                                                          int n) override;
+  int num_pages() const override;
+  // void write_page(int page_num, int w, int h,
+  //                 float zoom, float rotate,
+  //                 unsigned char* buffer, fz_rect clip) override;
+  [[nodiscard]] DisplayListHandle get_display_list(int page_num) override;
+  void write_section(int page_num, int w, int h, float zoom, float rotate,
+                     DisplayListHandle dlist, unsigned char *buffer,
+                     fz_rect clip) override;
+  [[nodiscard]] std::unique_ptr<Parser> duplicate() const override;
 
-        void clear_doc() override;
-        bool load_document(const std::string& filepath) override;
-        const std::string& get_document_name() const override;
-        [[nodiscard]] PageSpecs page_specs(int page) const override;
-        [[nodiscard]] std::vector<HorizontalBound> split_bounds(PageSpecs ps, int n) override;
-        int num_pages() const override;
-        // void write_page(int page_num, int w, int h,
-        //                 float zoom, float rotate,
-        //                 unsigned char* buffer, fz_rect clip) override;
-        [[nodiscard]] DisplayListHandle get_display_list(int page_num) override;
-        void write_section(int page_num, int w, int h, float zoom, float rotate,
-                            DisplayListHandle dlist, unsigned char* buffer,
-                            fz_rect clip) override;
-        [[nodiscard]] std::unique_ptr<Parser> duplicate() const override;
-
-    private:
-        fz_context* ctx;
-        fz_document* doc;
-        std::string doc_name;
-        std::string full_filepath;
-        bool use_icc_profile;
-    };
-}
+private:
+  fz_context *ctx;
+  fz_document *doc;
+  std::string doc_name;
+  std::string full_filepath;
+  bool use_icc_profile;
+};
+} // namespace pdf
