@@ -4,19 +4,12 @@
 #include "terminal.h"
 #include "tui.h"
 #include "utils/logging.h"
+#include "utils/profiling.h"
 #include "utils/ram_usage.h"
 #include <charconv>
 #include <chrono>
 #include <cstdio>
 #include <print>
-#include <ranges>
-#ifdef TRACY_ENABLE
-#include <tracy/Tracy.hpp>
-#else
-#define ZoneScoped
-#define ZoneScopedN
-#endif
-
 namespace { // utility functions
 std::string top_status_bar_with_stats(const TermSize &ts,
                                       const RenderResult &latest_frame,
@@ -219,7 +212,9 @@ void Viewer::process_keypress() {
       display_latest_frame();
       break;
     }
-    if (char_value == 'a') { // pan left TODO, for panning if viewport not changed, don't need to display frame -> do nothing
+    if (char_value ==
+        'a') { // pan left TODO, for panning if viewport not changed, don't need
+               // to display frame -> do nothing
       update_viewport(-0.1, 0);
       display_latest_frame();
       break;

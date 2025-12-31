@@ -1,14 +1,9 @@
 #include <cstdio>
 #include <print>
-#ifdef TRACY_ENABLE
-#include <tracy/Tracy.hpp>
-#else
-#define ZoneScoped
-#define ZoneScopedN
-#endif
 #include "viewer.h"
 #include <CLI11.hpp>
 #include "utils/logging.h"
+#include "utils/profiling.h"
 
 int main(int argc, char **argv) {
   CLI::App app("pdvu");

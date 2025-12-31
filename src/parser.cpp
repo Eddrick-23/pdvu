@@ -1,13 +1,8 @@
 #include "parser.h"
+#include "utils/profiling.h"
 #include <filesystem>
 #include <mutex>
 #include <print>
-#ifdef TRACY_ENABLE
-#include <tracy/Tracy.hpp>
-#else
-#define ZoneScoped
-#endif
-
 struct MutexLocks {
   std::mutex mutexes[FZ_LOCK_MAX];
 };

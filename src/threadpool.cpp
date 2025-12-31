@@ -1,10 +1,6 @@
 #include "threadpool.h"
-#ifdef TRACY_ENABLE
-#include <tracy/Tracy.hpp>
-#else
-#define ZoneScoped
-#define ZoneScopedN
-#endif
+#include "utils/profiling.h"
+
 ThreadPool::ThreadPool(const pdf::Parser &prototype_parser, const int n) {
   ZoneScopedN("threadpool setup");
   for (int i = 0; i < n; i++) {

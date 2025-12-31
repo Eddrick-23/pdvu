@@ -1,11 +1,6 @@
 #include "render_engine.h"
+#include "utils/profiling.h"
 
-#ifdef TRACY_ENABLE
-#include <tracy/Tracy.hpp>
-#else
-#define ZoneScoped
-#define ZoneScopedN
-#endif
 RenderEngine::RenderEngine(const pdf::Parser &prototype_parser, int n_threads,
                            bool use_cache)
     : use_cache(use_cache) {

@@ -1,10 +1,8 @@
 #include <iostream>
 #include <unistd.h>
-#include <__ostream/basic_ostream.h>
 #include "tempfile.h"
 
 
-// TODO add write data method
 
 Tempfile::Tempfile(size_t size) {
     file_size = size;
