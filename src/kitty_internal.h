@@ -28,13 +28,18 @@ constexpr std::string base64_encode(const std::string &input) {
     out.push_back('=');
   return out;
 }
-constexpr std::string b64_black_pixel(int opacity) {
+inline std::string b64_black_pixel_3x3(int opacity) {
+  // 3x3 due to interpolation on some terminals
   std::string pixel;
   pixel.push_back(0);
   pixel.push_back(0);
   pixel.push_back(0);
   const int alpha_channel = opacity * 255 / 100; // map from 0 to 100%
   pixel.push_back(alpha_channel);
-  return base64_encode(pixel);
+  std::string image_data;
+  for (int i = 0; i < 9; ++i) {
+    image_data += pixel;
+  }
+  return base64_encode(image_data);
 }
 } // namespace kitty::detail

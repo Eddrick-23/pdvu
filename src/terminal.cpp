@@ -29,7 +29,9 @@ void exit_alt_screen() {
 std::string move_cursor(int row, int col) {
   return std::format("\033[{};{}H", row, col);
 }
-std::string reset_screen_and_cursor_string() { return "\033[H\033[2J"; }
+std::string reset_screen_and_cursor_string() {
+  return "\033[H\033[J"; // avoid [2J since it deletes stored images
+}
 } // namespace terminal
 
 Terminal::Terminal() {}

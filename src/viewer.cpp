@@ -3,17 +3,37 @@
 #include "parser.h"
 #include "terminal.h"
 #include "tui.h"
+#include "utils/logging.h"
 #include "utils/ram_usage.h"
 #include <charconv>
 #include <chrono>
 #include <cstdio>
 #include <print>
+#include <ranges>
 #ifdef TRACY_ENABLE
 #include <tracy/Tracy.hpp>
 #else
 #define ZoneScoped
 #define ZoneScopedN
 #endif
+
+namespace { // utility functions
+std::string top_status_bar_with_stats(const TermSize &ts,
+                                      const RenderResult &latest_frame,
+                                      const std::string &doc_name, int page,
+                                      int total_pages) {
+  size_t mem_bytes = ram_usage::getCurrentRSS();
+  double mem_usage_mb = mem_bytes / (1024.0 * 1024.0);
+  std::string stats =
+      std::to_string(latest_frame.render_time_ms) +
+      std::format("ms {} ", TUI::symbols::box_single_line.at(179)) +
+      std::format("{:.1f}MB", mem_usage_mb);
+  return TUI::top_bar(ts, doc_name, std::format("{}/{}", page + 1, total_pages),
+                      stats);
+}
+std::string bottom_bar(const TermSize &ts) { return TUI::bottom_bar(ts); }
+} // namespace
+
 Viewer::Viewer(std::unique_ptr<pdf::Parser> main_parser,
                std::unique_ptr<RenderEngine> render_engine, bool use_shm) {
   ZoneScopedN("Viewer setup");
@@ -63,8 +83,7 @@ void Viewer::render_page(int page_num) {
   const TermSize ts = term.get_terminal_size();
   if (ts.width < TUI::MIN_COLS || ts.height < TUI::MIN_ROWS) {
     // Just update the guard text, don't bother the engine
-    std::print("{}{}", terminal::reset_screen_and_cursor_string(),
-               TUI::guard_message(ts));
+    std::print("{}", TUI::guard_message(ts));
     std::fflush(stdout);
     return;
   }
@@ -82,45 +101,44 @@ void Viewer::change_zoom_index(int delta) {
 }
 
 Viewer::CropRect Viewer::calculate_crop_window() {
-  // TODO should return a struct that we pass to the kitty protocol
-  // get image data from latest frame, height width etc...
-  // get viewport data (need to create a struct that tracks offsets and zoom
-  // levels)
+  const TermSize ts = term.get_terminal_size();
 
-  // calculate the x and y off set from (0,0) where (0,0) is the top left
-  // calculate the width and height to crop accordingly
-  // width is terminal width, height must take into account top and bottom bar
-  TermSize ts = term.get_terminal_size();
-  int available_height_pixels = ts.height - 2 * ts.pixels_per_row;
-  if (latest_frame.page_width <= ts.width &&
-      latest_frame.page_height <= available_height_pixels) {
+  // calculate drawable bounds
+  const int available_rows = ts.height - 2; // top and bottom bar
+  const int available_cols = ts.width;
+  const int max_h_pixels = available_rows * ts.pixels_per_row;
+  const int max_w_pixels = available_cols * ts.pixels_per_col;
+
+  // check if no crop needed
+  if (latest_frame.page_width <= max_w_pixels &&
+      latest_frame.page_height <= max_h_pixels) {
     // no crop needed, whole image fits in window
     return CropRect{0, 0, latest_frame.page_width, latest_frame.page_height};
   }
 
-  int x_offset_pixels =
+  // calculate window
+  const int x_offset_pixels =
       std::floor(latest_frame.page_width * viewport.rel_x_offset);
-  int y_offset_pixels =
+  const int y_offset_pixels =
       std::floor(latest_frame.page_height * viewport.rel_y_offset);
-
-  return CropRect(x_offset_pixels, y_offset_pixels,
-                  latest_frame.page_width - x_offset_pixels,
-                  latest_frame.page_height - y_offset_pixels);
+  const int crop_w =
+      std::min(max_w_pixels, latest_frame.page_width - x_offset_pixels);
+  const int crop_h =
+      std::min(max_h_pixels, latest_frame.page_height - y_offset_pixels);
+  return CropRect(x_offset_pixels, y_offset_pixels, crop_w, crop_h);
 }
 void Viewer::update_viewport(float delta_x, float delta_y) {
-  // update the internal attribute viewport
-  TermSize ts = term.get_terminal_size();
+  const TermSize ts = term.get_terminal_size();
 
   // calculate size of crop window relative to image
-  // TODO update ts.height to take into account top and bottom bar
-  int available_height_pixels =
-      ts.height - 2 * ts.pixels_per_row; // top and bottom bar
-  float view_ratio_w = (float)ts.width / latest_frame.page_width;
-  float view_ratio_h = (float)available_height_pix / latest_frame.page_height;
+  const int available_height_pixels = (ts.height - 2) * ts.pixels_per_row;
+  const float view_ratio_w = static_cast<float>(ts.x) / latest_frame.page_width;
+  const float view_ratio_h =
+      static_cast<float>(available_height_pixels) / latest_frame.page_height;
 
   // calculate max offsets
-  float max_x_offset = std::max(0.0f, 1.0f - view_ratio_w);
-  float max_y_offset = std::max(0.0f, 1.0f - view_ratio_h);
+  const float max_x_offset = std::max(0.0f, 1.0f - view_ratio_w);
+  const float max_y_offset = std::max(0.0f, 1.0f - view_ratio_h);
 
   // clamp the offsets
   viewport.rel_x_offset =
@@ -130,20 +148,19 @@ void Viewer::update_viewport(float delta_x, float delta_y) {
 }
 
 void Viewer::process_keypress() {
-  InputEvent input = term.read_input(16); // 60fps
-
+  auto [key, char_value] = term.read_input(16); // 60fps
   // if guard message is being displayed, only allow q to quit
   TermSize ts = term.get_terminal_size();
   if (ts.width < TUI::MIN_COLS || ts.height < TUI::MIN_ROWS) {
-    if (input.key == key_char && input.char_value == 'q') { // quit
+    if (key == key_char && char_value == 'q') { // quit
       running = false;
       return;
     }
   }
 
-  if (input.key == key_none)
+  if (key == key_none)
     return; // handle interrupt, do nothing
-  switch (input.key) {
+  switch (key) {
   case key_right_arrow:
     if (current_page >= total_pages - 1) {
       current_page = total_pages - 1;
@@ -161,49 +178,60 @@ void Viewer::process_keypress() {
     }
     break;
   case key_char:
-    if (input.char_value == 'q') { // quit
+    if (char_value == 'q') { // quit
       running = false;
       break;
     }
-    if (input.char_value == 'g') { // go to page
+    if (char_value == 'g') { // go to page
       handle_go_to_page();
       break;
     }
-    if (input.char_value == '?') {
+    if (char_value == '?') {
       handle_help_page();
       break;
     }
-    if (input.char_value == 'z') { // reset zoom
+    if (char_value == 'z') { // reset zoom
       viewport.zoom_index = default_zoom_index;
       viewport.zoom = zoom_levels[default_zoom_index];
       render_page(current_page);
     }
-    if (input.char_value == '=') { // zoom in
+    if (char_value == '=' || char_value == '+') { // zoom in
       // zoom in logic
+      int current_zoom_index = viewport.zoom_index;
       change_zoom_index(1);
-      render_page(current_page);
+      if (viewport.zoom_index != current_zoom_index) {
+        render_page(current_page);
+      }
       break;
     }
-    if (input.char_value == '-') { // zoomout
+    if (char_value == '-' || char_value == '_') { // zoomout
       // zoom out logic
+      int current_zoom_index = viewport.zoom_index;
       change_zoom_index(-1);
-      render_page(current_page);
+      if (viewport.zoom_index != current_zoom_index) {
+        render_page(current_page);
+      }
       break;
     }
-    if (input.char_value == 'w') {
-      // pan up
+    if (char_value ==
+        'w') { // pan up  TODO, add in capital letters to pan at double rate
+      update_viewport(0, -0.1);
+      display_latest_frame();
       break;
     }
-    if (input.char_value == 'a') {
-      // pan left
+    if (char_value == 'a') { // pan left TODO, for panning if viewport not changed, don't need to display frame -> do nothing
+      update_viewport(-0.1, 0);
+      display_latest_frame();
       break;
     }
-    if (input.char_value == 's') {
-      // pan down
+    if (char_value == 's') { // pan down
+      update_viewport(0, 0.1);
+      display_latest_frame();
       break;
     }
-    if (input.char_value == 'd') {
-      // pan right
+    if (char_value == 'd') { // pan right
+      update_viewport(0.1, 0);
+      display_latest_frame();
       break;
     }
   default: // do nothing for the rest
@@ -253,7 +281,7 @@ void Viewer::handle_go_to_page() {
   if (page_change) {
     render_page(current_page);
   } else { // restore bottom bar only if nothing changed
-    std::print("{}", TUI::bottom_bar(term.get_terminal_size()));
+    std::print("{}", bottom_bar(last_term_size));
     std::fflush(stdout);
   }
 }
@@ -262,7 +290,8 @@ void Viewer::handle_help_page() {
 
   auto clear_overlay = [](int start_row, int end_row, int width) {
     std::string sequence;
-    sequence += clear_dim_layer();
+    sequence += terminal::reset_screen_and_cursor_string();
+    sequence += kitty::clear_dim_layer();
     const std::string blank_line = std::string(width, ' ');
     for (int row = start_row; row <= end_row; row++) {
       sequence += terminal::move_cursor(row, 1);
@@ -312,13 +341,20 @@ void Viewer::handle_help_page() {
       return;
     }
   }
-  if (was_resized) {
-    render_page(current_page);
-    return;
-  }
   std::string sequence;
   sequence +=
       clear_overlay(2, last_terminal_size.height - 1, last_terminal_size.width);
+  if (was_resized) {
+    render_page(current_page);
+    std::print("{}", sequence);
+    fflush(stdout);
+    return;
+  }
+  // redraw top and bottom bar
+  sequence += top_status_bar_with_stats(last_terminal_size, latest_frame,
+                                        parser->get_document_name(),
+                                        current_page, total_pages);
+  sequence += bottom_bar(last_terminal_size);
   std::print("{}", sequence);
   std::fflush(stdout);
 }
@@ -345,26 +381,32 @@ bool Viewer::fetch_latest_frame() {
 }
 void Viewer::display_latest_frame() {
   const TermSize ts = term.get_terminal_size();
+  // prepare screen and cursor
   std::string frame = terminal::reset_screen_and_cursor_string();
   frame += center_cursor(latest_frame.page_width, latest_frame.page_height,
                          ts.pixels_per_row, ts.pixels_per_col, ts.height - 2,
                          ts.width, 2, 1);
 
-  frame += get_image_sequence(latest_frame.path_to_data,
-                              latest_frame.page_width, latest_frame.page_height,
-                              shm_supported ? "shm" : "tempfile");
+  // Take into account cropping
+  constexpr int KITTY_SLOT_ID = 1;
+  update_viewport(0.0, 0.0); // update incase image dimensions changed
+  auto [x_offset_pixels, y_offset_pixels, width, height] =
+      calculate_crop_window();
+  bool need_transmit = last_req_id != latest_frame.req_id;
+  if (need_transmit) {
+    last_req_id = latest_frame.req_id;
+  }
+  // generate sequence to display image
+  frame += kitty::get_image_sequence(
+      latest_frame.path_to_data, KITTY_SLOT_ID, latest_frame.page_width,
+      latest_frame.page_height, x_offset_pixels, y_offset_pixels, width, height,
+      shm_supported ? "shm" : "tempfile", need_transmit);
 
-  frame += TUI::bottom_bar(ts);
-  size_t mem_bytes = getCurrentRSS();
-  double mem_usage_mb = mem_bytes / (1024.0 * 1024.0);
-  std::string stats =
-      std::to_string(latest_frame.render_time_ms) +
-      std::format("ms {} ", TUI::symbols::box_single_line.at(179)) +
-      std::format("{:.1f}MB", mem_usage_mb);
-  frame +=
-      TUI::top_bar(ts, parser->get_document_name(),
-                   std::format("{}/{}", current_page + 1, total_pages), stats);
-
+  // top and bottom status bars
+  frame += bottom_bar(ts);
+  frame += top_status_bar_with_stats(
+      ts, latest_frame, parser->get_document_name(), current_page, total_pages);
+  // flush and display
   std::print("{}", frame);
   std::fflush(stdout);
 }

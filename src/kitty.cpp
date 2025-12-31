@@ -1,41 +1,58 @@
 #include "kitty.h"
-
-#include <format>
-
 #include "kitty_internal.h"
+#include <format>
+namespace kitty {
+  static constexpr int32_t IMAGE_Z = INT32_MIN / 2 - 2;
+  static constexpr int32_t DIM_LAYER_Z = INT32_MIN /2 - 1;
 
-std::string get_image_sequence(const std::string &filepath, int img_width,
-                               int img_height,
-                               const std::string &transmission_medium) {
-  // z-index below INT32_MIN / 2 to render under background colours
-  // This allows rendering text over the image
-  constexpr int32_t UNDER_BG_Z = INT32_MIN / 2 - 1;
-  // for cropping, we define a rectangle and only the region in that rectangle
-  // is displayed
-  std::string result = std::format(
-      "\x1b_Ga=T,t={},f=24,C=1,z={},s={},v={},x={},y={},w={},h={};{}\x1b\\",
-      transmission_medium == "shm" ? "s" : "f", UNDER_BG_Z, img_width,
-      img_height,
-      0, // offset from left -> how much we translate right from (0,0)
-      0, // offset from top -> how much we translate down from (0,0)
-      0, // width of visible area -> rectangle width
-      0, // height of visible area -> rectangle height
-      kitty::detail::base64_encode(filepath));
-  return result;
-}
+  std::string get_image_sequence(const std::string &filepath, int img_id,
+                                 int img_width, int img_height,
+                                 int x_offset_pixels, int y_offset_pixels,
+                                 int crop_rect_width, int crop_rect_height,
+                                 const std::string &transmission_medium,
+                                 bool transmit) {
+    // z-index below INT32_MIN / 2 to render under background colours
+    // This allows rendering text over the image
+    std::string sequence;
+    if (transmit) {
+      // save the full image first
+      sequence += std::format(
+          "\x1b_Ga=t,q=2,i={},t={},f=24,s={},v={};{}"
+          "\x1b\\",
+          img_id, transmission_medium == "shm" ? "s" : "f", img_width,
+          img_height,
+          kitty::detail::base64_encode(filepath));
+    }
+    sequence += std::format( // read and display
+        "\x1b_Ga=p,q=2,i={},p={},C=1,z={},x={},y={},w={},h={}\x1b\\", img_id, img_id,
+        IMAGE_Z,
+        x_offset_pixels,   // offset right from top left
+        y_offset_pixels,   // offset down from top left
+        crop_rect_width,   // width of visible area -> rectangle width
+        crop_rect_height); // height of visible area -> rectangle height
+    return sequence;
+  }
 
-std::string get_dim_layer(int term_width, int term_height) {
-  constexpr std::string b64_pixel = kitty::detail::b64_black_pixel(100);
-  std::string result =
-      std::format("\x1b_Ga=T,t=d,f=32,C=1,z={},s={},v={},c={},r={};{}\x1b\\",
-                  -1, // below written layer at index 1
-                  1, 1, term_width, term_height, b64_pixel);
-  return result;
-}
+  std::string delete_image_placement() {
+    return "\x1b_Ga=d\x1b\\"; // delete all visible placements
+  }
+  std::string get_dim_layer(int term_width, int term_height) {
+    const std::string b64_block = detail::b64_black_pixel_3x3(100);
+    // create a 3 x 3 block
+    // crop out the middle pixel
+    // use that pixel and stretch to prevent interpolation from affecting transparency
+    std::string result =
+        std::format("\x1b_Ga=T,q=2,f=32,C=1,z={},s={},v={},c={},r={},x={},y={},w={},h={};{}\x1b\\",
+                    DIM_LAYER_Z, // below written layer
+                    3, 3, term_width, term_height,
+                    1, 1, 1, 1,
+                    b64_block);
+    return result;
+  }
 
-std::string clear_dim_layer() { // clear the pixel we put at index -1
-  // <ESC>_Ga=d,d=Z,z=-1<ESC>\
-  // # delete the placements with z-index -1, also freeing up image data
-  std::string result = std::format("\x1b_Ga=d,d=Z,z=-1\x1b\\");
-  return result;
+
+
+  std::string clear_dim_layer() {
+    return std::format("\x1b_Ga=d,d=Z,z={}\x1b\\", DIM_LAYER_Z);
+  }
 }

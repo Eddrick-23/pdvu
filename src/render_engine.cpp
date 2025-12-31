@@ -44,7 +44,6 @@ RenderEngine::get_result() { // get the most recently created image
 void RenderEngine::coordinator_loop() {
   /* Main job is to wake on new request, then break down and equeue tasks to the
    * threadpool to execute
-   *
    */
 
   while (running) {
@@ -102,6 +101,7 @@ void RenderEngine::dispatch_page_write(const RenderRequest &req) {
                  std::chrono::duration_cast<std::chrono::milliseconds>(
                      std::chrono::steady_clock::now() - start)
                      .count());
+    return;
   }
   // prepare data then enqueue to threadpool
   try {

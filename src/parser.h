@@ -31,7 +31,7 @@ struct PageSpecs {
     const size_t size = w * 3 * h;
 
     return PageSpecs(x0, y0, x1, y1, rect.x0, rect.y0, rect.x1, rect.y1, w, h,
-                     size);
+                     size, x1 - x0, y1 - y0);
   }
 };
 

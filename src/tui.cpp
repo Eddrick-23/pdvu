@@ -14,15 +14,15 @@ const std::vector<std::array<std::string, 2>> help_text = {
     {"q", "Quit"},
     {"g", "Go to Page"},
     {"Esc", "Exit input textbox"},
-    {"/ or shift+f", "Find text"},
+    {"/ or shift+f", "Find text"}, // TODO
     {"w", "Pan up"},
     {"a", "Pan left"},
     {"s", "Pan down"},
     {"d", "pan right"},
-    {"r", "rotate clockwise 90 degrees"},
+    {"r", "rotate clockwise 90 degrees"}, // TODO
     {"+ or =", "zoom in"},
     {"- or _", "zoom out"},
-    {"f", "zoom to fit"},
+    {"z", "zoom to fit"},
     {"?", "Help page"},
 };
 }
@@ -172,6 +172,7 @@ std::string guard_message(const TermSize &ts) {
   terminal::hide_cursor();
   std::string result;
   result += terminal::reset_screen_and_cursor_string();
+  result += kitty::delete_image_placement();
   const std::string red = "\x1b[1;31m";
   const std::string green = "\x1b[1;32m";
   std::string title = "Terminal size too small";
@@ -197,7 +198,7 @@ std::string guard_message(const TermSize &ts) {
   result += "\x1b[0m"; // Reset
   return result;
 }
-// TODO
+
 std::string help_overlay(const TermSize &ts) {
   if (ts.width < MIN_COLS || ts.height < MIN_ROWS) {
     return guard_message(ts);
@@ -209,10 +210,17 @@ std::string help_overlay(const TermSize &ts) {
   const std::string bold_text = "\x1b[1m";
   const std::string reset_bold = "\x1b[22m";
   const std::string black_bg = std::format("\x1b[48;5;{}m", 16);
-  result += orange_fg; // fg
+
+  result += orange_fg;
+  result += black_bg;
   // overlay background with a black overlay
   result += terminal::move_cursor(1, 1);
-  result += get_dim_layer(ts.width, ts.height);
+  result += std::string(ts.width, ' '); // erase top bar
+  result += terminal::move_cursor(ts.height, 1);
+  result += std::string(ts.width, ' '); // erase bottom bar
+  result += terminal::move_cursor(1, 1);
+  result += kitty::get_dim_layer(ts.width, ts.height);
+  result += terminal::move_cursor(1,1);
 
   const std::string logo = R"(
         ___________________    ______  __
@@ -267,8 +275,8 @@ std::string help_overlay(const TermSize &ts) {
 std::string bottom_input_bar(Terminal &term, const std::string &prompt,
                              const std::function<void()> &on_resize) {
   /* creates a single row text input UI that takes user input */
-  // Might be a better way to handle resizing but for now we pass in a callback
-  // function
+  // Might be a better way to handle resizing
+  // but for now we pass in a callback function
 
   TermSize current_term_size = term.get_terminal_size();
   std::string buffer;

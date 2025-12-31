@@ -22,7 +22,7 @@ public:
   void render_page(int page_num);
 
   void change_zoom_index(int delta);
-  CropRect calculate_crop_window(); // TODO should return a struct
+  CropRect calculate_crop_window();
   void update_viewport(float delta_x, float delta_y);
   void handle_go_to_page();
   void handle_help_page();
@@ -32,9 +32,8 @@ public:
 
 private:
   // sub systems
-  Terminal term;                       // terminal data and raw mode
-  std::unique_ptr<pdf::Parser> parser; // parsing pdfs
-  // hold a pointer because parser must be loaded fully before creating renderer
+  Terminal term;                          // terminal data and raw mode
+  std::unique_ptr<pdf::Parser> parser;    // parsing pdfs
   std::unique_ptr<RenderEngine> renderer; // loading page frames
 
   // current state
@@ -42,6 +41,7 @@ private:
   int total_pages = 0;
   bool running = false;
   bool shm_supported = false;
+  int last_req_id = 0;
   RenderResult latest_frame = RenderResult{};
 
   // control zoom and panning
@@ -51,9 +51,9 @@ private:
     int zoom_index;
     float zoom;
   };
-  static constexpr std::array<float, 10> zoom_levels{0.5, 0.75, 0.8, 0.9,  1.0,
-                                                     1.1, 1.25, 1.5, 1.75, 2.0};
-  static constexpr int default_zoom_index = 4; // 1.0x (100%)
+  static constexpr std::array<float, 11> zoom_levels{
+      0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0};
+  static constexpr int default_zoom_index = 5; // 1.0x (100%)
 
   Viewport viewport{0.0, 0.0, default_zoom_index,
                     zoom_levels[default_zoom_index]};
