@@ -6,10 +6,10 @@
 #define ZoneScoped
 #define ZoneScopedN
 #endif
-#include "kitty.h"
-#include "tui.h"
 #include "viewer.h"
 #include <CLI11.hpp>
+#include <plog/Initializers/RollingFileInitializer.h>
+#include <plog/Log.h>
 
 int main(int argc, char **argv) {
   CLI::App app("pdvu");
@@ -41,38 +41,42 @@ int main(int argc, char **argv) {
 
   CLI11_PARSE(app, argc, argv);
   if (show_license) {
-    if (show_license) {
-      std::println("OPEN SOURCE LICENSES");
-      std::print("====================\n\n");
+    std::println("OPEN SOURCE LICENSES");
+    std::print("====================\n\n");
 
-      std::println("1. CLI11");
-      std::println("   - License: 3-Clause BSD");
-      std::print("   - Copyright (c) 2017-2024 University of Cincinnati\n\n");
+    std::println("1. PLOG");
+    std::println("   - License: MIT");
+    std::print("   - Copyright (c) 2022 Sergey Podobry\n\n");
 
-      std::println("2. Tracy Profiler");
-      std::println("   - License: 3-Clause BSD");
-      std::print("   - Copyright (c) 2017-2025 Bartosz Taudul\n\n");
+    std::println("2. CLI11");
+    std::println("   - License: 3-Clause BSD");
+    std::print("   - Copyright (c) 2017-2024 University of Cincinnati\n\n");
 
-      std::println("3. MuPDF");
-      std::println("   - License: GNU Affero General Public License (AGPL v3)");
-      std::println("   - Copyright (c) 2006-2025 Artifex Software, Inc.");
-      std::println(
-          "   - NOTE: Because this software links against MuPDF, this entire");
-      std::print("     application is provided under the AGPL v3 license.\n\n");
+    std::println("3. Tracy Profiler");
+    std::println("   - License: 3-Clause BSD");
+    std::print("   - Copyright (c) 2017-2025 Bartosz Taudul\n\n");
 
-      std::println(
-          "For full license texts, please read LICENSE-3RD-PARTY.txt included");
-      std::println("with this distribution or visit: "
-                   "https://github.com/Eddrick-23/pdvu");
+    std::println("4. MuPDF");
+    std::println("   - License: GNU Affero General Public License (AGPL v3)");
+    std::println("   - Copyright (c) 2006-2025 Artifex Software, Inc.");
+    std::println(
+        "   - NOTE: Because this software links against MuPDF, this entire");
+    std::print("     application is provided under the AGPL v3 license.\n\n");
 
-      return 0;
-    }
+    std::println(
+        "For full license texts, please read LICENSE-3RD-PARTY.txt included");
+    std::println("with this distribution or visit: "
+                 "https://github.com/Eddrick-23/pdvu");
+
+    return 0;
   }
 
   if (pdf_path.extension() != ".pdf") {
     std::println(stderr, "Error: Pdf file must be provided");
     return 1;
   }
+  // logging for debugging
+  plog::init(plog::debug, "/tmp/pdvu.log", 10000000, 1);
 
   // 1) Set up parser and load in document
   std::unique_ptr<pdf::Parser> parser = nullptr;
@@ -94,7 +98,8 @@ int main(int argc, char **argv) {
 
   // 3) set up viewer and run
   Viewer viewer(std::move(parser), std::move(render_engine), use_shm);
+  PLOG_INFO << "Start up complete, starting loop";
   viewer.run(); // start main loop
-
+  PLOG_INFO << "Shutdown session";
   return 0;
 }
