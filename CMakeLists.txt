@@ -14,13 +14,31 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_subdirectory(src)
 
-option(ENABLE_TRACY "Enable Tracy profiler" OFF)
+# --- PLOG LOGGER CONFIGURATION ---
+option(ENABLE_LOGGING "Enable plog logging" OFF)
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  set(ENABLE_LOGGING ON)
+endif()
+
+if(ENABLE_LOGGING)
+  message(STATUS "Logging ENABLED")
+  include(FetchContent)
+  FetchContent_Declare(
+      plog
+      GIT_REPOSITORY https://github.com/SergiusTheBest/plog.git
+      GIT_TAG 1.1.11
+      GIT_SHALLOW true
+  )
+  FetchContent_MakeAvailable(plog)
+  target_link_libraries(pdvu_core PUBLIC plog::plog)
+else ()
+  message(STATUS "Logging DISABLED")
+endif()
 # --- TRACY PROFILER CONFIGURATION ---
+option(ENABLE_TRACY "Enable Tracy profiler" OFF)
 if(ENABLE_TRACY)
     message(STATUS "Tracy profiling ENABLED")
-
-    # Define macro for the library sources
-    target_compile_definitions(pdvu_core PUBLIC TRACY_ENABLE)
 
     # Build Tracy Client
     set(TRACY_CLIENT_SRC "${CMAKE_SOURCE_DIR}/external/tracy/public/TracyClient.cpp")
@@ -37,8 +55,12 @@ else()
     message(STATUS "Tracy profiling DISABLED")
 endif()
 
+#define macros
+target_compile_definitions(pdvu_core PUBLIC
+    $<$<BOOL:${ENABLE_LOGGING}>:ENABLE_LOGGING>
+    $<$<BOOL:${ENABLE_TRACY}>:TRACY_ENABLE>
+)
 add_executable(pdvu src/main.cpp)
-
 target_link_libraries(pdvu PRIVATE pdvu_core)
 
 # --- GoogleTest config ---

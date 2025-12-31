@@ -1,4 +1,3 @@
-
 set(CORE_SOURCES
         terminal.cpp
         kitty.cpp
@@ -10,17 +9,6 @@ set(CORE_SOURCES
         render_engine.cpp
         threadpool.cpp
 )
-
-#Plog config
-include(FetchContent)
-FetchContent_Declare(
-    plog
-    GIT_REPOSITORY https://github.com/SergiusTheBest/plog.git
-    GIT_TAG 1.1.11
-    GIT_SHALLOW true
-)
-FetchContent_MakeAvailable(plog)
-
 
 # create core library
 add_library(pdvu_core STATIC ${CORE_SOURCES})
@@ -45,5 +33,4 @@ set_target_properties(mupdf_third PROPERTIES
 target_link_libraries(pdvu_core PUBLIC
   mupdf
   mupdf_third
-  plog::plog
 )

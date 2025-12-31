@@ -8,8 +8,7 @@
 #endif
 #include "viewer.h"
 #include <CLI11.hpp>
-#include <plog/Initializers/RollingFileInitializer.h>
-#include <plog/Log.h>
+#include "utils/logging.h"
 
 int main(int argc, char **argv) {
   CLI::App app("pdvu");
@@ -76,7 +75,9 @@ int main(int argc, char **argv) {
     return 1;
   }
   // logging for debugging
-  plog::init(plog::debug, "/tmp/pdvu.log", 10000000, 1);
+  #ifdef ENABLE_LOGGING
+    plog::init(plog::debug, "/tmp/pdvu.log", 10000000, 1);
+  #endif
 
   // 1) Set up parser and load in document
   std::unique_ptr<pdf::Parser> parser = nullptr;
