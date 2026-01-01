@@ -1,13 +1,21 @@
 # pdvu
+![License](https://img.shields.io/badge/license-AGPL%20v3-blue)
+![Language](https://img.shields.io/badge/language-C%2B%2B23-orange)
 
-<u>__This is project is still in progress, large changes to the codebase expected__</u>
+<u>__This project is still in progress, large changes to the codebase expected__</u>
 
 **pdvu** is a high-performance, terminal-based PDF viewer written in C++. 
 
-Designed with a strict focus on memory efficiency, pdvu targets a minimal memory footprint using a prefetchless approach with on demand page loading.
+## Features
+- Low memory footprint
+    - No TUI library
+    - No prefetching
+    - Cache only heavy pages
+- Multithreaded rendering
+- Tempfile and Posix Shared Memory Transmission
+- Page Zooming and Panning
+- text searching (in a future update)
 
-![License](https://img.shields.io/badge/license-AGPL%20v3-blue)
-![Language](https://img.shields.io/badge/language-C%2B%2B23-orange)
 
 ## Requirements
 
@@ -78,7 +86,7 @@ This is an automated benchmark using a python script with predifined inputs and 
 
 ## Auto test (Image heavy)
 
-| Metric | MIN | MAX | Mean |
+|  | MIN | MAX | Mean |
 |--------|-----|-----|------|
 | pdvu | 79.41 | 675.84 | 445.11 |
 | tdf | 49.03 | 1075.30 | 734.42 |
@@ -89,7 +97,7 @@ This is an automated benchmark using a python script with predifined inputs and 
 
 ## Auto test (Text heavy)
 
-| Metric | MIN | MAX | Mean |
+|  | MIN | MAX | Mean |
 |--------|-----|-----|------|
 | pdvu | 24.69 | 38.42 | 28.57 |
 | tdf | 91.33 | 1000.22 | 748.08 |
@@ -98,7 +106,3 @@ This is an automated benchmark using a python script with predifined inputs and 
 </tr>
 </table>
 
-## Roadmap
-Future updates are planned for the following features
-- Page Zooming and Panning
-- "Ctrl f" for word searching

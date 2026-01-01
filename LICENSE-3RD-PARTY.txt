@@ -4,9 +4,10 @@ P D V U   L I C E N S I N G   I N F O R M A T I O N
 
 This software uses the following third-party libraries:
 
-1. CLI11 (Command Line Interface)
-2. Tracy Profiler (Performance Profiling)
-3. MuPDF (PDF Parsing and Rendering)
+1. PLOG (Logging Library)
+2. CLI11 (Command Line Interface)
+3. Tracy Profiler (Performance Profiling)
+4. MuPDF (PDF Parsing and Rendering)
 
 Below are the license terms for each component.
 
