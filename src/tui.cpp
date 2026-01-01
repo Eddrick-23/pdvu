@@ -117,7 +117,7 @@ std::string add_centered(int row, int term_width, const std::string &text,
   col = col < 1 ? 1 : col;
   return "\033[" + std::to_string(row) + ";" + std::to_string(col) + "H" + text;
 }
-std::string top_bar(const TermSize &ts, const std::string &left,
+std::string top_status_bar(const TermSize &ts, const std::string &left,
                     const std::string &mid, const std::string &right) {
   std::string result;
   result += terminal::move_cursor(1, 1);
@@ -150,20 +150,21 @@ std::string top_bar(const TermSize &ts, const std::string &left,
   return result;
 }
 
-std::string bottom_bar(const TermSize &ts) {
-  const std::string text = std::format(
-      "SEARCH: ctrl/cmd + f {} GO TO PAGE: g {} NAVIGATE: <- -> {} QUIT : q {} "
-      "Help: ?",
+std::string bottom_status_bar(const TermSize &ts, float current_zoom_level) {
+  const std::string left_text = std::format(
+      " GO TO PAGE: g {} NAVIGATE: <- -> {} QUIT : q {} "
+      "Help: ? {}",
       symbols::box_single_line.at(179), symbols::box_single_line.at(179),
       symbols::box_single_line.at(179), symbols::box_single_line.at(179));
-
+  const std::string right_text = std::format("Zoom : {}%", current_zoom_level * 100);
   std::string result;
   result += terminal::move_cursor(ts.height, 1); // move to last row
   result += "\033[2K\033[7m";           // clear line and invert colours
   result += std::string(ts.width, ' '); // overlay bg
   result += terminal::move_cursor(ts.height, 1); // move to last row
-  result += add_centered(ts.height, ts.width, text,
-                         visible_length(text)); // text for bottom bar
+  result += left_text;
+  result += terminal::move_cursor(ts.height, ts.width - visible_length(right_text));
+  result += right_text;
   result += "\033[0m";                          // Reset colors
   return result;
 }

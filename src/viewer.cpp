@@ -21,10 +21,10 @@ std::string top_status_bar_with_stats(const TermSize &ts,
       std::to_string(latest_frame.render_time_ms) +
       std::format("ms {} ", TUI::symbols::box_single_line.at(179)) +
       std::format("{:.1f}MB", mem_usage_mb);
-  return TUI::top_bar(ts, doc_name, std::format("{}/{}", page + 1, total_pages),
+  return TUI::top_status_bar(ts, doc_name, std::format("{}/{}", page + 1, total_pages),
                       stats);
 }
-std::string bottom_bar(const TermSize &ts) { return TUI::bottom_bar(ts); }
+std::string bottom_bar(const TermSize &ts, float current_zoom_level) { return TUI::bottom_status_bar(ts, current_zoom_level); }
 } // namespace
 
 Viewer::Viewer(std::unique_ptr<pdf::Parser> main_parser,
@@ -276,7 +276,7 @@ void Viewer::handle_go_to_page() {
   if (page_change) {
     render_page(current_page);
   } else { // restore bottom bar only if nothing changed
-    std::print("{}", bottom_bar(last_term_size));
+    std::print("{}", bottom_bar(last_term_size, viewport.zoom));
     std::fflush(stdout);
   }
 }
@@ -349,7 +349,7 @@ void Viewer::handle_help_page() {
   sequence += top_status_bar_with_stats(last_terminal_size, latest_frame,
                                         parser->get_document_name(),
                                         current_page, total_pages);
-  sequence += bottom_bar(last_terminal_size);
+  sequence += bottom_bar(last_terminal_size, viewport.zoom);
   std::print("{}", sequence);
   std::fflush(stdout);
 }
@@ -398,7 +398,7 @@ void Viewer::display_latest_frame() {
       shm_supported ? "shm" : "tempfile", need_transmit);
 
   // top and bottom status bars
-  frame += bottom_bar(ts);
+  frame += bottom_bar(ts, viewport.zoom);
   frame += top_status_bar_with_stats(
       ts, latest_frame, parser->get_document_name(), current_page, total_pages);
   // flush and display
