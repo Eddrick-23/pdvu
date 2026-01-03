@@ -5,8 +5,9 @@
 
 using namespace kitty;
 
-size_t count_substr(const std::string& str, const std::string& substr) {
-  if (substr.empty()) return 0;
+size_t count_substr(const std::string &str, const std::string &substr) {
+  if (substr.empty())
+    return 0;
   size_t count = 0, pos = 0;
   while ((pos = str.find(substr, pos)) != std::string::npos) {
     count++;
@@ -29,19 +30,26 @@ TEST(KittyProtocolUtils, Base64Encoding) {
 
 // Test black pixel generation
 // TODO fix since we change to block
-TEST(KittyProtocolUtils, BlackPixelEncoding) {
+TEST(KittyProtocolUtils, BlackPixel3x3Encoding) {
+  auto concat_strings = [](const std::string &substr, int n) {
+    std::string result;
+    for (int i = 0; i < n; ++i) {
+      result += substr;
+    }
+    return result;
+  };
   struct TestCase {
     int opacity;
-    std::string expected;  // base64 of RGBA bytes [0,0,0,alpha]
+    std::string expected; // base64 of RGBA bytes [0,0,0,alpha]
   } test_cases[] = {
-    {0,   "AAAAAA=="},  // [0,0,0,0]   -> fully transparent
-    {50,  "AAAAfw=="},  // [0,0,0,127] -> half opacity
-    {100, "AAAA/w=="},  // [0,0,0,255] -> fully opaque
-    {25,  "AAAAPw=="},  // [0,0,0,63]  -> 25% opacity
-    {75,  "AAAAvw=="},  // [0,0,0,191] -> 75% opacity
-};
+      {0, concat_strings("AAAAAAAAAAAAAAAA", 3)},
+      {25, concat_strings("AAAAPwAAAD8AAAA/", 3)},
+      {50, concat_strings("AAAAfwAAAH8AAAB/", 3)},
+      {75, concat_strings("AAAAvwAAAL8AAAC/", 3)},
+      {100, concat_strings("AAAA/wAAAP8AAAD/", 3)},
+  };
 
-  for (const auto& [opacity, expected] : test_cases) {
+  for (const auto &[opacity, expected] : test_cases) {
     EXPECT_EQ(kitty::detail::b64_black_pixel_3x3(opacity), expected);
   }
 }
@@ -65,15 +73,15 @@ TEST(KittyProtocol, ImageSequence_StructureAndParameters_Transmit) {
   EXPECT_TRUE(result.contains("v=800")); // height
   // placement
 
-  EXPECT_TRUE(result.contains("a=t"));   // Action = transmit without display
-  EXPECT_TRUE(result.contains("i=1"));   // id = 1
-  EXPECT_TRUE(result.contains("p=1"));   // placement id = 1
-  EXPECT_TRUE(result.contains("C=1"));   // keep cursor position
-  EXPECT_TRUE(result.contains("z="));    // z index is set
-  EXPECT_TRUE(result.contains("x=0"));   // crop x offset
-  EXPECT_TRUE(result.contains("y=0"));   // crop y offset
-  EXPECT_TRUE(result.contains("w=0"));   // crop rect width
-  EXPECT_TRUE(result.contains("h=0"));   // crop rect height
+  EXPECT_TRUE(result.contains("a=t")); // Action = transmit without display
+  EXPECT_TRUE(result.contains("i=1")); // id = 1
+  EXPECT_TRUE(result.contains("p=1")); // placement id = 1
+  EXPECT_TRUE(result.contains("C=1")); // keep cursor position
+  EXPECT_TRUE(result.contains("z="));  // z index is set
+  EXPECT_TRUE(result.contains("x=0")); // crop x offset
+  EXPECT_TRUE(result.contains("y=0")); // crop y offset
+  EXPECT_TRUE(result.contains("w=0")); // crop rect width
+  EXPECT_TRUE(result.contains("h=0")); // crop rect height
 }
 
 TEST(KittyProtocol,

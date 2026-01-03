@@ -1,4 +1,5 @@
 #pragma once
+#include "parser.h"
 #include "terminal.h"
 #include <functional>
 #include <string>
@@ -41,10 +42,17 @@ inline constexpr int MIN_COLS = 40;
 std::string add_centered(int row, int term_width, const std::string &text,
                          int text_length);
 std::string top_status_bar(const TermSize &ts, const std::string &left,
-                    const std::string &mid, const std::string &right);
+                           const std::string &mid, const std::string &right);
 std::string bottom_status_bar(const TermSize &ts, float current_zoom_level);
 std::string guard_message(const TermSize &ts);
 std::string help_overlay(const TermSize &ts);
 std::string bottom_input_bar(Terminal &term, const std::string &prompt,
                              const std::function<void()> &on_resize);
+
+bool is_window_too_small(const TermSize &ts);
+float calculate_zoom_factor(const TermSize &ts, const pdf::PageSpecs &,
+                            int content_cols, int content_rows, float zoom);
+std::string center_cursor(const TermSize &ts, int w_pixels, int h_pixels,
+                          int content_cols, int content_rows, int start_row,
+                          int start_col);
 } // namespace TUI

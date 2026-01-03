@@ -118,7 +118,7 @@ std::string add_centered(int row, int term_width, const std::string &text,
   return "\033[" + std::to_string(row) + ";" + std::to_string(col) + "H" + text;
 }
 std::string top_status_bar(const TermSize &ts, const std::string &left,
-                    const std::string &mid, const std::string &right) {
+                           const std::string &mid, const std::string &right) {
   std::string result;
   result += terminal::move_cursor(1, 1);
   result += "\033[2K\033[7m"; // invert colours
@@ -156,16 +156,18 @@ std::string bottom_status_bar(const TermSize &ts, float current_zoom_level) {
       "Help: ? {}",
       symbols::box_single_line.at(179), symbols::box_single_line.at(179),
       symbols::box_single_line.at(179), symbols::box_single_line.at(179));
-  const std::string right_text = std::format("Zoom : {}%", current_zoom_level * 100);
+  const std::string right_text =
+      std::format("Zoom : {}%", current_zoom_level * 100);
   std::string result;
   result += terminal::move_cursor(ts.height, 1); // move to last row
   result += "\033[2K\033[7m";           // clear line and invert colours
   result += std::string(ts.width, ' '); // overlay bg
   result += terminal::move_cursor(ts.height, 1); // move to last row
   result += left_text;
-  result += terminal::move_cursor(ts.height, ts.width - visible_length(right_text));
+  result +=
+      terminal::move_cursor(ts.height, ts.width - visible_length(right_text));
   result += right_text;
-  result += "\033[0m";                          // Reset colors
+  result += "\033[0m"; // Reset colors
   return result;
 }
 
@@ -221,7 +223,7 @@ std::string help_overlay(const TermSize &ts) {
   result += std::string(ts.width, ' '); // erase bottom bar
   result += terminal::move_cursor(1, 1);
   result += kitty::get_dim_layer(ts.width, ts.height);
-  result += terminal::move_cursor(1,1);
+  result += terminal::move_cursor(1, 1);
 
   const std::string logo = R"(
         ___________________    ______  __
@@ -402,4 +404,37 @@ std::string bottom_input_bar(Terminal &term, const std::string &prompt,
   return buffer;
 }
 
+bool is_window_too_small(const TermSize &ts) {
+  return ts.width < MIN_COLS || ts.height < MIN_ROWS;
 }
+
+float calculate_zoom_factor(const TermSize &ts, const pdf::PageSpecs &ps,
+                            int content_cols, int content_rows, float zoom) {
+
+  const int max_w_pixels = content_cols * ts.pixels_per_col;
+  const int max_h_pixels = content_rows * ts.pixels_per_row;
+
+  const float h_scale = static_cast<float>(max_w_pixels) / ps.acc_width;
+  const float v_scale = static_cast<float>(max_h_pixels) / ps.acc_height;
+
+  return std::min(h_scale, v_scale) * zoom;
+}
+std::string center_cursor(const TermSize &ts, int w_pixels, int h_pixels,
+                          int content_cols, int content_rows, int start_row,
+                          int start_col) {
+  /* center cursor vertically and horizontally so rendered image is centered in
+   * window */
+
+  const int cols_used = static_cast<int>(
+      std::ceil(static_cast<float>(w_pixels) / ts.pixels_per_col));
+  const int rows_used = static_cast<int>(
+      std::ceil(static_cast<float>(h_pixels) / ts.pixels_per_row));
+
+  int top_margin = (content_rows - rows_used) / 2;
+  int left_margin = (content_cols - cols_used) / 2;
+
+  top_margin = top_margin > 0 ? top_margin : 0;
+  left_margin = left_margin > 0 ? left_margin : 0;
+  return terminal::move_cursor(top_margin + start_row, left_margin + start_col);
+}
+} // namespace TUI
