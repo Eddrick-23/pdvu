@@ -6,9 +6,9 @@
 #include <sys/ioctl.h>
 #include <sys/poll.h>
 #include <unistd.h>
-volatile sig_atomic_t Terminal::window_resized =
-    1; // set as 1 so terminal caches the dimensions on startup
-
+// set as 1 so terminal caches the dimensions on startup
+volatile sig_atomic_t Terminal::window_resized = 1;
+volatile sig_atomic_t Terminal::quit_requested = 0;
 namespace terminal {
 void hide_cursor() {
   std::print("{}", "\033[?25l");
@@ -43,17 +43,31 @@ Terminal::~Terminal() {
 }
 
 void Terminal::handle_sigwinch(int sig) { window_resized = 1; }
+void Terminal::handle_sigterm(int sig) { quit_requested = 1; }
 
-void Terminal::setup_resize_handler() {
-  struct sigaction action;
-  action.sa_handler = handle_sigwinch;
-  sigemptyset(&action.sa_mask);
-
-  // Force blocking calls like read to return -1 when a signal arrives
-  action.sa_flags = 0;
-
-  if (sigaction(SIGWINCH, &action, NULL) == -1) {
+void Terminal::setup_signal_handlers() {
+  struct sigaction sa_resize;
+  sa_resize.sa_handler = handle_sigwinch;
+  sigemptyset(&sa_resize.sa_mask);
+  // Important: Force blocking calls like read to return -1 when a signal
+  // arrives
+  sa_resize.sa_flags = 0;
+  if (sigaction(SIGWINCH, &sa_resize, NULL) == -1) {
     perror("sigaction");
+  }
+  struct sigaction sa_quit;
+  sa_quit.sa_handler = handle_sigterm;
+  sigemptyset(&sa_quit.sa_mask);
+  sa_quit.sa_flags = 0;
+  // Register for SIGHUP(Tab Close), SIGTERM(kill), SIGINT(Ctrl-c)
+  if (sigaction(SIGHUP, &sa_quit, NULL) == -1) {
+    perror("sigaction SIGHUP");
+  }
+  if (sigaction(SIGTERM, &sa_quit, NULL) == -1) {
+    perror("sigaction SIGTERM");
+  }
+  if (sigaction(SIGINT, &sa_quit, NULL) == -1) {
+    perror("sigaction SIGINT");
   }
 }
 

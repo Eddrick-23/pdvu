@@ -20,11 +20,13 @@ std::string reset_screen_and_cursor_string();
 class Terminal {
 public:
   static volatile sig_atomic_t window_resized;
+  static volatile sig_atomic_t quit_requested;
   Terminal();
   ~Terminal();
 
   static void handle_sigwinch(int sig);
-  void setup_resize_handler();
+  static void handle_sigterm(int sig);
+  void setup_signal_handlers();
   bool was_resized();
 
   void enter_raw_mode();

@@ -50,7 +50,7 @@ void Viewer::run() {
     terminal::enter_alt_screen();
     terminal::hide_cursor();
     term.enter_raw_mode();
-    term.setup_resize_handler();
+    term.setup_signal_handlers();
   }
   term.was_resized(); // force fetch initial sizes and set flag to 0
   request_page_render(current_page);
@@ -58,7 +58,7 @@ void Viewer::run() {
   using Clock = std::chrono::steady_clock;
   auto start = Clock::now();
   bool resizing = false;
-  while (running) {
+  while (running && !Terminal::quit_requested) {
     process_keypress();
 
     if (term.was_resized()) {

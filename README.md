@@ -16,7 +16,6 @@
 - Page Zooming and Panning
 - text searching (in a future update)
 
-
 ## Requirements
 
 * **MacOS (have not tested on linux platform yet)**
