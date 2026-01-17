@@ -12,6 +12,11 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Set flags for builds
+set(CMAKE_CXX_FLAGS_DEBUG "-fno-omit-frame-pointer -g -O0 -Wall -Wextra")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -fno-omit-frame-pointer -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+
 add_subdirectory(src)
 
 # --- PLOG LOGGER CONFIGURATION ---

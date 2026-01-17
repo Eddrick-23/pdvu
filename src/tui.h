@@ -43,7 +43,8 @@ std::string add_centered(int row, int term_width, const std::string &text,
                          int text_length);
 std::string top_status_bar(const TermSize &ts, const std::string &left,
                            const std::string &mid, const std::string &right);
-std::string bottom_status_bar(const TermSize &ts, float current_zoom_level);
+std::string bottom_status_bar(const TermSize &ts, float current_zoom_level,
+                              int rotation);
 std::string guard_message(const TermSize &ts);
 std::string help_overlay(const TermSize &ts);
 std::string bottom_input_bar(Terminal &term, const std::string &prompt,

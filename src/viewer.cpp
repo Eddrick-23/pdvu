@@ -24,8 +24,8 @@ std::string top_status_bar_with_stats(const TermSize &ts,
   return TUI::top_status_bar(
       ts, doc_name, std::format("{}/{}", page + 1, total_pages), stats);
 }
-std::string bottom_bar(const TermSize &ts, float current_zoom_level) {
-  return TUI::bottom_status_bar(ts, current_zoom_level);
+std::string bottom_bar(const TermSize &ts, float current_zoom_level, int rotation) {
+  return TUI::bottom_status_bar(ts, current_zoom_level, rotation);
 }
 
 constexpr inline bool floats_equal(float a, float b) {
@@ -126,7 +126,7 @@ void Viewer::display_latest_frame() {
       shm_supported ? "shm" : "tempfile", need_transmit);
 
   // top and bottom status bars
-  frame += bottom_bar(ts, viewport.zoom);
+  frame += bottom_bar(ts, viewport.zoom, rotation_degrees);
   frame += top_status_bar_with_stats(
       ts, latest_frame, parser->get_document_name(), current_page, total_pages);
   // flush and display
@@ -142,12 +142,14 @@ void Viewer::request_page_render(int page_num) {
     std::fflush(stdout);
     return;
   }
-  const pdf::PageSpecs ps = parser->page_specs(page_num); // using default zoom
-  // ts.height - 2 due to rows taken by top and bottom bar
-  const float zoom_factor = TUI::calculate_zoom_factor(
-      ts, ps, ts.width, ts.height - 2, viewport.zoom);
-  renderer->request_page(page_num, zoom_factor, ps.scale(zoom_factor),
-                         shm_supported ? "shm" : "tempfile");
+  if (const auto specs = parser->page_specs(page_num)) {
+    pdf::PageSpecs ps = specs ->rotate_quarter_clockwise(rotation_degrees / 90);
+    // ts.height - 2 due to rows taken by top and bottom bar
+    const float zoom_factor = TUI::calculate_zoom_factor(
+        ts, ps, ts.width, ts.height - 2, viewport.zoom);
+    renderer->request_page(page_num, zoom_factor, ps.scale(zoom_factor),
+                           shm_supported ? "shm" : "tempfile");
+  }
 }
 
 void Viewer::change_zoom_index(int delta) {
@@ -273,7 +275,7 @@ void Viewer::handle_go_to_page() {
   if (page_change) {
     request_page_render(current_page);
   } else { // restore bottom bar only if nothing changed
-    std::print("{}", bottom_bar(last_term_size, viewport.zoom));
+    std::print("{}", bottom_bar(last_term_size, viewport.zoom, rotation_degrees));
     std::fflush(stdout);
   }
 }
@@ -345,7 +347,7 @@ void Viewer::handle_help_page() {
   sequence += top_status_bar_with_stats(last_terminal_size, latest_frame,
                                         parser->get_document_name(),
                                         current_page, total_pages);
-  sequence += bottom_bar(last_terminal_size, viewport.zoom);
+  sequence += bottom_bar(last_terminal_size, viewport.zoom, rotation_degrees);
   std::print("{}", sequence);
   std::fflush(stdout);
 }
@@ -407,7 +409,13 @@ void Viewer::process_keypress() {
       }
       break;
     }
-    if (char_value == '-' || char_value == '_') { // zoomout
+      if (char_value == 'r') {
+        rotation_degrees = (rotation_degrees + 90) % 360;
+        // std::print("{}", bottom_bar(term.get_terminal_size(), viewport.zoom, rotation_degrees));
+        // std::fflush(stdout);
+        request_page_render(current_page);
+      }
+      if (char_value == '-' || char_value == '_') { // zoomout
       // zoom out logic
       int current_zoom_index = viewport.zoom_index;
       change_zoom_index(-1);

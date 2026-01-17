@@ -41,6 +41,7 @@ private:
   // current state
   int current_page = 0;
   int total_pages = 0;
+  int rotation_degrees = 0;
   bool running = false;
   bool shm_supported = false;
   size_t last_req_id = 0;

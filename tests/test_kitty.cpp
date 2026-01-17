@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-
 #include "kitty.h"
 #include "kitty_internal.h"
 

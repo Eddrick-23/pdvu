@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "utils/logging.h"
 #include "utils/profiling.h"
 #include <filesystem>
 #include <mutex>
@@ -35,14 +36,15 @@ MuPDFParser::MuPDFParser(const bool use_ICC, fz_context *cloned_ctx) {
   doc = nullptr;
 
   if (!ctx) {
-    std::println(stderr, "CRITICAL: Failed to create MuPDF context.");
-    exit(EXIT_FAILURE);
+    throw std::runtime_error("Failed to create MuPDF context");
   }
 
   // Disable ICC colour management for performance
   if (!use_ICC) {
     fz_try(ctx) { fz_disable_icc(ctx); }
-    fz_catch(ctx) { std::println(stderr, "WARNING: Failed to configure ICC."); }
+    fz_catch(ctx) {
+      PLOG_WARNING << "Failed to configure ICC";
+    }
   }
   use_icc_profile = use_ICC;
 
@@ -76,7 +78,7 @@ bool MuPDFParser::load_document(const std::string &filepath) {
   clear_doc();
   fz_try(ctx) { doc = fz_open_document(ctx, filepath.c_str()); }
   fz_catch(ctx) {
-    std::println(stderr, "ERROR: Could not open file: {}", filepath);
+    PLOG_ERROR << std::format("Could not open file: {}", filepath);
     return false;
   }
   full_filepath = filepath; // save path for duplicating
@@ -94,22 +96,23 @@ int MuPDFParser::num_pages() const {
   int count = 0;
   fz_try(ctx) { count = fz_count_pages(ctx, doc); }
   fz_catch(ctx) {
-    std::println(stderr, "ERROR: Failed to count pages.");
+    PLOG_ERROR << "Error: Failed to count pages.";
     return 0;
   }
   return count;
 }
 
-PageSpecs MuPDFParser::page_specs(const int page_num) const {
+std::optional<PageSpecs> MuPDFParser::page_specs(const int page_num) const {
   ZoneScoped;
   fz_page *page = nullptr;
   constexpr float base_zoom = 1.0;
   fz_try(ctx) { page = fz_load_page(ctx, doc, page_num); }
   fz_catch(ctx) {
-    std::println(stderr, "ERROR: Failed to load page");
-    return {0, 0, 0, 0};
+    PLOG_ERROR << std::format("Error: Failed to load page. PageNum: {}", page);
+    return {};
   }
-  const fz_matrix ctm = fz_scale(base_zoom, base_zoom);
+  fz_matrix ctm = fz_scale(base_zoom, base_zoom);
+
   // raw data
   fz_rect raw_bounds = fz_bound_page(ctx, page);
   raw_bounds = fz_transform_rect(raw_bounds, ctm);
@@ -122,8 +125,8 @@ PageSpecs MuPDFParser::page_specs(const int page_num) const {
   const int w = bbox.x1 - bbox.x0;
   const int h = bbox.y1 - bbox.y0;
   const size_t size = w * 3 * h;
-  float acc_height = raw_bounds.y1 - raw_bounds.y0;
-  float acc_width = raw_bounds.x1 - raw_bounds.x0;
+  const float acc_height = raw_bounds.y1 - raw_bounds.y0;
+  const float acc_width = raw_bounds.x1 - raw_bounds.x0;
 
   return PageSpecs(raw_bounds.x0, raw_bounds.y0, raw_bounds.x1,
                    raw_bounds.y1,                      // Base
@@ -162,53 +165,6 @@ std::vector<HorizontalBound> MuPDFParser::split_bounds(PageSpecs ps, int n) {
   return bounds;
 }
 
-// void MuPDFParser::write_page(const int page_num, const int w, const int h,
-//                         const float zoom, const float rotate,
-//                         unsigned char* buffer, fz_rect clip) {
-//     ZoneScoped;
-//     // write page to a custom buffer directly
-//     fz_page* page = nullptr;
-//     fz_try(ctx) {
-//         page = fz_load_page(ctx, doc, page_num);
-//     }
-//     fz_catch(ctx) {
-//         std::cerr <<"ERROR: Failed to load page." << std::endl;
-//     }
-//
-//     if (w != clip.x1 - clip.x0 || h != clip.y1 - clip.y0) {
-//         std::cerr << "ERROR: clip dimensions do not match w and h." <<
-//         std::endl; return;
-//     }
-//
-//     fz_pixmap* pix = nullptr;
-//
-//     fz_try(ctx) {
-//         fz_matrix ctm = fz_scale(zoom, zoom);
-//         ctm = fz_pre_rotate(ctm, rotate);
-//         pix = fz_new_pixmap_with_data(ctx, fz_device_rgb(ctx), w, h,
-//                                                  NULL, 0, w * 3, buffer);
-//         // set start points based on clip
-//         pix->x = static_cast<int>(clip.x0);
-//         pix->y = static_cast<int>(clip.y0);
-//         fz_clear_pixmap_with_value(ctx, pix, 255); // set white background
-//         fz_device* dev = fz_new_draw_device(ctx, fz_identity, pix);
-//         fz_run_page(ctx, page, dev, ctm, nullptr);
-//
-//         // free memory
-//         fz_close_device(ctx, dev);
-//         fz_drop_device(ctx, dev);
-//         fz_drop_page(ctx, page);
-//         fz_drop_pixmap(ctx, pix);
-//     }
-//     fz_catch(ctx) {
-//         if (pix) {
-//             fz_drop_pixmap(ctx, pix);
-//         }
-//         fz_drop_page(ctx, page);
-//         std::cerr <<"ERROR: Failed to draw page." << std::endl;
-//     }
-// }
-
 using DisplayListHandle = std::shared_ptr<fz_display_list>;
 DisplayListHandle MuPDFParser::get_display_list(int page_num) {
   ZoneScoped;
@@ -216,7 +172,7 @@ DisplayListHandle MuPDFParser::get_display_list(int page_num) {
   fz_display_list *raw_list = nullptr;
   fz_try(ctx) { page = fz_load_page(ctx, doc, page_num); }
   fz_catch(ctx) {
-    std::println(stderr, "Failed to load page");
+    PLOG_ERROR << "Failed to load page";
     return nullptr;
   }
   fz_try(ctx) {
@@ -227,7 +183,8 @@ DisplayListHandle MuPDFParser::get_display_list(int page_num) {
     if (page) {
       fz_drop_page(ctx, page);
     }
-    std::println(stderr, "Failed to create display list");
+    PLOG_ERROR << "Failed to create display list";
+    // TODO change this to return std::optional to follow PageSpecs?
     return nullptr; // coordinator will check if displaylist was created
                     // successfully
   }
@@ -239,9 +196,9 @@ DisplayListHandle MuPDFParser::get_display_list(int page_num) {
   });
 }
 
-void MuPDFParser::write_section(int page_num, int w, int h, float zoom,
-                                float rotate, DisplayListHandle dlist,
-                                unsigned char *buffer, fz_rect clip) {
+void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs &ps,
+                                DisplayListHandle dlist, unsigned char *buffer,
+                                fz_rect clip) {
   /* dlist is created by another thread. That thread will be responsible for
    * dropping it clip is which portion of the dlist we are reading from. it must
    * match with w and h The input buffer must be shifted such that the first
@@ -249,14 +206,29 @@ void MuPDFParser::write_section(int page_num, int w, int h, float zoom,
    * write to the buffer in parallel all to different sections at once
    */
   ZoneScoped;
+  auto translate_matrix = [ps](fz_matrix &ctm) {
+    const int rot = ps.rotation;
+    const int total_w = ps.width;
+    const int total_h = ps.height;
+    if (rot == 90) {
+      ctm = fz_concat(ctm, fz_translate(total_w, 0));
+    } else if (rot == 180) {
+      ctm = fz_concat(ctm, fz_translate(total_w, total_h));
+    } else if (rot == 270) {
+      ctm = fz_concat(ctm, fz_translate(0, total_h));
+    }
+  };
   if (w != clip.x1 - clip.x0 || h != clip.y1 - clip.y0) {
-    std::println(stderr, "ERROR: clip dimensions do not match w and h");
+    PLOG_ERROR << std::format("clip dimensions do not match w:{} and "
+                              "h:{}. clip data: x0:{},y0:{},x1:{},y1:{}",
+                              w, h, clip.x0, clip.y0, clip.x1, clip.y1);
     return;
   }
   fz_pixmap *pix = nullptr;
   fz_try(ctx) {
     fz_matrix ctm = fz_scale(zoom, zoom);
-    ctm = fz_pre_rotate(ctm, rotate);
+    ctm = fz_pre_rotate(ctm, ps.rotation);
+    translate_matrix(ctm);
     pix = fz_new_pixmap_with_bbox_and_data(
         ctx, fz_device_rgb(ctx), fz_irect_from_rect(clip), NULL, 0, buffer);
     pix->x = static_cast<int>(clip.x0);
@@ -274,7 +246,7 @@ void MuPDFParser::write_section(int page_num, int w, int h, float zoom,
     if (pix) {
       fz_drop_pixmap(ctx, pix);
     }
-    std::println(stderr, "ERROR: Failed to draw page.");
+    PLOG_ERROR << "Failed to draw page";
   }
 }
 

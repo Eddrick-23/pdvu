@@ -1,4 +1,5 @@
 #include "render_engine.h"
+#include <plog/Log.h>
 #include "utils/profiling.h"
 
 RenderEngine::RenderEngine(const pdf::Parser &prototype_parser, int n_threads,
@@ -130,8 +131,8 @@ void RenderEngine::dispatch_page_write(const RenderRequest &req) {
     for (auto h_bound : bounds) {
       auto fut = thread_pool->enqueue_with_future(
           [h_bound, req, dlist, buffer](pdf::Parser &parser) {
-            parser.write_section(req.page_num, h_bound.width, h_bound.height,
-                                 req.zoom, 0, dlist.value(),
+            parser.write_section(h_bound.width, h_bound.height, req.zoom,
+                                 req.scaled_page_specs, dlist.value(),
                                  static_cast<unsigned char *>(buffer) +
                                      h_bound.offset,
                                  h_bound.rect);
@@ -151,8 +152,8 @@ void RenderEngine::dispatch_page_write(const RenderRequest &req) {
     auto full_duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     if (use_cache && write_duration > page_cache_time_limit) {
-      cache_page(req.page_num, req.zoom, new_shm, new_temp, req.transmission,
-                 ps.width, ps.height);
+      cache_page(req.page_num, req.zoom, req.scaled_page_specs.rotation,
+                 new_shm, new_temp, req.transmission, ps.width, ps.height);
     }
     update_frame(ps.width, ps.height, full_duration.count());
   } catch (const std::exception &e) {
@@ -184,7 +185,7 @@ RenderEngine::fetch_display_list(int page_num) {
   return {};
 }
 
-void RenderEngine::cache_page(int page_num, float zoom,
+void RenderEngine::cache_page(int page_num, float zoom, int rotation,
                               const std::shared_ptr<SharedMemory> &shm,
                               const std::shared_ptr<Tempfile> &tempfile,
                               const std::string &transmission, int page_width,
@@ -194,18 +195,18 @@ void RenderEngine::cache_page(int page_num, float zoom,
     buffer.resize(shm->size());
     shm->copy_data(buffer.data(), buffer.size());
   }
-  page_cache.put({page_num, zoom}, {transmission, std::move(buffer), tempfile,
-                                    page_width, page_height});
+  page_cache.put(
+      {page_num, zoom, rotation},
+      {transmission, std::move(buffer), tempfile, page_width, page_height});
 }
 
 std::optional<PageCacheData>
 RenderEngine::try_page_cache(const RenderRequest &req,
                              std::shared_ptr<SharedMemory> &shm_ptr,
                              std::shared_ptr<Tempfile> &tempfile_ptr) {
-  auto cached_page = page_cache.get({req.page_num, req.zoom});
+  auto cached_page = page_cache.get({req.page_num, req.zoom, req.scaled_page_specs.rotation});
   if (!cached_page.has_value())
     return {};
-
   PageCacheData data = cached_page.value();
   if (data.transmission == "shm") {
     shm_ptr = std::make_unique<SharedMemory>(data.shm_buffer.size());

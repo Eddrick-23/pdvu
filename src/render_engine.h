@@ -14,9 +14,11 @@
 struct PageDetails {
   int page_num;
   float zoom;
+  int rotation_degrees;
   bool operator==(const PageDetails &other) const {
     constexpr float rel_eps = 1e-9;
     return page_num == other.page_num &&
+           rotation_degrees == other.rotation_degrees &&
            std::fabs(other.zoom - zoom) <= rel_eps * std::max(other.zoom, zoom);
   }
 };
@@ -27,6 +29,7 @@ struct PageCacheData {
   std::shared_ptr<Tempfile> tempfile_data;
   int page_width;
   int page_height;
+  int rotation_degrees;
 };
 
 struct RenderRequest {
@@ -65,7 +68,7 @@ public:
 private:
   void coordinator_loop();
   void dispatch_page_write(const RenderRequest &req);
-  void cache_page(int page_num, float zoom,
+  void cache_page(int page_num, float zoom, int rotation,
                   const std::shared_ptr<SharedMemory> &shm,
                   const std::shared_ptr<Tempfile> &tempfile,
                   const std::string &transmission, int page_width,

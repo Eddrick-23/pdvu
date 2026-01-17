@@ -150,14 +150,16 @@ std::string top_status_bar(const TermSize &ts, const std::string &left,
   return result;
 }
 
-std::string bottom_status_bar(const TermSize &ts, float current_zoom_level) {
+std::string bottom_status_bar(const TermSize &ts, float current_zoom_level,
+                              int rotation) {
   const std::string left_text = std::format(
       " GO TO PAGE: g {} NAVIGATE: <- -> {} QUIT : q {} "
       "Help: ? {}",
       symbols::box_single_line.at(179), symbols::box_single_line.at(179),
       symbols::box_single_line.at(179), symbols::box_single_line.at(179));
-  const std::string right_text =
-      std::format("Zoom : {}%", current_zoom_level * 100);
+  const std::string right_text = std::format(
+      "{}{}°{} Zoom : {}%", symbols::box_single_line.at(179), rotation,
+      symbols::box_single_line.at(179), current_zoom_level * 100);
   std::string result;
   result += terminal::move_cursor(ts.height, 1); // move to last row
   result += "\033[2K\033[7m";           // clear line and invert colours
