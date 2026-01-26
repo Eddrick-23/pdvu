@@ -24,10 +24,11 @@ private:
   };
   // helper functions
   bool fetch_latest_frame();
-  void display_latest_frame();
+  void display_latest_frame(int existing_width, int existing_height,
+                            int target_width, int target_height);
   void request_page_render(int page_num);
   void change_zoom_index(int delta);
-  CropRect calculate_crop_window();
+  CropRect calculate_crop_window(int width, int height);
   void update_viewport(float delta_x, float delta_y);
   void handle_page_pan(char key);
   void handle_go_to_page();
@@ -45,6 +46,7 @@ private:
   bool running = false;
   bool shm_supported = false;
   size_t last_req_id = 0;
+  pdf::PageSpecs target_page_specs = {};
   RenderResult latest_frame = RenderResult{};
 
   // control zoom and panning

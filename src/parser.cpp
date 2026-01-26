@@ -108,7 +108,7 @@ std::optional<PageSpecs> MuPDFParser::page_specs(const int page_num) const {
   constexpr float base_zoom = 1.0;
   fz_try(ctx) { page = fz_load_page(ctx, doc, page_num); }
   fz_catch(ctx) {
-    PLOG_ERROR << std::format("Error: Failed to load page. PageNum: {}", page);
+    PLOG_ERROR << std::format("Error: Failed to load page. PageNum: {}", page_num);
     return {};
   }
   fz_matrix ctm = fz_scale(base_zoom, base_zoom);

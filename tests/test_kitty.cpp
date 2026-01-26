@@ -1,6 +1,6 @@
-#include <gtest/gtest.h>
 #include "kitty.h"
 #include "kitty_internal.h"
+#include <gtest/gtest.h>
 
 using namespace kitty;
 
@@ -110,6 +110,13 @@ TEST(KittyProtocol, ImageSequence_TransmissionFormat) {
 
   EXPECT_TRUE(result_shm.contains("t=s"));
   EXPECT_TRUE(result_tempfile.contains("t=f"));
+}
+
+TEST(KittyProtocol, ImageSequence_OptionalImageDimensions) {
+  auto result = get_image_sequence("testfile", 1, 100, 100, 0, 0, 0, 0, "shm",
+                                   true, 50, 50);
+  EXPECT_TRUE(result.contains("c=50"));
+  EXPECT_TRUE(result.contains("r=50"));
 }
 
 TEST(KittyProtocol, PathEncoding) {
