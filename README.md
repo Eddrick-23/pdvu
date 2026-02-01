@@ -74,7 +74,9 @@ Test Machine:
 - Memory: 18 GB
 - Software Version: Sequoia 15.7.1
 
-This is an automated benchmark using a python script with predifined inputs and rss measured at 0.5s intervals
+This is an automated benchmark using a python script with predifined inputs and the **physical memory footprint** measured at 0.5s intervals using the [footprint](https://www.unix.com/man_page/osx/1/footprint/) cli tool on macos.
+
+Why not measure RSS? This [video](https://developer.apple.com/videos/play/wwdc2018/416/) covers memory in depth, but the main idea is we want to know the physical footprint which consists of dirty memory + compressed memory (i.e. memory that cannot be reclaimed by the system)
 
 ![image heavy benchmark](benchmark/graphs/auto_image_heavy.png)
 ![text heavy benchmark](benchmark/graphs/auto_text_heavy.png)
@@ -87,7 +89,7 @@ This is an automated benchmark using a python script with predifined inputs and 
 
 |  | MIN | MAX | Mean |
 |--------|-----|-----|------|
-| pdvu | 79.41 | 675.84 | 445.11 |
+| pdvu | 11.03 | 675.84 | 445.11 |
 | tdf | 49.03 | 1075.30 | 734.42 |
 | preview | 148.45 | 805.78 | 507.80 |
 
@@ -98,10 +100,18 @@ This is an automated benchmark using a python script with predifined inputs and 
 
 |  | MIN | MAX | Mean |
 |--------|-----|-----|------|
-| pdvu | 24.69 | 38.42 | 28.57 |
-| tdf | 91.33 | 1000.22 | 748.08 |
-| preview | 203.55 | 331.09 | 301.84 |
+| pdvu | 68.69 | 309.38 | 225.03 |
+| tdf | 101.08 | 1216.33 | 858.80 |
+| preview | 194.72 | 840.07 | 470.36 |
 </td>
 </tr>
 </table>
+################################ text pdf data(Physical Footprint) ################################
+pdvu: MIN:11.03, MAX:21.14, Mean:18.539698795180723
+tdf: MIN:75.47, MAX:824.22, Mean:567.1935928143712
+preview: MIN:288.21, MAX:788.07, Mean:571.4896022727272
+################################ image heavy pdf data(Physical Footprint) ################################
+pdvu: MIN:68.69, MAX:309.38, Mean:225.03024096385545
+tdf: MIN:101.08, MAX:1216.33, Mean:858.798622754491
+preview: MIN:194.72, MAX:840.07, Mean:470.35931818181814
 

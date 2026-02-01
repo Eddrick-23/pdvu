@@ -1,6 +1,6 @@
 # Benchmarks
 NOTE: Memory usage for TUI tools (tdf, pdvu) reflects process-only usage. The display overhead (rendering textures, window management) is offloaded to the host Terminal Emulator. In contrast, Preview figures include the full GUI stack cost, which may add extra memory overhead.
-## Stress test Memory Benchmark
+## Stress test Memory Benchmark (To be updated using physical memory footprint instead of RSS)
 The benchmark is done by loading the pdf and the memory tracker, waiting for 10 seconds, then holding down the key to cycle through pages, all the way until we reach the last page, then cycling back. Memory usage is tracked and plotted as follows.
 
 This is to simulate a worst case scenario of loading pages rapidly as a user scrolls through. The automated benchmark is more indicative of actual performance
