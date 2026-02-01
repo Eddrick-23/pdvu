@@ -87,22 +87,23 @@ Why not measure RSS? This [video](https://developer.apple.com/videos/play/wwdc20
 
 ## Auto test (Image heavy)
 
-|  | MIN | MAX | Mean |
+|   | MIN | MAX | Mean |
 |--------|-----|-----|------|
-| pdvu | 11.03 | 675.84 | 445.11 |
-| tdf | 49.03 | 1075.30 | 734.42 |
-| preview | 148.45 | 805.78 | 507.80 |
+| pdvu | 68.69 | 309.38 | 225.03 |
+| tdf | 101.08 | 1216.33 | 858.80 |
+| preview | 194.72 | 840.07 | 470.36 |
+
 
 </td>
 <td>
 
 ## Auto test (Text heavy)
 
-|  | MIN | MAX | Mean |
+|   | MIN | MAX | Mean |
 |--------|-----|-----|------|
-| pdvu | 68.69 | 309.38 | 225.03 |
-| tdf | 101.08 | 1216.33 | 858.80 |
-| preview | 194.72 | 840.07 | 470.36 |
+| pdvu | 11.03 | 21.14 | 18.54 |
+| tdf | 75.47 | 824.22 | 567.19 |
+| preview | 288.21 | 788.07 | 571.49 |
 </td>
 </tr>
 </table>
