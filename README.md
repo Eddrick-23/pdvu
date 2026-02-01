@@ -106,12 +106,4 @@ Why not measure RSS? This [video](https://developer.apple.com/videos/play/wwdc20
 </td>
 </tr>
 </table>
-################################ text pdf data(Physical Footprint) ################################
-pdvu: MIN:11.03, MAX:21.14, Mean:18.539698795180723
-tdf: MIN:75.47, MAX:824.22, Mean:567.1935928143712
-preview: MIN:288.21, MAX:788.07, Mean:571.4896022727272
-################################ image heavy pdf data(Physical Footprint) ################################
-pdvu: MIN:68.69, MAX:309.38, Mean:225.03024096385545
-tdf: MIN:101.08, MAX:1216.33, Mean:858.798622754491
-preview: MIN:194.72, MAX:840.07, Mean:470.35931818181814
 
