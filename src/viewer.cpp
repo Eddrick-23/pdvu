@@ -421,10 +421,11 @@ void Viewer::process_keypress() {
       break;
     }
     if (char_value == 'z') { // reset zoom
-      // TODO only rerender if there was a change in zoom
-      viewport.zoom_index = default_zoom_index;
-      viewport.zoom = zoom_levels[default_zoom_index];
-      request_page_render(current_page);
+      if (viewport.zoom_index != default_zoom_index) {
+        viewport.zoom_index = default_zoom_index;
+        viewport.zoom = zoom_levels[default_zoom_index];
+        request_page_render(current_page);
+      }
     }
     if (char_value == '=' || char_value == '+') { // zoom in
       // zoom in logic

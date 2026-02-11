@@ -1,5 +1,4 @@
 #include "render_engine.h"
-#include <plog/Log.h>
 #include "utils/profiling.h"
 
 RenderEngine::RenderEngine(const pdf::Parser &prototype_parser, int n_threads,
