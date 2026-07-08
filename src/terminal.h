@@ -1,6 +1,7 @@
 #pragma once
 #include <sys/termios.h>
 
+#include <csignal>
 #include <string>
 
 #include "keys.h"
