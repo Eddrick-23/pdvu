@@ -1,11 +1,13 @@
 #include "terminal.h"
-#include <cstdio>
-#include <fstream>
-#include <print>
+
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <sys/poll.h>
 #include <unistd.h>
+
+#include <cstdio>
+#include <fstream>
+#include <print>
 // set as 1 so terminal caches the dimensions on startup
 volatile sig_atomic_t Terminal::window_resized = 1;
 volatile sig_atomic_t Terminal::quit_requested = 0;
@@ -26,13 +28,11 @@ void exit_alt_screen() {
   std::print("{}", "\033[?1049l");
   std::fflush(stdout);
 }
-std::string move_cursor(int row, int col) {
-  return std::format("\033[{};{}H", row, col);
-}
+std::string move_cursor(int row, int col) { return std::format("\033[{};{}H", row, col); }
 std::string reset_screen_and_cursor_string() {
-  return "\033[H\033[J"; // avoid [2J since it deletes stored images
+  return "\033[H\033[J";  // avoid [2J since it deletes stored images
 }
-} // namespace terminal
+}  // namespace terminal
 
 Terminal::Terminal() {}
 
@@ -73,7 +73,7 @@ void Terminal::setup_signal_handlers() {
 
 bool Terminal::was_resized() {
   if (window_resized) {
-    get_terminal_size(); // update attributes before reset
+    get_terminal_size();  // update attributes before reset
     window_resized = 0;
     return true;
   }
@@ -82,9 +82,8 @@ bool Terminal::was_resized() {
 
 TermSize Terminal::get_terminal_size() {
   winsize ws{};
-  if (window_resized == 0) { // not resized, use cached
-    return TermSize(width, height, x_pixels, y_pixels, pixels_per_row,
-                    pixels_per_col);
+  if (window_resized == 0) {  // not resized, use cached
+    return TermSize(width, height, x_pixels, y_pixels, pixels_per_row, pixels_per_col);
   }
   if (ioctl(STDIN_FILENO, TIOCGWINSZ, &ws) == 0) {
     width = ws.ws_col;
@@ -97,8 +96,8 @@ TermSize Terminal::get_terminal_size() {
     pixels_per_row = drawable_y_pixels / ws.ws_row;
     pixels_per_col = drawable_x_pixels / ws.ws_col;
 
-    return TermSize(ws.ws_col, ws.ws_row, ws.ws_xpixel, ws.ws_ypixel,
-                    pixels_per_row, pixels_per_col);
+    return TermSize(ws.ws_col, ws.ws_row, ws.ws_xpixel, ws.ws_ypixel, pixels_per_row,
+                    pixels_per_col);
   }
   std::println(stderr, "Failed to get terminal size");
   return TermSize(24, 80, 0, 0, 0, 0);
@@ -107,7 +106,7 @@ TermSize Terminal::get_terminal_size() {
 void Terminal::enter_raw_mode() {
   if (tcgetattr(STDIN_FILENO, &orig_termios) == -1) {
     die("tctgetattr");
-  }; // get original state
+  };  // get original state
 
   struct termios raw = orig_termios;
   // TURN OFF: ECHO(printing), ICANON(enter key), ISIG(ctrl-c/z signals)
@@ -130,7 +129,7 @@ void Terminal::exit_raw_mode() {
   }
 }
 
-void Terminal::die(const char *s) {
+void Terminal::die(const char* s) {
   // cleanup
   exit_raw_mode();
   terminal::exit_alt_screen();
@@ -166,38 +165,36 @@ InputEvent Terminal::read_input(int timeout_ms) {
     return InputEvent{key_none};
   }
 
-  if (c == '\x1b') { // escape key and arrow keys
+  if (c == '\x1b') {  // escape key and arrow keys
     pollfd pfd;
     pfd.fd = STDIN_FILENO;
     pfd.events = POLLIN;
 
-    int ret = poll(&pfd, 1, 10); // wait 10ms for next byte
+    int ret = poll(&pfd, 1, 10);  // wait 10ms for next byte
     if (ret == 0) {
       return InputEvent{key_escape};
     }
     if (ret > 0) {
       char seq[3];
-      if (read(STDIN_FILENO, &seq[0], 1) != 1)
-        return InputEvent{key_escape};
+      if (read(STDIN_FILENO, &seq[0], 1) != 1) return InputEvent{key_escape};
 
       if (seq[0] == '\x08' || seq[0] == '\x7F') {
         return InputEvent{key_alt_backspace};
       }
       if (seq[0] == '[') {
-        if (read(STDIN_FILENO, &seq[1], 1) != 1)
-          return InputEvent{key_escape};
+        if (read(STDIN_FILENO, &seq[1], 1) != 1) return InputEvent{key_escape};
         switch (seq[1]) {
-        case 'A':
-          return InputEvent{key_up_arrow};
-        case 'B':
-          return InputEvent{key_down_arrow};
-        case 'C':
-          return InputEvent{key_right_arrow};
-        case 'D':
-          return InputEvent{key_left_arrow};
+          case 'A':
+            return InputEvent{key_up_arrow};
+          case 'B':
+            return InputEvent{key_down_arrow};
+          case 'C':
+            return InputEvent{key_right_arrow};
+          case 'D':
+            return InputEvent{key_left_arrow};
         }
       }
-      return InputEvent{key_alt_char, seq[0]}; // e.g. alt + f
+      return InputEvent{key_alt_char, seq[0]};  // e.g. alt + f
     }
     return InputEvent{key_escape};
   }
@@ -214,8 +211,8 @@ InputEvent Terminal::read_input(int timeout_ms) {
   if (c >= 1 && c <= 31) {
     return InputEvent{key_ctrl_char, c};
   }
-  if (c >= 32 && c <= 126) { // printable chars
+  if (c >= 32 && c <= 126) {  // printable chars
     return InputEvent(key_char, c);
   }
-  return InputEvent{key_none}; // ignore other keys for now
+  return InputEvent{key_none};  // ignore other keys for now
 }

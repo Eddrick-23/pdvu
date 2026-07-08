@@ -1,19 +1,22 @@
 #include "shm.h"
-#include "utils/profiling.h"
+
+#include <sys/fcntl.h>
+#include <sys/mman.h>
+#include <unistd.h>
+
 #include <atomic>
 #include <cassert>
 #include <cerrno>
 #include <chrono>
-#include <sys/fcntl.h>
-#include <sys/mman.h>
-#include <unistd.h>
+
+#include "utils/profiling.h"
 static std::atomic<int> shm_sequence_id{0};
 
 int is_shm_supported() {
   int shm_fd = shm_open("/test_shm_support", O_CREAT | O_RDWR | O_EXCL, 0600);
   if (shm_fd == -1) {
     // handle error
-    if (errno == ENOSYS) { // not supported
+    if (errno == ENOSYS) {  // not supported
       return 0;
     }
     perror("shm_open");
@@ -33,20 +36,19 @@ SharedMemory::SharedMemory(size_t image_size) {
   shm_name = std::format("/pdvu_{}_{}", getpid(), id);
 
   shm_fd = shm_open(shm_name.c_str(), O_CREAT | O_RDWR | O_EXCL,
-                    0600); // create memory
+                    0600);  // create memory
   if (shm_fd == -1) {
     throw std::runtime_error("Failed to open shared memory: " + shm_name);
   }
 
-  if (ftruncate(shm_fd, image_size) == -1) { // set size
+  if (ftruncate(shm_fd, image_size) == -1) {  // set size
     close(shm_fd);
     unlink(shm_name.c_str());
     throw std::runtime_error("Failed to set shared memory size: " + shm_name);
   }
 
   // memory map shared memory object
-  mapped_ptr =
-      mmap(nullptr, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+  mapped_ptr = mmap(nullptr, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
   if (mapped_ptr == MAP_FAILED) {
     close(shm_fd);
     unlink(shm_name.c_str());
@@ -65,18 +67,18 @@ SharedMemory::~SharedMemory() {
   }
 }
 
-const std::string &SharedMemory::name() const { return shm_name; }
+const std::string& SharedMemory::name() const { return shm_name; }
 
-const size_t &SharedMemory::size() const { return shm_size; }
+const size_t& SharedMemory::size() const { return shm_size; }
 
-void *SharedMemory::data() const { return mapped_ptr; }
+void* SharedMemory::data() const { return mapped_ptr; }
 
-void SharedMemory::write_data(const unsigned char *data, const size_t len) {
+void SharedMemory::write_data(const unsigned char* data, const size_t len) {
   assert(len <= shm_size);
   memcpy(mapped_ptr, data, len);
 }
 
-void SharedMemory::copy_data(void *dest, size_t len) const {
+void SharedMemory::copy_data(void* dest, size_t len) const {
   assert(len <= shm_size);
   std::memcpy(dest, mapped_ptr, len);
 }
@@ -89,7 +91,7 @@ void SharedMemory::close_mem() {
 }
 
 // move constructor
-SharedMemory::SharedMemory(SharedMemory &&other) noexcept {
+SharedMemory::SharedMemory(SharedMemory&& other) noexcept {
   shm_fd = other.shm_fd;
   shm_name = std::move(other.shm_name);
   mapped_ptr = other.mapped_ptr;
@@ -101,7 +103,7 @@ SharedMemory::SharedMemory(SharedMemory &&other) noexcept {
   other.shm_size = 0;
 }
 
-SharedMemory &SharedMemory::operator=(SharedMemory &&other) noexcept {
+SharedMemory& SharedMemory::operator=(SharedMemory&& other) noexcept {
   if (this != &other) {
     close_mem();
     if (mapped_ptr != MAP_FAILED) {

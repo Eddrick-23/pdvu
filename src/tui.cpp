@@ -1,11 +1,13 @@
 #include "tui.h"
-#include "kitty.h"
-#include "terminal.h"
+
 #include <chrono>
 #include <cstdio>
 #include <functional>
 #include <print>
 #include <string>
+
+#include "kitty.h"
+#include "terminal.h"
 
 namespace TUI::helplist {
 const std::vector<std::array<std::string, 2>> help_text = {
@@ -14,12 +16,12 @@ const std::vector<std::array<std::string, 2>> help_text = {
     {"q", "Quit"},
     {"g", "Go to Page"},
     {"Esc", "Exit input textbox"},
-    {"/ or shift+f", "Find text"}, // TODO
+    {"/ or shift+f", "Find text"},  // TODO
     {"w", "Pan up"},
     {"a", "Pan left"},
     {"s", "Pan down"},
     {"d", "pan right"},
-    {"r", "rotate clockwise 90 degrees"}, // TODO
+    {"r", "rotate clockwise 90 degrees"},  // TODO
     {"+ or =", "zoom in"},
     {"- or _", "zoom out"},
     {"z", "zoom to fit"},
@@ -27,14 +29,14 @@ const std::vector<std::array<std::string, 2>> help_text = {
 };
 }
 
-namespace { // utility function
-int visible_length(const std::string &s) {
+namespace {  // utility function
+int visible_length(const std::string& s) {
   /* count visible length of string ignoring escape characters*/
   int count = 0;
   bool in_escape = false;
   for (size_t i = 0; i < s.length(); ++i) {
     unsigned char c = static_cast<unsigned char>(s[i]);
-    if (c == '\x1b') { // start of escape character
+    if (c == '\x1b') {  // start of escape character
       in_escape = true;
       continue;
     }
@@ -50,35 +52,30 @@ int visible_length(const std::string &s) {
     if ((c & 0xC0) == 0x80) {
       continue;
     }
-    count++; // stand char or start of a utf-8 char
+    count++;  // stand char or start of a utf-8 char
   }
   return count;
 }
 
-std::string centre_with_space(int width, const std::string &text) {
+std::string centre_with_space(int width, const std::string& text) {
   /* return a string centred in a given width, with spaced padding on its sides
    */
   std::string result;
   const int left_padding = (width - text.length()) / 2;
   const int right_padding = width - text.length() - left_padding;
-  result +=
-      std::string(left_padding, ' ') + text + std::string(right_padding, ' ');
+  result += std::string(left_padding, ' ') + text + std::string(right_padding, ' ');
   return result;
 }
-std::string trim(const std::string &str,
-                 const std::string &whitespace = " \t") {
+std::string trim(const std::string& str, const std::string& whitespace = " \t") {
   const auto strBegin = str.find_first_not_of(whitespace);
-  if (strBegin == std::string::npos)
-    return ""; // no content
+  if (strBegin == std::string::npos) return "";  // no content
 
   const auto strEnd = str.find_last_not_of(whitespace);
   const auto strRange = strEnd - strBegin + 1;
 
   return str.substr(strBegin, strRange);
 }
-std::string create_box(int start_row, int start_col, int width, int height,
-                       bool fill) {
-
+std::string create_box(int start_row, int start_col, int width, int height, bool fill) {
   std::string result = fill ? std::format("\x1b[48;5;{}m", 16) : "";
   result += terminal::move_cursor(start_row, start_col);
   result += TUI::symbols::box_double_line.at(201);
@@ -87,7 +84,7 @@ std::string create_box(int start_row, int start_col, int width, int height,
   }
   result += TUI::symbols::box_double_line.at(187);
 
-  for (int i = start_row + 1; i < start_row + height; i++) { // draw the sides
+  for (int i = start_row + 1; i < start_row + height; i++) {  // draw the sides
     result += terminal::move_cursor(i, start_col);
     result += TUI::symbols::box_single_line.at(179);
     if (fill) {
@@ -103,31 +100,30 @@ std::string create_box(int start_row, int start_col, int width, int height,
     result += TUI::symbols::box_single_line.at(196);
   }
   result += TUI::symbols::box_double_line.at(188);
-  result += fill ? "\x1b[49m" : ""; // reset bg colour
+  result += fill ? "\x1b[49m" : "";  // reset bg colour
   return result;
 }
-} // namespace
+}  // namespace
 
 namespace TUI {
-std::string add_centered(int row, int term_width, const std::string &text,
-                         int text_length) {
+std::string add_centered(int row, int term_width, const std::string& text, int text_length) {
   /* returns string which centres text within the terminal window when printed
    */
   int col = (term_width - text_length) / 2;
   col = col < 1 ? 1 : col;
   return "\033[" + std::to_string(row) + ";" + std::to_string(col) + "H" + text;
 }
-std::string top_status_bar(const TermSize &ts, const std::string &left,
-                           const std::string &mid, const std::string &right) {
+std::string top_status_bar(const TermSize& ts, const std::string& left, const std::string& mid,
+                           const std::string& right) {
   std::string result;
   result += terminal::move_cursor(1, 1);
-  result += "\033[2K\033[7m"; // invert colours
+  result += "\033[2K\033[7m";  // invert colours
   result += std::string(ts.width, ' ');
 
   // split to three regions
   // " "###" "###" "###" "
   const int region_width = (ts.width - 4) / 3;
-  auto truncate = [region_width](const std::string &s) {
+  auto truncate = [region_width](const std::string& s) {
     if (s.length() > region_width) {
       return s.substr(0, region_width - 3) + "...";
     }
@@ -146,34 +142,32 @@ std::string top_status_bar(const TermSize &ts, const std::string &left,
   result += terminal::move_cursor(1, ts.width - visible_length(right_text));
   result += right_text + " ";
 
-  result += "\x1b[0m"; // reset colours
+  result += "\x1b[0m";  // reset colours
   return result;
 }
 
-std::string bottom_status_bar(const TermSize &ts, float current_zoom_level,
-                              int rotation) {
+std::string bottom_status_bar(const TermSize& ts, float current_zoom_level, int rotation) {
   const std::string left_text = std::format(
       " GO TO PAGE: g {} NAVIGATE: <- -> {} QUIT : q {} "
       "Help: ? {}",
       symbols::box_single_line.at(179), symbols::box_single_line.at(179),
       symbols::box_single_line.at(179), symbols::box_single_line.at(179));
-  const std::string right_text = std::format(
-      "{}{}°{} Zoom : {}%", symbols::box_single_line.at(179), rotation,
-      symbols::box_single_line.at(179), current_zoom_level * 100);
+  const std::string right_text =
+      std::format("{}{}°{} Zoom : {}%", symbols::box_single_line.at(179), rotation,
+                  symbols::box_single_line.at(179), current_zoom_level * 100);
   std::string result;
-  result += terminal::move_cursor(ts.height, 1); // move to last row
-  result += "\033[2K\033[7m";           // clear line and invert colours
-  result += std::string(ts.width, ' '); // overlay bg
-  result += terminal::move_cursor(ts.height, 1); // move to last row
+  result += terminal::move_cursor(ts.height, 1);  // move to last row
+  result += "\033[2K\033[7m";                     // clear line and invert colours
+  result += std::string(ts.width, ' ');           // overlay bg
+  result += terminal::move_cursor(ts.height, 1);  // move to last row
   result += left_text;
-  result +=
-      terminal::move_cursor(ts.height, ts.width - visible_length(right_text));
+  result += terminal::move_cursor(ts.height, ts.width - visible_length(right_text));
   result += right_text;
-  result += "\033[0m"; // Reset colors
+  result += "\033[0m";  // Reset colors
   return result;
 }
 
-std::string guard_message(const TermSize &ts) {
+std::string guard_message(const TermSize& ts) {
   terminal::hide_cursor();
   std::string result;
   result += terminal::reset_screen_and_cursor_string();
@@ -181,10 +175,9 @@ std::string guard_message(const TermSize &ts) {
   const std::string red = "\x1b[1;31m";
   const std::string green = "\x1b[1;32m";
   std::string title = "Terminal size too small";
-  std::string current_dimensions = (ts.width >= MIN_COLS ? green : red) +
-                                   "Width = " + std::to_string(ts.width) +
-                                   (ts.height >= MIN_ROWS ? green : red) +
-                                   " Height = " + std::to_string(ts.height);
+  std::string current_dimensions =
+      (ts.width >= MIN_COLS ? green : red) + "Width = " + std::to_string(ts.width) +
+      (ts.height >= MIN_ROWS ? green : red) + " Height = " + std::to_string(ts.height);
   std::string required_dimensions =
       "Needed: " + std::to_string(MIN_COLS) + " x " + std::to_string(MIN_ROWS);
 
@@ -192,19 +185,18 @@ std::string guard_message(const TermSize &ts) {
 
   int center_row = ts.height / 2;
 
+  result += add_centered(center_row - 2, ts.width, title, visible_length(title));
   result +=
-      add_centered(center_row - 2, ts.width, title, visible_length(title));
-  result += add_centered(center_row, ts.width, current_dimensions,
-                         visible_length(current_dimensions));
+      add_centered(center_row, ts.width, current_dimensions, visible_length(current_dimensions));
 
   result += green;
   result += add_centered(center_row + 2, ts.width, required_dimensions,
                          visible_length(required_dimensions));
-  result += "\x1b[0m"; // Reset
+  result += "\x1b[0m";  // Reset
   return result;
 }
 
-std::string help_overlay(const TermSize &ts) {
+std::string help_overlay(const TermSize& ts) {
   if (ts.width < MIN_COLS || ts.height < MIN_ROWS) {
     return guard_message(ts);
   }
@@ -220,9 +212,9 @@ std::string help_overlay(const TermSize &ts) {
   result += black_bg;
   // overlay background with a black overlay
   result += terminal::move_cursor(1, 1);
-  result += std::string(ts.width, ' '); // erase top bar
+  result += std::string(ts.width, ' ');  // erase top bar
   result += terminal::move_cursor(ts.height, 1);
-  result += std::string(ts.width, ' '); // erase bottom bar
+  result += std::string(ts.width, ' ');  // erase bottom bar
   result += terminal::move_cursor(1, 1);
   result += kitty::get_dim_layer(ts.width, ts.height);
   result += terminal::move_cursor(1, 1);
@@ -237,21 +229,20 @@ std::string help_overlay(const TermSize &ts) {
   std::istringstream iss(logo);
   std::string line;
   int start_row = 2;
-  result += "\x1b[1m"; // set bold text
+  result += "\x1b[1m";  // set bold text
   while (std::getline(iss, line)) {
     if (!line.empty()) {
       line = trim(line);
       result += add_centered(start_row++, ts.width, line, 33);
     }
   }
-  result += "\x1b[22m"; // reset bold
+  result += "\x1b[22m";  // reset bold
 
   constexpr int box_height = 30;
   constexpr int box_width = 70;
   constexpr int box_start_row = 10;
   const int box_start_col = (ts.width - box_width) / 2 + 2;
-  result +=
-      create_box(box_start_row, box_start_col, box_width, box_height, true);
+  result += create_box(box_start_row, box_start_col, box_width, box_height, true);
 
   // "Key" and "Description" headers in bold
   // key text in orange, middle aligned
@@ -267,18 +258,18 @@ std::string help_overlay(const TermSize &ts) {
   for (auto arr : helplist::help_text) {
     text_start_row++;
     result += terminal::move_cursor(text_start_row, box_start_col + 1);
-    const std::string &key_text = arr.front();
-    const std::string &desc_text = arr.back();
+    const std::string& key_text = arr.front();
+    const std::string& desc_text = arr.back();
     result += orange_fg + centre_with_space(key_col_width, key_text);
     result += white_fg + " " + desc_text;
   }
-  result += "\x1b[0m";                // reset colors
-  result += std::format("\x1b{}", 8); // restore
+  result += "\x1b[0m";                 // reset colors
+  result += std::format("\x1b{}", 8);  // restore
   return result;
 };
 
-std::string bottom_input_bar(Terminal &term, const std::string &prompt,
-                             const std::function<void()> &on_resize) {
+std::string bottom_input_bar(Terminal& term, const std::string& prompt,
+                             const std::function<void()>& on_resize) {
   /* creates a single row text input UI that takes user input */
   // Might be a better way to handle resizing
   // but for now we pass in a callback function
@@ -286,12 +277,11 @@ std::string bottom_input_bar(Terminal &term, const std::string &prompt,
   TermSize current_term_size = term.get_terminal_size();
   std::string buffer;
 
-  size_t cursor_pos = 0;  // cursor index in the buffer
-  size_t visible_pos = 0; // index of first visible char in buffer
+  size_t cursor_pos = 0;   // cursor index in the buffer
+  size_t visible_pos = 0;  // index of first visible char in buffer
 
-  auto redraw = [&]() { // helper to redraw the whole line on input
-    if (current_term_size.width < MIN_COLS ||
-        current_term_size.height < MIN_ROWS) {
+  auto redraw = [&]() {  // helper to redraw the whole line on input
+    if (current_term_size.width < MIN_COLS || current_term_size.height < MIN_ROWS) {
       std::print("{}", guard_message(current_term_size));
       std::fflush(stdout);
       return;
@@ -299,10 +289,9 @@ std::string bottom_input_bar(Terminal &term, const std::string &prompt,
     int available_width = current_term_size.width - prompt.length();
     available_width = available_width < 1 ? 1 : available_width;
 
-    if (cursor_pos < visible_pos) { // scrolled left off screen
+    if (cursor_pos < visible_pos) {  // scrolled left off screen
       visible_pos = cursor_pos;
-    } else if (cursor_pos >=
-               visible_pos + available_width) { // scrolled right off screen
+    } else if (cursor_pos >= visible_pos + available_width) {  // scrolled right off screen
       visible_pos = cursor_pos - available_width + 1;
     }
 
@@ -312,14 +301,13 @@ std::string bottom_input_bar(Terminal &term, const std::string &prompt,
     }
     // clear line and draw prompt
     terminal::show_cursor();
-    std::print("{}{}{}{}", terminal::move_cursor(current_term_size.height, 1),
-               "\x1b[2K\x1b[7m", prompt, buffer.substr(visible_pos));
+    std::print("{}{}{}{}", terminal::move_cursor(current_term_size.height, 1), "\x1b[2K\x1b[7m",
+               prompt, buffer.substr(visible_pos));
     std::fflush(stdout);
 
     // move to proper position on screen
     size_t screen_col = cursor_pos - visible_pos + prompt.length() + 1;
-    std::print("{}",
-               terminal::move_cursor(current_term_size.height, screen_col));
+    std::print("{}", terminal::move_cursor(current_term_size.height, screen_col));
     std::fflush(stdout);
   };
   InputEvent c;
@@ -335,28 +323,26 @@ std::string bottom_input_bar(Terminal &term, const std::string &prompt,
     }
     if (resizing) {
       auto now = Clock::now();
-      auto duration =
-          std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
-      if (duration.count() > 75) {                    // exit and rerender
-        current_term_size = term.get_terminal_size(); // update before rerender
+      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
+      if (duration.count() > 75) {                     // exit and rerender
+        current_term_size = term.get_terminal_size();  // update before rerender
         resizing = false;
-        on_resize(); // under new implementation, callback must automatically
-                     // render as well
+        on_resize();  // under new implementation, callback must automatically
+                      // render as well
         redraw();
         continue;
       }
     }
     c = term.read_input(100);
 
-    if (term.get_terminal_size().width < MIN_COLS ||
-        term.get_terminal_size().height < MIN_ROWS) {
+    if (term.get_terminal_size().width < MIN_COLS || term.get_terminal_size().height < MIN_ROWS) {
       // TODO find another way to allow direct quit from here?
       if (c.key == key_char && c.char_value == 'q') {
         return "";
       }
-      continue; // block inputs if guard message is displayed
+      continue;  // block inputs if guard message is displayed
     }
-    if (c.key == key_none) { // no input, check for new frame to display
+    if (c.key == key_none) {  // no input, check for new frame to display
       on_resize();
       // redraw();
       continue;
@@ -377,13 +363,13 @@ std::string bottom_input_bar(Terminal &term, const std::string &prompt,
         redraw();
       }
     } else if (c.key == key_alt_backspace) {
-      if (!buffer.empty()) { // clear all input
+      if (!buffer.empty()) {  // clear all input
         buffer = buffer.substr(cursor_pos);
         cursor_pos = 0;
         visible_pos = 0;
         redraw();
       }
-    } else if (c.key == key_char) { // printable chars
+    } else if (c.key == key_char) {  // printable chars
       buffer.insert(cursor_pos, 1, c.char_value);
       cursor_pos++;
       redraw();
@@ -406,13 +392,10 @@ std::string bottom_input_bar(Terminal &term, const std::string &prompt,
   return buffer;
 }
 
-bool is_window_too_small(const TermSize &ts) {
-  return ts.width < MIN_COLS || ts.height < MIN_ROWS;
-}
+bool is_window_too_small(const TermSize& ts) { return ts.width < MIN_COLS || ts.height < MIN_ROWS; }
 
-float calculate_zoom_factor(const TermSize &ts, const pdf::PageSpecs &ps,
-                            int content_cols, int content_rows, float zoom) {
-
+float calculate_zoom_factor(const TermSize& ts, const pdf::PageSpecs& ps, int content_cols,
+                            int content_rows, float zoom) {
   const int max_w_pixels = content_cols * ts.pixels_per_col;
   const int max_h_pixels = content_rows * ts.pixels_per_row;
 
@@ -421,16 +404,15 @@ float calculate_zoom_factor(const TermSize &ts, const pdf::PageSpecs &ps,
 
   return std::min(h_scale, v_scale) * zoom;
 }
-std::string center_cursor(const TermSize &ts, int w_pixels, int h_pixels,
-                          int content_cols, int content_rows, int start_row,
-                          int start_col) {
+std::string center_cursor(const TermSize& ts, int w_pixels, int h_pixels, int content_cols,
+                          int content_rows, int start_row, int start_col) {
   /* center cursor vertically and horizontally so rendered image is centered in
    * window */
 
-  const int cols_used = static_cast<int>(
-      std::ceil(static_cast<float>(w_pixels) / ts.pixels_per_col));
-  const int rows_used = static_cast<int>(
-      std::ceil(static_cast<float>(h_pixels) / ts.pixels_per_row));
+  const int cols_used =
+      static_cast<int>(std::ceil(static_cast<float>(w_pixels) / ts.pixels_per_col));
+  const int rows_used =
+      static_cast<int>(std::ceil(static_cast<float>(h_pixels) / ts.pixels_per_row));
 
   int top_margin = (content_rows - rows_used) / 2;
   int left_margin = (content_cols - cols_used) / 2;
@@ -439,4 +421,4 @@ std::string center_cursor(const TermSize &ts, int w_pixels, int h_pixels,
   left_margin = left_margin > 0 ? left_margin : 0;
   return terminal::move_cursor(top_margin + start_row, left_margin + start_col);
 }
-} // namespace TUI
+}  // namespace TUI

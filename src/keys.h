@@ -1,7 +1,7 @@
 #pragma once
 enum Key {
   key_none = 0,
-  key_char, // set char value only for this
+  key_char,  // set char value only for this
   key_escape,
   key_enter,
   key_tab,
@@ -17,6 +17,6 @@ enum Key {
 };
 
 struct InputEvent {
-  Key key;         // enum value
-  char char_value; // ascii value of key (valid for key_char only
+  Key key;          // enum value
+  char char_value;  // ascii value of key (valid for key_char only
 };

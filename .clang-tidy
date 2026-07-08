@@ -1,0 +1,13 @@
+---
+Checks: >
+  -*,
+  bugprone-*,
+  modernize-*,
+  readability-*,
+  misc-include-cleaner,
+  -modernize-use-trailing-return-type,
+  -readability-braces-around-statements,
+  -readability-magic-numbers
+WarningsAsErrors: 'bugprone-*'
+HeaderFilterRegex: '^(src|include)/.*'
+...

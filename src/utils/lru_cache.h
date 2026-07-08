@@ -1,7 +1,8 @@
-#include "utils/profiling.h"
 #include <algorithm>
 #include <mutex>
 #include <vector>
+
+#include "utils/profiling.h"
 
 #pragma once
 
@@ -9,8 +10,9 @@
  * Simple lru cache using std::vector
  */
 
-template <typename Key, typename Value> class LRUCache {
-public:
+template <typename Key, typename Value>
+class LRUCache {
+ public:
   explicit LRUCache(size_t size) : capacity(size) { entries.reserve(size); };
 
   std::optional<Value> get(Key key) {
@@ -22,8 +24,7 @@ public:
       if (entries[i].key == key) {
         // move to current element to front and shift everything before to the
         // right by 1
-        std::rotate(entries.begin(), entries.begin() + i,
-                    entries.begin() + i + 1);
+        std::rotate(entries.begin(), entries.begin() + i, entries.begin() + i + 1);
         return entries[0].value;
       }
     }
@@ -39,23 +40,22 @@ public:
       if (entries[i].key == key) {
         entries[i].value = std::move(val);
         // shift to front
-        std::rotate(entries.begin(), entries.begin() + i,
-                    entries.begin() + i + 1);
+        std::rotate(entries.begin(), entries.begin() + i, entries.begin() + i + 1);
         return;
       }
     }
-    if (entries.size() == capacity) { // evict if at capacity
+    if (entries.size() == capacity) {  // evict if at capacity
       entries.pop_back();
     }
     entries.insert(entries.begin(), Entry{std::move(key), std::move(val)});
   }
 
-  const auto &get_entries() {
+  const auto& get_entries() {
     // for testing to read the storage vector
     return entries;
   }
 
-private:
+ private:
   size_t capacity;
   struct Entry {
     Key key;

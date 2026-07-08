@@ -38,5 +38,6 @@ Makefile
 # Ignore unit test logs
 /Testing
 
-# Ignore benchmark csv output
+# Ignore benchmark artifacts
 /benchmark/output
+/benchmark/__pycache__

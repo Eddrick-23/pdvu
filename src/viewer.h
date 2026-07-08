@@ -4,13 +4,13 @@
 #include "terminal.h"
 
 class Viewer {
-public:
-  Viewer(std::unique_ptr<pdf::Parser> main_parser,
-         std::unique_ptr<RenderEngine> render_engine, bool use_shm);
-  void run(); // main loop
+ public:
+  Viewer(std::unique_ptr<pdf::Parser> main_parser, std::unique_ptr<RenderEngine> render_engine,
+         bool use_shm);
+  void run();  // main loop
 
-private:
-  struct CropRect { // (0,0) is taken to be top left corner
+ private:
+  struct CropRect {  // (0,0) is taken to be top left corner
     int x_offset_pixels;
     int y_offset_pixels;
     int width;
@@ -24,8 +24,8 @@ private:
   };
   // helper functions
   bool fetch_latest_frame();
-  void display_latest_frame(int existing_width, int existing_height,
-                            int target_width, int target_height);
+  void display_latest_frame(int existing_width, int existing_height, int target_width,
+                            int target_height);
   void request_page_render(int page_num);
   void change_zoom_index(int delta);
   CropRect calculate_crop_window(int width, int height);
@@ -35,9 +35,9 @@ private:
   void handle_help_page();
   void process_keypress();
   // sub systems
-  Terminal term;                          // terminal data and raw mode
-  std::unique_ptr<pdf::Parser> parser;    // parsing pdfs
-  std::unique_ptr<RenderEngine> renderer; // loading page frames
+  Terminal term;                           // terminal data and raw mode
+  std::unique_ptr<pdf::Parser> parser;     // parsing pdfs
+  std::unique_ptr<RenderEngine> renderer;  // loading page frames
 
   // current state
   int current_page = 0;
@@ -50,9 +50,8 @@ private:
   RenderResult latest_frame = RenderResult{};
 
   // control zoom and panning
-  static constexpr std::array<float, 11> zoom_levels{
-      0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0};
-  static constexpr int default_zoom_index = 5; // 1.0x (100%)
-  Viewport viewport{0.0, 0.0, default_zoom_index,
-                    zoom_levels[default_zoom_index]};
+  static constexpr std::array<float, 11> zoom_levels{0.5, 0.67, 0.75, 0.8,  0.9, 1.0,
+                                                     1.1, 1.25, 1.5,  1.75, 2.0};
+  static constexpr int default_zoom_index = 5;  // 1.0x (100%)
+  Viewport viewport{0.0, 0.0, default_zoom_index, zoom_levels[default_zoom_index]};
 };

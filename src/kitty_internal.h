@@ -6,9 +6,8 @@ namespace kitty::detail {
 // divide 24 bits into 4 groups of 6
 // Add two 00s in front of each group of 6 to expand to 32 bits
 // Each byte is then mapped to a number less than 64 based on the lookup table
-constexpr std::string base64_encode(const std::string &input) {
-  constexpr char lookup[] =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+constexpr std::string base64_encode(const std::string& input) {
+  constexpr char lookup[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   std::string out;
   out.reserve(((input.length() + 2) / 3) * 4);
 
@@ -22,10 +21,8 @@ constexpr std::string base64_encode(const std::string &input) {
       valb -= 6;
     }
   }
-  if (valb > -6)
-    out.push_back(lookup[((val << 8) >> (valb + 8)) & 0x3F]);
-  while (out.size() % 4)
-    out.push_back('=');
+  if (valb > -6) out.push_back(lookup[((val << 8) >> (valb + 8)) & 0x3F]);
+  while (out.size() % 4) out.push_back('=');
   return out;
 }
 inline std::string b64_black_pixel_3x3(int opacity) {
@@ -34,7 +31,7 @@ inline std::string b64_black_pixel_3x3(int opacity) {
   pixel.push_back(0);
   pixel.push_back(0);
   pixel.push_back(0);
-  const int alpha_channel = opacity * 255 / 100; // map from 0 to 100%
+  const int alpha_channel = opacity * 255 / 100;  // map from 0 to 100%
   pixel.push_back(alpha_channel);
   std::string image_data;
   for (int i = 0; i < 9; ++i) {
@@ -42,4 +39,4 @@ inline std::string b64_black_pixel_3x3(int opacity) {
   }
   return base64_encode(image_data);
 }
-} // namespace kitty::detail
+}  // namespace kitty::detail
