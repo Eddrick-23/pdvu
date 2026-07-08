@@ -198,9 +198,10 @@ std::optional<PageCacheData> RenderEngine::try_page_cache(const RenderRequest& r
   }
   if (!shm_ptr && !tempfile_ptr) {  // our cache stores empty data
     throw std::runtime_error("Cache retrival failed");
-    // TODO change this to update error message to display on main page  or fall
-    // through and rerender update lru_cache to remove this entry since its
-    // carrying null data
+    // TODO change this to fall through and rerender
+    // Update lru_cache to remove this entry since its
+    // carrying null data. add lru_cache option to erase/remove entries
   }
+
   return data;
 }

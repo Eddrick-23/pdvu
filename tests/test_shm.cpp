@@ -2,8 +2,6 @@
 #include <sys/fcntl.h>
 #include <utils/shm.h>
 
-// TODO test write_data
-
 bool shm_exists(const char* name) {
   int fd = shm_open(name, O_RDONLY, 0);
   if (fd == -1) {
@@ -81,7 +79,6 @@ TEST(ShmTest, ManualWriteData) {
     auto test_shm = SharedMemory(1000);
     shm_name = test_shm.name();
     memcpy(test_shm.data(), data.c_str(), data.size());
-
     auto read_string = std::string(static_cast<char*>(test_shm.data()), data.size());
 
     EXPECT_EQ(read_string, data);
