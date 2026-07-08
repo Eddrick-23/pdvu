@@ -1,9 +1,12 @@
 #include "parser.h"
-#include "utils/logging.h"
-#include "utils/profiling.h"
+
 #include <filesystem>
 #include <mutex>
 #include <print>
+
+#include "utils/logging.h"
+#include "utils/profiling.h"
+
 struct MutexLocks {
   std::mutex mutexes[FZ_LOCK_MAX];
 };
@@ -11,19 +14,19 @@ struct MutexLocks {
 static MutexLocks global_mu_locks;
 
 // Callback: Lock
-void lock_callback(void *user, int lock) {
-  static_cast<MutexLocks *>(user)->mutexes[lock].lock();
-}
+void lock_callback(void* user, int lock) { static_cast<MutexLocks*>(user)->mutexes[lock].lock(); }
 
 // Callback: Unlock
-void unlock_callback(void *user, int lock) {
-  static_cast<MutexLocks *>(user)->mutexes[lock].unlock();
+void unlock_callback(void* user, int lock) {
+  static_cast<MutexLocks*>(user)->mutexes[lock].unlock();
 }
+
 using namespace pdf;
 
-MuPDFParser::MuPDFParser(const bool use_ICC, fz_context *cloned_ctx) {
+MuPDFParser::MuPDFParser(const bool use_ICC, fz_context* cloned_ctx) {
   // FZ_STORE_DEFAULT = default resource cache size
-  if (cloned_ctx) { // optional param to use a cloned context for duplicating
+  if (cloned_ctx) {
+    // optional param to use a cloned context for duplicating
     ctx = std::move(cloned_ctx);
   } else {
     static fz_locks_context locks_ctx;
@@ -42,9 +45,7 @@ MuPDFParser::MuPDFParser(const bool use_ICC, fz_context *cloned_ctx) {
   // Disable ICC colour management for performance
   if (!use_ICC) {
     fz_try(ctx) { fz_disable_icc(ctx); }
-    fz_catch(ctx) {
-      PLOG_WARNING << "Failed to configure ICC";
-    }
+    fz_catch(ctx) { PLOG_WARNING << "Failed to configure ICC"; }
   }
   use_icc_profile = use_ICC;
 
@@ -74,20 +75,20 @@ MuPDFParser::~MuPDFParser() {
   }
 }
 
-bool MuPDFParser::load_document(const std::string &filepath) {
+bool MuPDFParser::load_document(const std::string& filepath) {
   clear_doc();
   fz_try(ctx) { doc = fz_open_document(ctx, filepath.c_str()); }
   fz_catch(ctx) {
     PLOG_ERROR << std::format("Could not open file: {}", filepath);
     return false;
   }
-  full_filepath = filepath; // save path for duplicating
+  full_filepath = filepath;  // save path for duplicating
   std::filesystem::path p(filepath);
   doc_name = p.filename().string();
   return true;
 }
 
-const std::string &MuPDFParser::get_document_name() const { return doc_name; }
+const std::string& MuPDFParser::get_document_name() const { return doc_name; }
 
 int MuPDFParser::num_pages() const {
   if (!doc) {
@@ -104,7 +105,7 @@ int MuPDFParser::num_pages() const {
 
 std::optional<PageSpecs> MuPDFParser::page_specs(const int page_num) const {
   ZoneScoped;
-  fz_page *page = nullptr;
+  fz_page* page = nullptr;
   constexpr float base_zoom = 1.0;
   fz_try(ctx) { page = fz_load_page(ctx, doc, page_num); }
   fz_catch(ctx) {
@@ -129,15 +130,15 @@ std::optional<PageSpecs> MuPDFParser::page_specs(const int page_num) const {
   const float acc_width = raw_bounds.x1 - raw_bounds.x0;
 
   return PageSpecs(raw_bounds.x0, raw_bounds.y0, raw_bounds.x1,
-                   raw_bounds.y1,                      // Base
-                   bbox.x0, bbox.y0, bbox.x1, bbox.y1, // ints
-                   w, h, size, acc_width, acc_height); // dims
+                   raw_bounds.y1,                       // Base
+                   bbox.x0, bbox.y0, bbox.x1, bbox.y1,  // ints
+                   w, h, size, acc_width, acc_height);  // dims
 }
 
 std::vector<HorizontalBound> MuPDFParser::split_bounds(PageSpecs ps, int n) {
   ZoneScoped;
   // split the page into n horizontal strips represented by fz_rect
-  constexpr int pad = 3; // data is in rgb format
+  constexpr int pad = 3;  // data is in rgb format
   std::vector<HorizontalBound> bounds;
   int y_step = ps.height / n;
   int remainder = ps.height % n;
@@ -149,8 +150,7 @@ std::vector<HorizontalBound> MuPDFParser::split_bounds(PageSpecs ps, int n) {
   size_t offset = 0;
   for (int i = 0; i < n - 1; i++) {
     const size_t pixels = (x1 - x0) * (y1 - y0) * pad;
-    auto data = HorizontalBound{fz_make_rect(x0, y0, x1, y1), x1 - x0, y1 - y0,
-                                pixels, offset};
+    auto data = HorizontalBound{fz_make_rect(x0, y0, x1, y1), x1 - x0, y1 - y0, pixels, offset};
     bounds.push_back(data);
     y0 = y1;
     y1 += y_step;
@@ -159,17 +159,17 @@ std::vector<HorizontalBound> MuPDFParser::split_bounds(PageSpecs ps, int n) {
   // last iteration
   y1 += remainder;
   const size_t pixels = (x1 - x0) * (y1 - y0) * pad;
-  const auto data = HorizontalBound{fz_make_rect(x0, y0, x1, y1), x1 - x0,
-                                    y1 - y0, pixels, offset};
+  const auto data = HorizontalBound{fz_make_rect(x0, y0, x1, y1), x1 - x0, y1 - y0, pixels, offset};
   bounds.push_back(data);
   return bounds;
 }
 
 using DisplayListHandle = std::shared_ptr<fz_display_list>;
+
 DisplayListHandle MuPDFParser::get_display_list(int page_num) {
   ZoneScoped;
-  fz_page *page = nullptr;
-  fz_display_list *raw_list = nullptr;
+  fz_page* page = nullptr;
+  fz_display_list* raw_list = nullptr;
   fz_try(ctx) { page = fz_load_page(ctx, doc, page_num); }
   fz_catch(ctx) {
     PLOG_ERROR << "Failed to load page";
@@ -185,20 +185,19 @@ DisplayListHandle MuPDFParser::get_display_list(int page_num) {
     }
     PLOG_ERROR << "Failed to create display list";
     // TODO change this to return std::optional to follow PageSpecs?
-    return nullptr; // coordinator will check if displaylist was created
-                    // successfully
+    return nullptr;  // coordinator will check if displaylist was created
+    // successfully
   }
-  fz_context *captured_ctx = this->ctx; // capture for custom deleter
-  return DisplayListHandle(raw_list, [captured_ctx](fz_display_list *ptr) {
+  fz_context* captured_ctx = this->ctx;  // capture for custom deleter
+  return DisplayListHandle(raw_list, [captured_ctx](fz_display_list* ptr) {
     if (ptr) {
       fz_drop_display_list(captured_ctx, ptr);
     }
   });
 }
 
-void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs &ps,
-                                DisplayListHandle dlist, unsigned char *buffer,
-                                fz_rect clip) {
+void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
+                                DisplayListHandle dlist, unsigned char* buffer, fz_rect clip) {
   /* dlist is created by another thread. That thread will be responsible for
    * dropping it clip is which portion of the dlist we are reading from. it must
    * match with w and h The input buffer must be shifted such that the first
@@ -206,7 +205,7 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs &ps,
    * write to the buffer in parallel all to different sections at once
    */
   ZoneScoped;
-  auto translate_matrix = [ps](fz_matrix &ctm) {
+  auto translate_matrix = [ps](fz_matrix& ctm) {
     const int rot = ps.rotation;
     const int total_w = ps.width;
     const int total_h = ps.height;
@@ -219,22 +218,23 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs &ps,
     }
   };
   if (w != clip.x1 - clip.x0 || h != clip.y1 - clip.y0) {
-    PLOG_ERROR << std::format("clip dimensions do not match w:{} and "
-                              "h:{}. clip data: x0:{},y0:{},x1:{},y1:{}",
-                              w, h, clip.x0, clip.y0, clip.x1, clip.y1);
+    PLOG_ERROR << std::format(
+        "clip dimensions do not match w:{} and "
+        "h:{}. clip data: x0:{},y0:{},x1:{},y1:{}",
+        w, h, clip.x0, clip.y0, clip.x1, clip.y1);
     return;
   }
-  fz_pixmap *pix = nullptr;
+  fz_pixmap* pix = nullptr;
   fz_try(ctx) {
     fz_matrix ctm = fz_scale(zoom, zoom);
     ctm = fz_pre_rotate(ctm, ps.rotation);
     translate_matrix(ctm);
-    pix = fz_new_pixmap_with_bbox_and_data(
-        ctx, fz_device_rgb(ctx), fz_irect_from_rect(clip), NULL, 0, buffer);
+    pix = fz_new_pixmap_with_bbox_and_data(ctx, fz_device_rgb(ctx), fz_irect_from_rect(clip), NULL,
+                                           0, buffer);
     pix->x = static_cast<int>(clip.x0);
     pix->y = static_cast<int>(clip.y0);
-    fz_clear_pixmap_with_value(ctx, pix, 255); // set white background
-    fz_device *dev = fz_new_draw_device(ctx, fz_identity, pix);
+    fz_clear_pixmap_with_value(ctx, pix, 255);  // set white background
+    fz_device* dev = fz_new_draw_device(ctx, fz_identity, pix);
     fz_run_display_list(ctx, dlist.get(), dev, ctm, clip, NULL);
 
     // free memory
@@ -251,10 +251,9 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs &ps,
 }
 
 std::unique_ptr<Parser> MuPDFParser::duplicate() const {
-
-  fz_context *clone_ctx = fz_clone_context(ctx);
-  auto new_parser = std::make_unique<MuPDFParser>(
-      this->use_icc_profile, clone_ctx); // debug try without clone
+  fz_context* clone_ctx = fz_clone_context(ctx);
+  auto new_parser =
+      std::make_unique<MuPDFParser>(this->use_icc_profile, clone_ctx);  // debug try without clone
 
   if (!full_filepath.empty()) {
     if (!new_parser->load_document(this->full_filepath)) {
@@ -264,7 +263,7 @@ std::unique_ptr<Parser> MuPDFParser::duplicate() const {
   return new_parser;
 }
 
-MuPDFParser::MuPDFParser(MuPDFParser &&other) noexcept {
+MuPDFParser::MuPDFParser(MuPDFParser&& other) noexcept {
   ctx = other.ctx;
   doc = other.doc;
   doc_name = other.doc_name;
@@ -276,7 +275,7 @@ MuPDFParser::MuPDFParser(MuPDFParser &&other) noexcept {
   other.use_icc_profile = false;
 }
 
-MuPDFParser &MuPDFParser::operator=(MuPDFParser &&other) noexcept {
+MuPDFParser& MuPDFParser::operator=(MuPDFParser&& other) noexcept {
   if (this != &other) {
     // clear current processes
     clear_doc();

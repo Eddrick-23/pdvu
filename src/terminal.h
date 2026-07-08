@@ -1,10 +1,12 @@
 #pragma once
-#include "keys.h"
-#include <string>
 #include <sys/termios.h>
+
+#include <string>
+
+#include "keys.h"
 struct TermSize {
   int width, height;
-  int x, y; // (pixels)
+  int x, y;  // (pixels)
   int pixels_per_row, pixels_per_col;
 };
 
@@ -15,10 +17,10 @@ void enter_alt_screen();
 void exit_alt_screen();
 std::string move_cursor(int row, int col);
 std::string reset_screen_and_cursor_string();
-} // namespace terminal
+}  // namespace terminal
 
 class Terminal {
-public:
+ public:
   static volatile sig_atomic_t window_resized;
   static volatile sig_atomic_t quit_requested;
   Terminal();
@@ -31,11 +33,11 @@ public:
 
   void enter_raw_mode();
   void exit_raw_mode();
-  void die(const char *s);
+  void die(const char* s);
   TermSize get_terminal_size();
   InputEvent read_input(int timeout_ms);
 
-private:
+ private:
   termios orig_termios;
   bool raw_mode = false;
   int width, height;

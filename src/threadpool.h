@@ -9,19 +9,16 @@
 #include "parser.h"
 
 class ThreadPool {
-
-public:
-  ThreadPool(const pdf::Parser &prototype_parser, int n);
+ public:
+  ThreadPool(const pdf::Parser& prototype_parser, int n);
   ~ThreadPool();
 
-  void worker_loop(pdf::Parser &parser);
+  void worker_loop(pdf::Parser& parser);
 
   template <typename F>
-  auto enqueue_with_future(F &&f)
-      -> std::future<std::invoke_result_t<F, pdf::Parser &>> {
-    using Result = std::invoke_result_t<F, pdf::Parser &>;
-    auto task = std::make_shared<std::packaged_task<Result(pdf::Parser &)>>(
-        std::forward<F>(f));
+  auto enqueue_with_future(F&& f) -> std::future<std::invoke_result_t<F, pdf::Parser&>> {
+    using Result = std::invoke_result_t<F, pdf::Parser&>;
+    auto task = std::make_shared<std::packaged_task<Result(pdf::Parser&)>>(std::forward<F>(f));
     std::future<Result> fut = task->get_future();
     // acquire lock and enqueue
     {
@@ -33,18 +30,16 @@ public:
       if (shutdown_) {
         throw std::runtime_error("enqueue on stopped ThreadPool");
       }
-      tasks_.emplace([task = std::move(task)](pdf::Parser &parser) mutable {
-        (*task)(parser);
-      });
+      tasks_.emplace([task = std::move(task)](pdf::Parser& parser) mutable { (*task)(parser); });
     }
     queue_cv_.notify_one();
     return fut;
   }
 
-  ThreadPool(const ThreadPool &) = delete;
-  ThreadPool &operator=(const ThreadPool &) = delete;
+  ThreadPool(const ThreadPool&) = delete;
+  ThreadPool& operator=(const ThreadPool&) = delete;
 
-private:
+ private:
   struct Worker {
     // custom wrapping of std::thread
     // holds its own duplicated parser instance
@@ -56,7 +51,7 @@ private:
   // pool of workers
   std::vector<Worker> workers_;
   // tasks and synchronisation
-  using Task = std::function<void(pdf::Parser &)>;
+  using Task = std::function<void(pdf::Parser&)>;
   std::queue<Task> tasks_;
   std::mutex queue_mutex_;
   std::condition_variable queue_cv_;

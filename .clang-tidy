@@ -1,0 +1,5 @@
+---
+Checks: '-*,bugprone-*,modernize-*,readability-*,-readability-braces-around-statements,-readability-magic-numbers'
+WarningsAsErrors: 'bugprone-*'
+HeaderFilterRegex: '^(src|include)/.*'
+---

@@ -1,24 +1,23 @@
+#include <CLI11.hpp>
 #include <cstdio>
 #include <print>
-#include "viewer.h"
-#include <CLI11.hpp>
+
 #include "utils/logging.h"
 #include "utils/profiling.h"
+#include "viewer.h"
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   CLI::App app("pdvu");
 
   bool show_license = false;
   app.add_flag("--license", show_license, "Print license info");
 
   bool enable_ICC = false;
-  app.add_flag("--ICC", enable_ICC,
-               "Enable ICC Colour management. May slow down parsing speed");
+  app.add_flag("--ICC", enable_ICC, "Enable ICC Colour management. May slow down parsing speed");
 
   bool use_shm = false;
-  app.add_flag(
-      "--shm", use_shm,
-      "Use Posix Shared Memory image transmission. Default uses temp file");
+  app.add_flag("--shm", use_shm,
+               "Use Posix Shared Memory image transmission. Default uses temp file");
 
   bool enable_cache = true;
   app.add_flag("--nocache{false}", enable_cache,
@@ -26,8 +25,7 @@ int main(int argc, char **argv) {
                "(MuPDF cache unaffected)");
 
   int n_threads = 1;
-  app.add_option("-j,--jobs,--threads", n_threads,
-                 "Number of worker threads to use. Default 1.");
+  app.add_option("-j,--jobs,--threads", n_threads, "Number of worker threads to use. Default 1.");
   n_threads = n_threads <= 0 ? 1 : n_threads;
 
   std::filesystem::path pdf_path;
@@ -53,14 +51,13 @@ int main(int argc, char **argv) {
     std::println("4. MuPDF");
     std::println("   - License: GNU Affero General Public License (AGPL v3)");
     std::println("   - Copyright (c) 2006-2025 Artifex Software, Inc.");
-    std::println(
-        "   - NOTE: Because this software links against MuPDF, this entire");
+    std::println("   - NOTE: Because this software links against MuPDF, this entire");
     std::print("     application is provided under the AGPL v3 license.\n\n");
 
+    std::println("For full license texts, please read LICENSE-3RD-PARTY.txt included");
     std::println(
-        "For full license texts, please read LICENSE-3RD-PARTY.txt included");
-    std::println("with this distribution or visit: "
-                 "https://github.com/Eddrick-23/pdvu");
+        "with this distribution or visit: "
+        "https://github.com/Eddrick-23/pdvu");
 
     return 0;
   }
@@ -69,10 +66,10 @@ int main(int argc, char **argv) {
     std::println(stderr, "Error: Pdf file must be provided");
     return 1;
   }
-  // logging for debugging
-  #ifdef ENABLE_LOGGING
-    plog::init(plog::debug, "/tmp/pdvu.log", 10000000, 1);
-  #endif
+// logging for debugging
+#ifdef ENABLE_LOGGING
+  plog::init(plog::debug, "/tmp/pdvu.log", 10000000, 1);
+#endif
 
   // 1) Set up parser and load in document
   std::unique_ptr<pdf::Parser> parser = nullptr;
@@ -88,14 +85,13 @@ int main(int argc, char **argv) {
   std::unique_ptr<RenderEngine> render_engine = nullptr;
   {
     ZoneScopedN("Render engine setup");
-    render_engine =
-        std::make_unique<RenderEngine>(*parser, n_threads, enable_cache);
+    render_engine = std::make_unique<RenderEngine>(*parser, n_threads, enable_cache);
   }
 
   // 3) set up viewer and run
   Viewer viewer(std::move(parser), std::move(render_engine), use_shm);
   PLOG_INFO << "Start up complete, starting loop";
-  viewer.run(); // start main loop
+  viewer.run();  // start main loop
   PLOG_INFO << "Shutdown session";
   return 0;
 }

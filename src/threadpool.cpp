@@ -1,13 +1,13 @@
 #include "threadpool.h"
+
 #include "utils/profiling.h"
 
-ThreadPool::ThreadPool(const pdf::Parser &prototype_parser, const int n) {
+ThreadPool::ThreadPool(const pdf::Parser& prototype_parser, const int n) {
   ZoneScopedN("threadpool setup");
   for (int i = 0; i < n; i++) {
     // use fresh parser classes so they don't share caches
     auto worker_parser = prototype_parser.duplicate();
-    auto thread =
-        std::thread(&ThreadPool::worker_loop, this, std::ref(*worker_parser));
+    auto thread = std::thread(&ThreadPool::worker_loop, this, std::ref(*worker_parser));
 
     workers_.emplace_back(std::move(thread), std::move(worker_parser));
   }
@@ -16,14 +16,14 @@ ThreadPool::ThreadPool(const pdf::Parser &prototype_parser, const int n) {
 ThreadPool::~ThreadPool() {
   shutdown_ = true;
   queue_cv_.notify_all();
-  for (auto &[thread, parser] : workers_) {
+  for (auto& [thread, parser] : workers_) {
     if (thread.joinable()) {
       thread.join();
     }
   }
 }
 
-void ThreadPool::worker_loop(pdf::Parser &parser) {
+void ThreadPool::worker_loop(pdf::Parser& parser) {
   while (true) {
     Task task;
     {
@@ -36,6 +36,6 @@ void ThreadPool::worker_loop(pdf::Parser &parser) {
       task = std::move(tasks_.front());
       tasks_.pop();
     }
-    task(parser); // execute task
+    task(parser);  // execute task
   }
 }

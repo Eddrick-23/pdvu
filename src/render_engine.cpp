@@ -1,8 +1,8 @@
 #include "render_engine.h"
+
 #include "utils/profiling.h"
 
-RenderEngine::RenderEngine(const pdf::Parser &prototype_parser, int n_threads,
-                           bool use_cache)
+RenderEngine::RenderEngine(const pdf::Parser& prototype_parser, int n_threads, bool use_cache)
     : use_cache(use_cache) {
   // parser created first because during shutdown, any context from parser must
   // be cleared after threadpool shutdown
@@ -15,23 +15,20 @@ RenderEngine::RenderEngine(const pdf::Parser &prototype_parser, int n_threads,
 RenderEngine::~RenderEngine() {
   running = false;
   cv_worker.notify_all();
-  if (worker.joinable())
-    worker.join(); // join back to main loop
+  if (worker.joinable()) worker.join();  // join back to main loop
 }
 
 void RenderEngine::request_page(int page_num, float zoom, pdf::PageSpecs ps,
-                                const std::string &transmission) {
+                                const std::string& transmission) {
   {
     std::lock_guard<std::mutex> lock(state_mutex);
     ++current_req_id;
-    pending_request =
-        RenderRequest{page_num, zoom, ps, current_req_id, transmission};
+    pending_request = RenderRequest{page_num, zoom, ps, current_req_id, transmission};
   }
-  cv_worker.notify_one(); // wake worker to render page
+  cv_worker.notify_one();  // wake worker to render page
 }
 
-std::optional<RenderResult>
-RenderEngine::get_result() { // get the most recently created image
+std::optional<RenderResult> RenderEngine::get_result() {  // get the most recently created image
   std::lock_guard<std::mutex> lock(state_mutex);
   return std::move(latest_result);
 }
@@ -46,11 +43,9 @@ void RenderEngine::coordinator_loop() {
     // wait for work
     {
       std::unique_lock<std::mutex> lock(state_mutex);
-      cv_worker.wait(
-          lock, [this] { return pending_request.has_value() || !running; });
+      cv_worker.wait(lock, [this] { return pending_request.has_value() || !running; });
 
-      if (!running)
-        break;
+      if (!running) break;
 
       req = std::move(pending_request.value());
       pending_request.reset();
@@ -59,7 +54,7 @@ void RenderEngine::coordinator_loop() {
   }
 }
 
-void RenderEngine::dispatch_page_write(const RenderRequest &req) {
+void RenderEngine::dispatch_page_write(const RenderRequest& req) {
   ZoneScopedN("dispatch_page_write");
   auto start = std::chrono::steady_clock::now();
   RenderResult result;
@@ -86,12 +81,10 @@ void RenderEngine::dispatch_page_write(const RenderRequest &req) {
   };
 
   // check cache for page data first
-  auto cached =
-      use_cache ? try_page_cache(req, new_shm, new_temp) : std::nullopt;
+  auto cached = use_cache ? try_page_cache(req, new_shm, new_temp) : std::nullopt;
   if (cached.has_value()) {
     auto data = cached.value();
-    result.path_to_data =
-        data.transmission == "shm" ? new_shm->name() : new_temp->path();
+    result.path_to_data = data.transmission == "shm" ? new_shm->name() : new_temp->path();
     update_frame(data.page_width, data.page_height,
                  std::chrono::duration_cast<std::chrono::milliseconds>(
                      std::chrono::steady_clock::now() - start)
@@ -113,7 +106,7 @@ void RenderEngine::dispatch_page_write(const RenderRequest &req) {
     auto bounds = parser->split_bounds(ps, n_threads_);
     std::vector<std::future<void>> futures;
     auto start_parse = std::chrono::steady_clock::now();
-    void *buffer = nullptr;
+    void* buffer = nullptr;
 
     // set up pointers and buffers
     if (req.transmission == "shm") {
@@ -128,44 +121,39 @@ void RenderEngine::dispatch_page_write(const RenderRequest &req) {
 
     // enqueue jobs
     for (auto h_bound : bounds) {
-      auto fut = thread_pool->enqueue_with_future(
-          [h_bound, req, dlist, buffer](pdf::Parser &parser) {
-            parser.write_section(h_bound.width, h_bound.height, req.zoom,
-                                 req.scaled_page_specs, dlist.value(),
-                                 static_cast<unsigned char *>(buffer) +
-                                     h_bound.offset,
-                                 h_bound.rect);
+      auto fut =
+          thread_pool->enqueue_with_future([h_bound, req, dlist, buffer](pdf::Parser& parser) {
+            parser.write_section(
+                h_bound.width, h_bound.height, req.zoom, req.scaled_page_specs, dlist.value(),
+                static_cast<unsigned char*>(buffer) + h_bound.offset, h_bound.rect);
           });
       futures.push_back(std::move(fut));
     }
     // wait for future, then update result
-    for (auto &fut : futures) {
+    for (auto& fut : futures) {
       fut.get();
     }
 
     result.transmission = req.transmission;
     result.zoom = req.zoom;
     auto end = std::chrono::steady_clock::now();
-    auto write_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-        end - start_parse);
-    auto full_duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto write_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_parse);
+    auto full_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     if (use_cache && write_duration > page_cache_time_limit) {
-      cache_page(req.page_num, req.zoom, req.scaled_page_specs.rotation,
-                 new_shm, new_temp, req.transmission, ps.width, ps.height);
+      cache_page(req.page_num, req.zoom, req.scaled_page_specs.rotation, new_shm, new_temp,
+                 req.transmission, ps.width, ps.height);
     }
     update_frame(ps.width, ps.height, full_duration.count());
-  } catch (const std::exception &e) {
+  } catch (const std::exception& e) {
     result.error_message = e.what();
   }
 }
 
-std::optional<pdf::DisplayListHandle>
-RenderEngine::fetch_display_list(int page_num) {
+std::optional<pdf::DisplayListHandle> RenderEngine::fetch_display_list(int page_num) {
   ZoneScoped;
   if (use_cache) {
     auto cache_check = dlist_cache.get(page_num);
-    if (cache_check.has_value()) { // exists, use cache
+    if (cache_check.has_value()) {  // exists, use cache
       return cache_check.value();
     }
   }
@@ -174,8 +162,7 @@ RenderEngine::fetch_display_list(int page_num) {
   const auto end = std::chrono::steady_clock::now();
 
   if (dlist) {
-    const auto duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     if (use_cache && duration >= dlist_cache_time_limit) {
       dlist_cache.put(page_num, dlist);
     }
@@ -185,27 +172,23 @@ RenderEngine::fetch_display_list(int page_num) {
 }
 
 void RenderEngine::cache_page(int page_num, float zoom, int rotation,
-                              const std::shared_ptr<SharedMemory> &shm,
-                              const std::shared_ptr<Tempfile> &tempfile,
-                              const std::string &transmission, int page_width,
-                              int page_height) {
+                              const std::shared_ptr<SharedMemory>& shm,
+                              const std::shared_ptr<Tempfile>& tempfile,
+                              const std::string& transmission, int page_width, int page_height) {
   std::vector<unsigned char> buffer;
   if (shm) {
     buffer.resize(shm->size());
     shm->copy_data(buffer.data(), buffer.size());
   }
-  page_cache.put(
-      {page_num, zoom, rotation},
-      {transmission, std::move(buffer), tempfile, page_width, page_height});
+  page_cache.put({page_num, zoom, rotation},
+                 {transmission, std::move(buffer), tempfile, page_width, page_height});
 }
 
-std::optional<PageCacheData>
-RenderEngine::try_page_cache(const RenderRequest &req,
-                             std::shared_ptr<SharedMemory> &shm_ptr,
-                             std::shared_ptr<Tempfile> &tempfile_ptr) {
+std::optional<PageCacheData> RenderEngine::try_page_cache(const RenderRequest& req,
+                                                          std::shared_ptr<SharedMemory>& shm_ptr,
+                                                          std::shared_ptr<Tempfile>& tempfile_ptr) {
   auto cached_page = page_cache.get({req.page_num, req.zoom, req.scaled_page_specs.rotation});
-  if (!cached_page.has_value())
-    return {};
+  if (!cached_page.has_value()) return {};
   PageCacheData data = cached_page.value();
   if (data.transmission == "shm") {
     shm_ptr = std::make_unique<SharedMemory>(data.shm_buffer.size());
@@ -213,7 +196,7 @@ RenderEngine::try_page_cache(const RenderRequest &req,
   } else {
     tempfile_ptr = data.tempfile_data;
   }
-  if (!shm_ptr && !tempfile_ptr) { // our cache stores empty data
+  if (!shm_ptr && !tempfile_ptr) {  // our cache stores empty data
     throw std::runtime_error("Cache retrival failed");
     // TODO change this to update error message to display on main page  or fall
     // through and rerender update lru_cache to remove this entry since its

@@ -1,13 +1,13 @@
-#include "parser.h"
 #include <gtest/gtest.h>
+
+#include "parser.h"
 
 // TODO test for scaling
 TEST(PageSpecsMethod, scale) {
-  pdf::PageSpecs ps{0,   0,   100, 200,           0,     0,    100,
-                    200, 100, 200, 3 * 100 * 200, 100.0, 200.0, 0};
+  pdf::PageSpecs ps{0, 0, 100, 200, 0, 0, 100, 200, 100, 200, 3 * 100 * 200, 100.0, 200.0, 0};
 
   std::array<float, 4> zoom_factors = {1.0, 1.5, 2.0, 0.5};
-  for (float zoom_factor: zoom_factors) {
+  for (float zoom_factor : zoom_factors) {
     const pdf::PageSpecs scaled = ps.scale(zoom_factor);
 
     EXPECT_EQ(scaled.base_x0, ps.base_x0 * zoom_factor);
@@ -29,8 +29,7 @@ TEST(PageSpecsMethod, scale) {
 
 // TODO test for rotation
 TEST(PageSpecsMethod, rotate_quarter_clockwise) {
-  pdf::PageSpecs ps{0,   0,   100, 200,           0,     0,    100,
-                    200, 100, 200, 3 * 100 * 200, 100.0, 200.0};
+  pdf::PageSpecs ps{0, 0, 100, 200, 0, 0, 100, 200, 100, 200, 3 * 100 * 200, 100.0, 200.0};
 
   int rotation = 0;
   for (int i = 1; i <= 4; i++) {
@@ -51,7 +50,7 @@ TEST(PageSpecsMethod, rotate_quarter_clockwise) {
       EXPECT_EQ(rotated.acc_width, ps.acc_width);
       EXPECT_EQ(rotated.acc_height, ps.acc_height);
       EXPECT_EQ(rotated.rotation, rotation);
-    } else { // expect x,y width,height to be flipped
+    } else {  // expect x,y width,height to be flipped
       EXPECT_EQ(rotated.base_x0, ps.base_y0);
       EXPECT_EQ(rotated.base_y0, ps.base_x0);
       EXPECT_EQ(rotated.base_x1, ps.base_y1);
