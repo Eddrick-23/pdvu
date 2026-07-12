@@ -9,5 +9,5 @@ Checks: >
   -readability-braces-around-statements,
   -readability-magic-numbers
 WarningsAsErrors: 'bugprone-*'
-HeaderFilterRegex: '^(src|include)/.*'
+HeaderFilterRegex: '^(src|include|tests)/.*'
 ...
