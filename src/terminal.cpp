@@ -1,10 +1,10 @@
 #include "terminal.h"
 
-#include <signal.h>
 #include <sys/ioctl.h>
 #include <sys/poll.h>
 #include <unistd.h>
 
+#include <csignal>
 #include <cstdio>
 #include <fstream>
 #include <print>
