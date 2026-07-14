@@ -1,0 +1,42 @@
+name: Cross-Platform CI
+
+on: [ push, pull_request ]
+
+jobs:
+  build-and-test:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      # Cache mupdf builds since they take a long time
+      - name: Cache MuPDF Build
+        id: cache-mupdf
+        uses: actions/cache@v6
+        with:
+          # Only cache the specific folder where the .a files and headers are saved
+          path: external/mupdf/build/release
+          # key by os to prevent mixing binaries
+          key: ${{ matrix.os }}-mupdf-${{ hashFiles('external/mupdf/Makefile') }}
+
+      - name: Build MuPDF Headless
+        # Only runs if the cache was not found
+        if: steps.cache-mupdf.outputs.cache-hit != 'true'
+        run: |
+          cd external/mupdf
+          make HAVE_X11=no HAVE_GLUT=no prefix=./build/release install -j4
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+
+      - name: Build and Test
+        run: |
+          cmake --build build
+          cd build && ctest --output-on-failure
