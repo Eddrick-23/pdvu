@@ -1,6 +1,8 @@
 [submodule "external/mupdf"]
 	path = external/mupdf
 	url = https://github.com/ArtifexSoftware/mupdf.git
+	ignore = untracked
 [submodule "external/tracy"]
 	path = external/tracy
 	url = https://github.com/wolfpld/tracy.git
+	ignore = untracked
