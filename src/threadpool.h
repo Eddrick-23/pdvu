@@ -22,7 +22,7 @@ class ThreadPool {
     std::future<Result> fut = task->get_future();
     // acquire lock and enqueue
     {
-      std::lock_guard<std::mutex> lock(queue_mutex_);
+      std::scoped_lock lock(queue_mutex_);
       // cannot store packaged task directly in queue
       // wrap in a lambda for type erasure
       // use mutable since task can change internal state but lambdas are const
