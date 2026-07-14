@@ -7,15 +7,27 @@ jobs:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ ubuntu-latest, macos-latest ]
+        include:
+          - os: ubuntu-latest
+            cc: gcc-14
+            cxx: g++-14
+          - os: macos-latest
+            cc: clang
+            cxx: clang++
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
         with:
           submodules: recursive
-
+      - name: Install Linux Compiler
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.cxx }}
+      
       # Cache mupdf builds since they take a long time
       - name: Cache MuPDF Build
         id: cache-mupdf
@@ -34,6 +46,9 @@ jobs:
           make HAVE_X11=no HAVE_GLUT=no prefix=./build/release install -j4
 
       - name: Configure CMake
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
         run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
 
       - name: Build and Test
