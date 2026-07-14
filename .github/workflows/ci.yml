@@ -1,6 +1,12 @@
 name: Cross-Platform CI
 
-on: [ push, pull_request ]
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    branches:
+      - "main"
 
 jobs:
   build-and-test:
@@ -20,8 +26,10 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
-        with:
-          submodules: recursive
+
+      - name: Fetch MuPDF submodule only
+        run: git submodule update --init external/mupdf
+
       - name: Install Linux Compiler
         if: matrix.os == 'ubuntu-latest'
         run: |
