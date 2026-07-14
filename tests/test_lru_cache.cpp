@@ -16,10 +16,10 @@ TEST(LRUCache, TestPutMultipleItems) {
     std::string key;
     int value;
   };
-  constexpr std::array<TestCase, 3> test_cases = {{
-      {"a", 1},
-      {"b", 2},
-      {"c", 3},
+  std::array<TestCase, 3> test_cases = {{
+      {.key = "a", .value = 1},
+      {.key = "b", .value = 2},
+      {.key = "c", .value = 3},
   }};
 
   constexpr int cache_size = test_cases.size();
@@ -36,10 +36,10 @@ TEST(LRUCache, TestGetItems) {
     std::string key;
     int value;
   };
-  constexpr std::array<TestCase, 3> test_cases = {{
-      {"a", 1},
-      {"b", 2},
-      {"c", 3},
+  const std::array<TestCase, 3> test_cases = {{
+      {.key = "a", .value = 1},
+      {.key = "b", .value = 2},
+      {.key = "c", .value = 3},
   }};
 
   constexpr int cache_size = test_cases.size();
@@ -56,9 +56,9 @@ TEST(LRUCache, TestEvict) {
     std::string key;
     int value;
   };
-  constexpr std::array<TestCase, 2> test_cases = {{
-      {"a", 1},
-      {"b", 2},
+  const std::array<TestCase, 2> test_cases = {{
+      {.key = "a", .value = 1},
+      {.key = "b", .value = 2},
   }};
 
   auto cache = LRUCache<std::string, int>(1);
@@ -76,9 +76,9 @@ TEST(LRUCache, TestReorderOnGet) {
     std::string key;
     int value;
   };
-  constexpr std::array<TestCase, 2> test_cases = {{
-      {"a", 1},
-      {"b", 2},
+  std::array<TestCase, 2> test_cases = {{
+      {.key = "a", .value = 1},
+      {.key = "b", .value = 2},
   }};
 
   auto cache = LRUCache<std::string, int>(test_cases.size());
@@ -102,9 +102,9 @@ TEST(LRUCache, TestReorderOnUpdate) {
     std::string key;
     int value;
   };
-  constexpr std::array<TestCase, 2> test_cases = {{
-      {"a", 1},
-      {"b", 2},
+  std::array<TestCase, 2> test_cases = {{
+      {.key = "a", .value = 1},
+      {.key = "b", .value = 2},
   }};
 
   auto cache = LRUCache<std::string, int>(test_cases.size());

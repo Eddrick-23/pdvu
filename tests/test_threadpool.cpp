@@ -25,7 +25,9 @@ class MockParser : public Parser {
 
 TEST(ThreadPoolTest, CreatePool) {
   auto mock = std::make_unique<MockParser>();
-  EXPECT_CALL(*mock, duplicate()).Times(2);
+  EXPECT_CALL(*mock, duplicate()).Times(2).WillRepeatedly([]() {
+    return std::make_unique<MockParser>();
+  });
   auto pool = ThreadPool(*mock, 2);
 }
 
@@ -56,13 +58,14 @@ TEST(TheadPoolTest, EnqueueTaskSingleThreadMultipleTasks) {
   std::vector<std::function<std::string(Parser&)>> tasks;
   tasks.reserve(10);
   for (int i = 0; i < 10; i++) {
-    auto task = [i, &results](Parser& parser) {  // takes in an Parser reference
+    auto task = [i, &results](Parser& parser) {  // takes in a Parser reference
       return results.at(i);
     };
     tasks.emplace_back(task);
   }
-  auto parser = std::make_unique<MockParser>();
-  auto pool = ThreadPool(*parser, 1);
+  auto mock = std::make_unique<MockParser>();
+  EXPECT_CALL(*mock, duplicate()).WillRepeatedly([]() { return std::make_unique<MockParser>(); });
+  auto pool = ThreadPool(*mock, 1);
   // enqueue the tasks and get their results
   std::vector<std::future<std::string>> futures;
   futures.reserve(10);
@@ -110,15 +113,16 @@ TEST(ThreadPoolTest, EnqueueTaskMultipleThreadsMultipleTasks) {
   tasks.reserve(n_tasks);
   std::latch sync_point(n_tasks);
   for (int i = 0; i < n_tasks; i++) {
-    auto task = [i, &results, &sync_point](Parser& parser) {  // takes in an Parser reference
+    auto task = [i, &results, &sync_point](Parser& parser) {  // takes in a Parser reference
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
       sync_point.count_down();
       return results.at(i);
     };
     tasks.emplace_back(task);
   }
-  auto parser = std::make_unique<MockParser>();
-  auto pool = ThreadPool(*parser, n_threads);
+  auto mock = std::make_unique<MockParser>();
+  EXPECT_CALL(*mock, duplicate()).WillRepeatedly([]() { return std::make_unique<MockParser>(); });
+  auto pool = ThreadPool(*mock, n_threads);
   // enqueue the tasks and get their results
   std::vector<std::future<std::string>> futures;
   futures.reserve(n_tasks);

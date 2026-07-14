@@ -14,7 +14,7 @@ lib/
 *.exe
 
 # The specific binary name for your project
-Termivue
+pdvu
 
 # CMake generation artifacts (if run in root)
 CMakeCache.txt
@@ -23,10 +23,8 @@ cmake_install.cmake
 Makefile
 
 # --- IDE Settings (CLion / JetBrains) ---
-# These contain your personal window layout and local paths
 .idea/
 
-# Visual Studio Code (in case you or a collaborator switch)
 .vscode/
 
 # --- macOS System Files ---
