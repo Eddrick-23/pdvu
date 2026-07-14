@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 
+#include <cstring>
 #include <iostream>
 
 Tempfile::Tempfile(size_t size) {
@@ -59,7 +60,7 @@ Tempfile::Tempfile(Tempfile&& other) noexcept {
   mapped_ptr = other.mapped_ptr;
   file_size = other.file_size;
 
-  other.fd = -1;  // so other doesnt close the file when its destroyed
+  other.fd = -1;  // so other doesn't close the file when its destroyed
   other.fp.clear();
   other.mapped_ptr = nullptr;
   other.file_size = 0;

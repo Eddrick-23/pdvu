@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cerrno>
 #include <chrono>
+#include <cstring>
 
 #include "utils/profiling.h"
 static std::atomic<int> shm_sequence_id{0};

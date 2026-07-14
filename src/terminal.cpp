@@ -9,7 +9,7 @@
 #include <fstream>
 #include <print>
 // set as 1 so terminal caches the dimensions on startup
-volatile sig_atomic_t Terminal::window_resized = 1;
+volatile sig_atomic_t Terminal::window_resized = 2;
 volatile sig_atomic_t Terminal::quit_requested = 0;
 namespace terminal {
 void hide_cursor() {
@@ -34,7 +34,7 @@ std::string reset_screen_and_cursor_string() {
 }
 }  // namespace terminal
 
-Terminal::Terminal() {}
+Terminal::Terminal() = default;
 
 Terminal::~Terminal() {
   exit_raw_mode();
@@ -72,7 +72,7 @@ void Terminal::setup_signal_handlers() {
 }
 
 bool Terminal::was_resized() {
-  if (window_resized) {
+  if (window_resized != 0) {
     get_terminal_size();  // update attributes before reset
     window_resized = 0;
     return true;
@@ -172,47 +172,48 @@ InputEvent Terminal::read_input(int timeout_ms) {
 
     int ret = poll(&pfd, 1, 10);  // wait 10ms for next byte
     if (ret == 0) {
-      return InputEvent{key_escape};
+      return InputEvent{.key = key_escape};
     }
     if (ret > 0) {
-      char seq[3];
-      if (read(STDIN_FILENO, &seq[0], 1) != 1) return InputEvent{key_escape};
+      // char seq[3];
+      std::array<char, 3> seq;
+      if (read(STDIN_FILENO, &seq[0], 1) != 1) return InputEvent{.key = key_escape};
 
       if (seq[0] == '\x08' || seq[0] == '\x7F') {
-        return InputEvent{key_alt_backspace};
+        return InputEvent{.key = key_alt_backspace};
       }
       if (seq[0] == '[') {
-        if (read(STDIN_FILENO, &seq[1], 1) != 1) return InputEvent{key_escape};
+        if (read(STDIN_FILENO, &seq[1], 1) != 1) return InputEvent{.key = key_escape};
         switch (seq[1]) {
           case 'A':
-            return InputEvent{key_up_arrow};
+            return InputEvent{.key = key_up_arrow};
           case 'B':
-            return InputEvent{key_down_arrow};
+            return InputEvent{.key = key_down_arrow};
           case 'C':
-            return InputEvent{key_right_arrow};
+            return InputEvent{.key = key_right_arrow};
           case 'D':
-            return InputEvent{key_left_arrow};
+            return InputEvent{.key = key_left_arrow};
         }
       }
-      return InputEvent{key_alt_char, seq[0]};  // e.g. alt + f
+      return InputEvent{.key = key_alt_char, .char_value = seq[0]};  // e.g. alt + f
     }
-    return InputEvent{key_escape};
+    return InputEvent{.key = key_escape};
   }
 
   if (c == '\x0D' || c == '\x0A') {
-    return InputEvent{key_enter};
+    return InputEvent{.key = key_enter};
   }
   if (c == '\x09') {
-    return InputEvent{key_tab};
+    return InputEvent{.key = key_tab};
   }
   if (c == '\x08' || c == '\x7F') {
-    return InputEvent{key_backspace};
+    return InputEvent{.key = key_backspace};
   }
   if (c >= 1 && c <= 31) {
-    return InputEvent{key_ctrl_char, c};
+    return InputEvent{.key = key_ctrl_char, .char_value = c};
   }
   if (c >= 32 && c <= 126) {  // printable chars
     return InputEvent(key_char, c);
   }
-  return InputEvent{key_none};  // ignore other keys for now
+  return InputEvent{.key = key_none};  // ignore other keys for now
 }

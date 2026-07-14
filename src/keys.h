@@ -18,5 +18,5 @@ enum Key {
 
 struct InputEvent {
   Key key;          // enum value
-  char char_value;  // ascii value of key (valid for key_char only
+  char char_value = '\0';  // ascii value of key (valid for key_char only
 };

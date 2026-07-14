@@ -14,7 +14,11 @@ ThreadPool::ThreadPool(const pdf::Parser& prototype_parser, const int n) {
 }
 
 ThreadPool::~ThreadPool() {
-  shutdown_ = true;
+  // wrap flag update to prevent race conditions during shutdown
+  {
+    std::scoped_lock lock(queue_mutex_);
+    shutdown_ = true;
+  }
   queue_cv_.notify_all();
   for (auto& [thread, parser] : workers_) {
     if (thread.joinable()) {

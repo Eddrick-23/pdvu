@@ -212,7 +212,7 @@ void Viewer::update_viewport(float delta_x, float delta_y) {
 void Viewer::handle_page_pan(char key) {
   const float old_rel_x_offset = viewport.rel_x_offset;
   const float old_rel_y_offset = viewport.rel_y_offset;
-  int factor = std::isupper(key) ? 2 : 1;
+  const int factor = (std::isupper(key) != 0) ? 2 : 1;
   key = static_cast<char>(std::tolower(static_cast<unsigned char>(key)));
   switch (key) {
     case 'w':  // pan up
@@ -227,6 +227,7 @@ void Viewer::handle_page_pan(char key) {
     case 'd':  // pan right
       update_viewport(0.1 * factor, 0);
     default:  // do nothing for the rest
+      break;
   }
 
   // only display if viewport offset changed
@@ -377,9 +378,9 @@ void Viewer::process_keypress() {
       }
       break;
     case key_left_arrow:
-      if (current_page <= 0)
+      if (current_page <= 0) {
         current_page = 0;
-      else {
+      } else {
         current_page--;
         request_page_render(current_page);
       }
@@ -439,5 +440,6 @@ void Viewer::process_keypress() {
         handle_page_pan(char_value);
       }
     default:  // do nothing for the rest
+      break;
   }
 }
