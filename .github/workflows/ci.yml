@@ -43,7 +43,7 @@ jobs:
         if: steps.cache-mupdf.outputs.cache-hit != 'true'
         run: |
           cd external/mupdf
-          make HAVE_X11=no HAVE_GLUT=no prefix=./build/release install -j4
+          make HAVE_X11=no HAVE_GLUT=no build=release libs -j4
 
       - name: Configure CMake
         env:
