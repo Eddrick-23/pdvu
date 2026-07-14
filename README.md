@@ -37,13 +37,13 @@
    git clone --recursive https://github.com/Eddrick-23/pdvu.git
    cd pdvu
    ```
-   > if you cloned noramlly. fetch the submoduleby running: `git submodule update --init --recursive`
+   > if you cloned normally . fetch the submodule by running: `git submodule update --init --recursive`
 
 2. **Prepare MuPDF:**
    Place the MuPDF source code in `external/mupdf` and build the static libraries (`libmupdf.a`, `libmupdf-third.a`).
    ```bash
    cd external/mupdf
-   make HAVE_X11=no HAVE_GLUT=no prefix=./build/release install
+   make HAVE_X11=no HAVE_GLUT=no build=release libs -j4
    ```
 
 3. **Build pdvu:**
