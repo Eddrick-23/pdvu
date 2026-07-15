@@ -1,5 +1,6 @@
 #include "render_engine.h"
 
+#include "utils/logging.h"
 #include "utils/profiling.h"
 
 RenderEngine::RenderEngine(const pdf::Parser& prototype_parser, int n_threads, bool use_cache)
@@ -199,6 +200,7 @@ std::optional<PageCacheData> RenderEngine::try_page_cache(const RenderRequest& r
   if (!shm_ptr && !tempfile_ptr) {  // our cache stores empty data
     throw std::runtime_error("Cache retrival failed");
     // TODO change this to fall through and rerender
+    PLOG_INFO << "Cache retrieval failed, cache has empty data";
     // Update lru_cache to remove this entry since its
     // carrying null data. add lru_cache option to erase/remove entries
   }
