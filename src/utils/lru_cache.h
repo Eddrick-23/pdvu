@@ -1,3 +1,4 @@
+#pragma once
 #include <algorithm>
 #include <mutex>
 #include <vector>
@@ -13,7 +14,7 @@
 template <typename Key, typename Value>
 class LRUCache {
  public:
-  explicit LRUCache(size_t size) : capacity(size) { entries.reserve(size); };
+  explicit LRUCache(size_t size) : capacity(size) { entries.reserve(size); }
 
   std::optional<Value> get(Key key) {
     ZoneScopedN("cache get");

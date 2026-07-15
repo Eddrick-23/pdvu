@@ -4,6 +4,7 @@
 #include <sys/poll.h>
 #include <unistd.h>
 
+#include <csignal>
 #include <cstdio>
 #include <fstream>
 #include <print>

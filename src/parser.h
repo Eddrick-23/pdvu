@@ -21,16 +21,16 @@ struct PageSpecs {
   int rotation;
 
   PageSpecs scale(float new_zoom) const {
-    // manual scaling without calling fz_bound_page again
-    float x0 = base_x0 * new_zoom;
-    float y0 = base_y0 * new_zoom;
-    float x1 = base_x1 * new_zoom;
-    float y1 = base_y1 * new_zoom;
+    // performs manual scaling without calling fz_bound_page again
+    const float x0 = base_x0 * new_zoom;
+    const float y0 = base_y0 * new_zoom;
+    const float x1 = base_x1 * new_zoom;
+    const float y1 = base_y1 * new_zoom;
 
     fz_irect rect = fz_round_rect({x0, y0, x1, y1});
-    const int w = rect.x1 - rect.x0;
-    const int h = rect.y1 - rect.y0;
-    const size_t size = w * 3 * h;
+    const int w = std::abs(rect.x1 - rect.x0);
+    const int h = std::abs(rect.y1 - rect.y0);
+    const size_t size = static_cast<unsigned int>(w) * 3U * static_cast<unsigned int>(h);
 
     return PageSpecs(x0, y0, x1, y1, rect.x0, rect.y0, rect.x1, rect.y1, w, h, size, x1 - x0,
                      y1 - y0, rotation);

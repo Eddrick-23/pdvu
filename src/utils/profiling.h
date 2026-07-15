@@ -4,5 +4,5 @@
 #include <tracy/Tracy.hpp>
 #else
 #define ZoneScoped
-#define ZoneScopedN
+#define ZoneScopedN(name)
 #endif
