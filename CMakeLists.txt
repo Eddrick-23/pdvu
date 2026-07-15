@@ -68,14 +68,15 @@ target_compile_options(pdvu_compiler_flags INTERFACE
 )
 target_compile_definitions(pdvu_compiler_flags INTERFACE
         $<$<BOOL:${ENABLE_LOGGING}>:ENABLE_LOGGING>
-        $<$<BOOL:${ENABLE_TRACY}>:TRACY_ENABLE>
-)
+        $<$<BOOL:${ENABLE_TRACY}>:TRACY_ENABLE>)
 
 # --- PROJECT SOURCE TARGETS ---
 add_subdirectory(src)
 
 add_executable(pdvu src/main.cpp)
 target_link_libraries(pdvu PRIVATE pdvu_core pdvu_compiler_flags)
+# silence warnings from external library code
+target_include_directories(pdvu SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/external)
 
 # --- LINK OPTIONAL LIBRARIES IF ENABLED ---
 if (ENABLE_LOGGING)
