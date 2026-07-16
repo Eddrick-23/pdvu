@@ -56,7 +56,7 @@ Tempfile::WriteStatus Tempfile::write_data(const unsigned char* data, size_t len
   if (data == nullptr) {
     return WriteStatus::NullBuffer;
   }
-  if (mapped_ptr == MAP_FAILED) {
+  if (mapped_ptr == MAP_FAILED || mapped_ptr == nullptr) {
     return WriteStatus::UnmappedPointer;
   }
   if (len > file_size) {
