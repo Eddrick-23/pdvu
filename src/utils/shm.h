@@ -5,6 +5,15 @@
 
 class SharedMemory {
  public:
+  enum class WriteStatus {
+    Success = 0,
+    NullBuffer,
+    UnmappedPointer,
+    SizeExceeded,
+  };
+
+  static const char* to_string(const WriteStatus&);
+
   explicit SharedMemory(size_t image_size);
   ~SharedMemory();
 
@@ -19,7 +28,7 @@ class SharedMemory {
   const std::string& name() const;
   const size_t& size() const;
   void* data() const;
-  void write_data(const unsigned char* data, size_t len);
+  WriteStatus write_data(const unsigned char* data, size_t len);
   void copy_data(void* dest, size_t len) const;
 
   void close_mem();

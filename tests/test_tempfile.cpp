@@ -86,7 +86,8 @@ TEST(TempfileTest, WriteData) {
     auto test = Tempfile(1000);
     tempfile_path = test.path();
 
-    test.write_data(reinterpret_cast<const unsigned char*>(s.data()), s.size());
+    auto status = test.write_data(reinterpret_cast<const unsigned char*>(s.data()), s.size());
+    ASSERT_EQ(status, Tempfile::WriteStatus::Success);
 
     void* raw = test.data();
     const char* bytes = static_cast<const char*>(raw);

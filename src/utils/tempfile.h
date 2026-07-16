@@ -4,6 +4,13 @@
 #include <string>
 class Tempfile {
  public:
+  enum class WriteStatus {
+    Success = 0,
+    NullBuffer,
+    UnmappedPointer,
+    SizeExceeded,
+  };
+
   explicit Tempfile(size_t size);
   ~Tempfile();
 
@@ -18,7 +25,7 @@ class Tempfile {
   void close_file();
   const std::string& path() const;
   void* data() const;
-  void write_data(const unsigned char* data, size_t len);
+  WriteStatus write_data(const unsigned char* data, size_t len);
 
  private:
   std::string fp;

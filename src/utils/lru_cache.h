@@ -69,12 +69,7 @@ class LRUCache {
     std::scoped_lock lock(mut);
     auto it = std::ranges::find(entries, key, &Entry::key);
     if (it != entries.end()) {
-      size_t idx = std::distance(entries.begin(), it);
-      while (idx < entries.size() - 1) {
-        std::swap(entries[idx], entries[idx + 1]);
-        ++idx;
-      }
-      entries.pop_back();
+      entries.erase(it);
     }
   }
 

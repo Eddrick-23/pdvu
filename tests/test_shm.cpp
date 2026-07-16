@@ -93,10 +93,10 @@ TEST(ShmTest, WriteData) {
     auto test_shm = SharedMemory(1000);
     shm_name = test_shm.name();
 
-    test_shm.write_data(reinterpret_cast<const unsigned char*>(s.data()), s.size());
+    auto status = test_shm.write_data(reinterpret_cast<const unsigned char*>(s.data()), s.size());
+    ASSERT_EQ(status, SharedMemory::WriteStatus::Success);
 
     void* raw = test_shm.data();
-
     const char* bytes = static_cast<const char*>(raw);
     std::string stored(bytes, s.size());
     EXPECT_EQ(stored, s);
