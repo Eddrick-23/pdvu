@@ -17,7 +17,7 @@ struct PageDetails {
   float zoom;
   int rotation_degrees;
   bool operator==(const PageDetails& other) const {
-    constexpr float rel_eps = 1e-9;
+    constexpr double rel_eps = 1e-9;
     return page_num == other.page_num && rotation_degrees == other.rotation_degrees &&
            std::fabs(other.zoom - zoom) <= rel_eps * std::max(other.zoom, zoom);
   }
@@ -103,11 +103,11 @@ class RenderEngine {
   const int dlist_cache_size = 10;
   const std::chrono::milliseconds dlist_cache_time_limit = std::chrono::milliseconds(100);
   LRUCache<int, pdf::DisplayListHandle> dlist_cache =
-      LRUCache<int, pdf::DisplayListHandle>(dlist_cache_size);
+      LRUCache<int, pdf::DisplayListHandle>(static_cast<size_t>(dlist_cache_size));
 
   // lru_cache to cache heavy pages
   const int page_cache_size = 10;
   const std::chrono::milliseconds page_cache_time_limit = std::chrono::milliseconds(100);
   LRUCache<PageDetails, PageCacheData> page_cache =
-      LRUCache<PageDetails, PageCacheData>(page_cache_size);
+      LRUCache<PageDetails, PageCacheData>(static_cast<size_t>(page_cache_size));
 };

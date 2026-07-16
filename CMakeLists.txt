@@ -2,47 +2,41 @@ cmake_minimum_required(VERSION 3.31)
 project(pdvu)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# GoogleTest requires at least C++17
-include(CTest) # includes BUILD_TESTING option
-if(NOT DEFINED BUILD_TESTING)
-    set(BUILD_TESTING OFF CACHE BOOL "Build unit tests")
-endif()
-
+# --- GLOBAL LANGUAGE CONFIGS ---
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Set flags for builds
-set(CMAKE_CXX_FLAGS_DEBUG "-fno-omit-frame-pointer -g -O0 -Wall -Wextra")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -fno-omit-frame-pointer -DNDEBUG")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+# --- TESTING OPTIONS ---
+include(CTest) # includes BUILD_TESTING option
+if (NOT DEFINED BUILD_TESTING)
+    set(BUILD_TESTING OFF CACHE BOOL "Build unit tests")
+endif ()
 
-add_subdirectory(src)
-
-# --- PLOG LOGGER CONFIGURATION ---
+# --- THIRD PARTY: PLOG LOGGER ---
 option(ENABLE_LOGGING "Enable plog logging" OFF)
 
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(ENABLE_LOGGING ON)
-endif()
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(ENABLE_LOGGING ON)
+endif ()
 
-if(ENABLE_LOGGING)
-  message(STATUS "Logging ENABLED")
-  include(FetchContent)
-  FetchContent_Declare(
-      plog
-      GIT_REPOSITORY https://github.com/SergiusTheBest/plog.git
-      GIT_TAG 1.1.11
-      GIT_SHALLOW true
-  )
-  FetchContent_MakeAvailable(plog)
-  target_link_libraries(pdvu_core PUBLIC plog::plog)
+if (ENABLE_LOGGING)
+    message(STATUS "Logging ENABLED")
+    include(FetchContent)
+    FetchContent_Declare(
+            plog
+            GIT_REPOSITORY https://github.com/SergiusTheBest/plog.git
+            GIT_TAG 1.1.11
+            GIT_SHALLOW true
+    )
+    FetchContent_MakeAvailable(plog)
 else ()
-  message(STATUS "Logging DISABLED")
-endif()
-# --- TRACY PROFILER CONFIGURATION ---
+    message(STATUS "Logging DISABLED")
+endif ()
+
+# --- THIRD PARTY: TRACY PROFILER ---
 option(ENABLE_TRACY "Enable Tracy profiler" OFF)
-if(ENABLE_TRACY)
+if (ENABLE_TRACY)
     message(STATUS "Tracy profiling ENABLED")
 
     # Build Tracy Client
@@ -53,22 +47,47 @@ if(ENABLE_TRACY)
 
     find_package(Threads REQUIRED)
     target_link_libraries(TracyClient PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
-
-    # Link Tracy to the core library
-    target_link_libraries(pdvu_core PUBLIC TracyClient)
-else()
+else ()
     message(STATUS "Tracy profiling DISABLED")
-endif()
+endif ()
 
-#define macros
-target_compile_definitions(pdvu_core PUBLIC
-    $<$<BOOL:${ENABLE_LOGGING}>:ENABLE_LOGGING>
-    $<$<BOOL:${ENABLE_TRACY}>:TRACY_ENABLE>
+# --- GLOBAL COMPILER FLAGS ---
+add_library(pdvu_compiler_flags INTERFACE)
+set(BASE_COMPILER_FLAGS
+        $<$<CONFIG:Debug>:-fno-omit-frame-pointer -ggdb -O0>
+        $<$<CONFIG:RelWithDebInfo>:-O2 -ggdb -fno-omit-frame-pointer>
+        $<$<CONFIG:Release>:-O3>
 )
-add_executable(pdvu src/main.cpp)
-target_link_libraries(pdvu PRIVATE pdvu_core)
+target_compile_options(pdvu_compiler_flags INTERFACE
+        ${BASE_COMPILER_FLAGS}
+        -Wall
+        -Wextra
+        -Wconversion
+        -Wsign-conversion
+        -Werror
+)
+target_compile_definitions(pdvu_compiler_flags INTERFACE
+        $<$<BOOL:${ENABLE_LOGGING}>:ENABLE_LOGGING>
+        $<$<BOOL:${ENABLE_TRACY}>:TRACY_ENABLE>)
 
-# --- GoogleTest config ---
+# --- PROJECT SOURCE TARGETS ---
+add_subdirectory(src)
+
+add_executable(pdvu src/main.cpp)
+target_link_libraries(pdvu PRIVATE pdvu_core pdvu_compiler_flags)
+# silence warnings from external library code
+target_include_directories(pdvu SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/external)
+
+# --- LINK OPTIONAL LIBRARIES IF ENABLED ---
+if (ENABLE_LOGGING)
+    target_link_libraries(pdvu_core PUBLIC plog::plog)
+endif ()
+if (ENABLE_TRACY)
+    target_link_libraries(pdvu_core PUBLIC TracyClient)
+endif ()
+
+
+# --- LINK UNIT TESTS ---
 if (BUILD_TESTING)
     message(STATUS "Unit tests ENABLED")
     add_subdirectory(tests)

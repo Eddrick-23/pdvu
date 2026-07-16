@@ -50,8 +50,8 @@ class Viewer {
   RenderResult latest_frame = RenderResult{};
 
   // control zoom and panning
-  static constexpr std::array<float, 11> zoom_levels{0.5, 0.67, 0.75, 0.8,  0.9, 1.0,
-                                                     1.1, 1.25, 1.5,  1.75, 2.0};
+  static constexpr std::array<float, 11> zoom_levels{0.5F, 0.67F, 0.75F, 0.8F,  0.9F, 1.0F,
+                                                     1.1F, 1.25F, 1.5F,  1.75F, 2.0F};
   static constexpr int default_zoom_index = 5;  // 1.0x (100%)
   Viewport viewport{0.0, 0.0, default_zoom_index, zoom_levels[default_zoom_index]};
 };

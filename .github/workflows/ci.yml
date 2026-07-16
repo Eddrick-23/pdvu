@@ -28,15 +28,30 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v6
 
+      - name: Resolve pinned MuPDF commit
+        id: mupdf-commit
+        run:
+          echo "sha=$(git rev-parse HEAD:external/mupdf)" >>"$GITHUB_OUTPUT"
+
+      - name: Cache MuPDF checkout
+        id: cache-mupdf-checkout
+        uses: actions/cache@v6
+        with:
+          path: |
+            external/mupdf
+            .git/modules/external/mupdf
+          key: ${{ matrix.os }}-mupdf-checkout-${{ steps.mupdf-commit.outputs.sha }}
+
       - name: Fetch MuPDF submodule only
-        run: git submodule update --init external/mupdf
+        if: steps.cache-mupdf-checkout.outputs.cache-hit != 'true'
+        run: git submodule update --init --depth 1 --recursive external/mupdf
 
       - name: Install Linux Compiler
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y ${{ matrix.cxx }}
-      
+
       # Cache mupdf builds since they take a long time
       - name: Cache MuPDF Build
         id: cache-mupdf
