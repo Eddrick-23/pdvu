@@ -6,10 +6,10 @@
 #include <print>
 
 #include "keys.h"
-#include "kitty.h"
-#include "parser.h"
-#include "terminal.h"
-#include "tui.h"
+#include "render/parser.h"
+#include "terminal/kitty.h"
+#include "terminal/terminal.h"
+#include "terminal/tui.h"
 #include "utils/logging.h"
 #include "utils/profiling.h"
 #include "utils/ram_usage.h"
