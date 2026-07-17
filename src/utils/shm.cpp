@@ -29,7 +29,7 @@ int is_shm_supported() {
 }
 
 // constructor
-SharedMemory::SharedMemory(size_t image_size) {
+SharedMemory::SharedMemory(const size_t image_size) {
   ZoneScoped;
   shm_size = image_size;
   // generate unique name using PID and timestamp
@@ -42,7 +42,8 @@ SharedMemory::SharedMemory(size_t image_size) {
     throw std::runtime_error("Failed to open shared memory: " + shm_name);
   }
 
-  if (ftruncate(shm_fd, image_size) == -1) {  // set size
+  // set size
+  if (ftruncate(shm_fd, static_cast<long>(image_size)) == -1) {
     close(shm_fd);
     unlink(shm_name.c_str());
     throw std::runtime_error("Failed to set shared memory size: " + shm_name);
@@ -67,6 +68,20 @@ SharedMemory::~SharedMemory() {
     shm_name.clear();
   }
 }
+const char* SharedMemory::to_string(const WriteStatus& status) {
+  switch (status) {
+    case WriteStatus::Success:
+      return "Success";
+    case WriteStatus::NullBuffer:
+      return "Source data pointer is null";
+    case WriteStatus::UnmappedPointer:
+      return "Shared memory segment is not mapped";
+    case WriteStatus::SizeExceeded:
+      return "Data length exceeds allocated shared memory size";
+    default:
+      return "Unknown error";
+  }
+}
 
 const std::string& SharedMemory::name() const { return shm_name; }
 
@@ -74,9 +89,19 @@ const size_t& SharedMemory::size() const { return shm_size; }
 
 void* SharedMemory::data() const { return mapped_ptr; }
 
-void SharedMemory::write_data(const unsigned char* data, const size_t len) {
-  assert(len <= shm_size);
+SharedMemory::WriteStatus SharedMemory::write_data(const unsigned char* data, const size_t len) {
+  if (data == nullptr) {
+    return WriteStatus::NullBuffer;
+  }
+  if (mapped_ptr == MAP_FAILED) {
+    return WriteStatus::UnmappedPointer;
+  }
+  if (len > shm_size) {
+    return WriteStatus::SizeExceeded;
+  }
+
   memcpy(mapped_ptr, data, len);
+  return WriteStatus::Success;
 }
 
 void SharedMemory::copy_data(void* dest, size_t len) const {

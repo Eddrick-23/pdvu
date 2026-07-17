@@ -107,7 +107,7 @@ class RenderEngine {
 
   // lru_cache to cache heavy pages
   const int page_cache_size = 10;
-  const std::chrono::milliseconds page_cache_time_limit = std::chrono::milliseconds(100);
+  const std::chrono::milliseconds page_cache_time_limit = std::chrono::milliseconds(5);
   LRUCache<PageDetails, PageCacheData> page_cache =
       LRUCache<PageDetails, PageCacheData>(static_cast<size_t>(page_cache_size));
 };

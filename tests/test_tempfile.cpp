@@ -31,7 +31,7 @@ TEST(TempfileTest, MoveConstructorTransfersOwnership) {
 
     // check that source no longer has the original data
     EXPECT_TRUE(test_source.path().empty());
-    EXPECT_EQ(test_source.data(), nullptr);
+    EXPECT_EQ(test_source.data(), MAP_FAILED);
   }
   // check that destructor still runs
   EXPECT_FALSE(std::filesystem::exists(tempfile_path));
@@ -54,7 +54,7 @@ TEST(TempfileTest, MoveAssignmentTransfersOwnership) {
 
     // check that source no longer has the original data
     EXPECT_TRUE(temp_source.path().empty());
-    EXPECT_EQ(temp_source.data(), nullptr);
+    EXPECT_EQ(temp_source.data(), MAP_FAILED);
 
     // check that target data deleted
     EXPECT_FALSE(std::filesystem::exists(tempfile_path_target));
@@ -86,7 +86,8 @@ TEST(TempfileTest, WriteData) {
     auto test = Tempfile(1000);
     tempfile_path = test.path();
 
-    test.write_data(reinterpret_cast<const unsigned char*>(s.data()), s.size());
+    auto status = test.write_data(reinterpret_cast<const unsigned char*>(s.data()), s.size());
+    ASSERT_EQ(status, Tempfile::WriteStatus::Success);
 
     void* raw = test.data();
     const char* bytes = static_cast<const char*>(raw);

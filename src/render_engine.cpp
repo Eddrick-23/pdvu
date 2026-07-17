@@ -1,5 +1,6 @@
 #include "render_engine.h"
 
+#include "utils/logging.h"
 #include "utils/profiling.h"
 
 RenderEngine::RenderEngine(const pdf::Parser& prototype_parser, int n_threads, bool use_cache)
@@ -187,20 +188,41 @@ void RenderEngine::cache_page(int page_num, float zoom, int rotation,
 std::optional<PageCacheData> RenderEngine::try_page_cache(const RenderRequest& req,
                                                           std::shared_ptr<SharedMemory>& shm_ptr,
                                                           std::shared_ptr<Tempfile>& tempfile_ptr) {
-  auto cached_page = page_cache.get({req.page_num, req.zoom, req.scaled_page_specs.rotation});
+  const auto key = PageDetails{
+      .page_num = req.page_num,
+      .zoom = req.zoom,
+      .rotation_degrees = req.scaled_page_specs.rotation,
+  };
+  const auto cached_page = page_cache.get(key);
   if (!cached_page.has_value()) return {};
+
   PageCacheData data = cached_page.value();
+
+  // shm does not allow reusing to we make a copy and write to the buffer
+  // tempfile allows reusing so we reuse the same tempfile pointer
   if (data.transmission == "shm") {
-    shm_ptr = std::make_unique<SharedMemory>(data.shm_buffer.size());
-    shm_ptr->write_data(data.shm_buffer.data(), data.shm_buffer.size());
+    try {
+      shm_ptr = std::make_unique<SharedMemory>(data.shm_buffer.size());
+      const auto status = shm_ptr->write_data(data.shm_buffer.data(), data.shm_buffer.size());
+      if (status != SharedMemory::WriteStatus::Success) {
+        PLOG_ERROR << "Render error: failed to write page " << key.page_num
+                   << " to ui buffer. Reason: " << SharedMemory::to_string(status);
+        shm_ptr.reset();
+      }
+    } catch (const std::exception& e) {
+      PLOG_ERROR << "Failed to allocate shm for cached page " << key.page_num << ": " << e.what();
+      shm_ptr.reset();
+    }
   } else {
     tempfile_ptr = data.tempfile_data;
   }
-  if (!shm_ptr && !tempfile_ptr) {  // our cache stores empty data
-    throw std::runtime_error("Cache retrival failed");
-    // TODO change this to fall through and rerender
-    // Update lru_cache to remove this entry since its
-    // carrying null data. add lru_cache option to erase/remove entries
+
+  // If key exists but there is no data there, wipe entry from cache
+  // and rerender
+  if (!shm_ptr && !tempfile_ptr) {
+    PLOG_INFO << "Cache retrieval failed, key has empty entry";
+    page_cache.erase(key);
+    return {};
   }
 
   return data;

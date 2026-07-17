@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <iterator>
 #include <mutex>
 #include <vector>
 
@@ -14,6 +15,13 @@
 template <typename Key, typename Value>
 class LRUCache {
  public:
+  struct Entry {
+    Key key;
+    Value value;
+
+    auto operator<=>(const Entry&) const = default;
+  };
+
   explicit LRUCache(size_t size) : capacity(size) { entries.reserve(size); }
 
   std::optional<Value> get(Key key) {
@@ -56,12 +64,17 @@ class LRUCache {
     return entries;
   }
 
+  void erase(Key key) {
+    ZoneScopedN("cache erase");
+    std::scoped_lock lock(mut);
+    auto it = std::ranges::find(entries, key, &Entry::key);
+    if (it != entries.end()) {
+      entries.erase(it);
+    }
+  }
+
  private:
   size_t capacity;
-  struct Entry {
-    Key key;
-    Value value;
-  };
   std::vector<Entry> entries;
   std::mutex mut;
 };

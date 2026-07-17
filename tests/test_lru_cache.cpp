@@ -1,6 +1,10 @@
 #include <gtest/gtest.h>
 #include <utils/lru_cache.h>
 
+#include <algorithm>
+
+#include "gmock/gmock-matchers.h"
+
 TEST(LRUCache, TestPutItem) {
   constexpr int cache_size = 1;
   auto cache = LRUCache<std::string, int>(cache_size);
@@ -126,3 +130,74 @@ TEST(LRUCache, TestReorderOnUpdate) {
   EXPECT_EQ(cache.get_entries()[1].key, test_cases[1].key);
   EXPECT_EQ(cache.get_entries()[1].value, test_cases[1].value);
 }
+
+struct EraseTestData {
+  std::string name;
+  std::vector<LRUCache<std::string, int>::Entry> entries;
+  std::vector<LRUCache<std::string, int>::Entry> entries_after;
+  std::string erase_key;
+};
+
+// REQUIRED FOR CTEST / CMAKE:
+// Google Test uses Argument-Dependent Lookup (ADL) to print test parameters.
+// Without this operator<<, gtest defaults to dumping the struct's raw memory as hex.
+// CMake's test discovery (gtest_discover_tests) regex chokes on that hex dump
+// and accidentally uses it as the test name in the console output.
+// This function forces a clean string output, fixing the test names in CTest.
+void PrintTo(const EraseTestData& data, std::ostream* os) { *os << data.name; }
+
+void PrintTo(const LRUCache<std::string, int>::Entry& entry, std::ostream* os) {
+  *os << "{key: " + entry.key + " " + "value: " + std::to_string(entry.value) + " }";
+}
+
+class EraseParameterizedTest : public ::testing::TestWithParam<EraseTestData> {};
+
+TEST_P(EraseParameterizedTest, EraseCorrectly) {
+  const EraseTestData& tc = GetParam();
+
+  auto entries = tc.entries;  // create mutable copy
+  auto cache = LRUCache<std::string, int>(tc.entries.size());
+  std::ranges::reverse(entries.begin(), entries.end());
+  for (const auto& [key, value] : entries) {
+    cache.put(key, value);
+  }
+  cache.erase(tc.erase_key);
+  EXPECT_THAT(cache.get_entries(), ::testing::ElementsAreArray(tc.entries_after));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    LRUCache, EraseParameterizedTest,
+    ::testing::Values(
+        EraseTestData{
+            "erase_front_element",
+            {{"a", 1}, {"b", 2}},
+            {{"b", 2}},
+            "a",
+        },
+        EraseTestData{
+            "erase_back_element",
+            {{"a", 1}, {"b", 2}},
+            {{"a", 1}},
+            "b",
+        },
+        EraseTestData{
+            "erase_middle_element",
+            {{"a", 1}, {"b", 2}, {"c", 3}},
+            {{"a", 1}, {"c", 3}},
+            "b",
+        },
+        EraseTestData{
+            "erase_missing_key",
+            {{"a", 1}, {"b", 2}, {"c", 3}},
+            {{"a", 1}, {"b", 2}, {"c", 3}},
+            "d",
+        },
+        EraseTestData{
+            "erase_empty_cache",
+            {},
+            {},
+            "b",
+        }),
+    [](const ::testing::TestParamInfo<EraseParameterizedTest::ParamType>& info) {
+      return info.param.name;
+    });

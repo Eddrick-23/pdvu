@@ -10,14 +10,14 @@ Tempfile::Tempfile(size_t size) {
   char tmp_template[] = "/tmp/pdvu_XXXXXX";
   fd = mkstemp(tmp_template);  // create actual file
   if (fd == -1) {
-    perror("mkstemp");
+    throw std::runtime_error(std::string("mkstemp failed: ") + strerror(errno));
   }
   fp = std::string(tmp_template);  // store the file path
 
   if (ftruncate(fd, file_size) == -1) {  // set size
     close(fd);
     unlink(fp.c_str());
-    throw std::runtime_error("Failed to set shared memory size: " + fp);
+    throw std::runtime_error("Failed to set temp file size: " + fp);
   }
 
   // creat raw pointer to buffer
@@ -25,7 +25,7 @@ Tempfile::Tempfile(size_t size) {
   if (mapped_ptr == MAP_FAILED) {
     close(fd);
     unlink(fp.c_str());
-    throw std::runtime_error("Failed to map shared memory: " + fp);
+    throw std::runtime_error("Failed to map temp file: " + fp);
   }
 }
 
@@ -52,7 +52,19 @@ const std::string& Tempfile::path() const {  // get path
 
 void* Tempfile::data() const { return mapped_ptr; }
 
-void Tempfile::write_data(const unsigned char* data, size_t len) { memcpy(mapped_ptr, data, len); }
+Tempfile::WriteStatus Tempfile::write_data(const unsigned char* data, size_t len) {
+  if (data == nullptr) {
+    return WriteStatus::NullBuffer;
+  }
+  if (mapped_ptr == MAP_FAILED || mapped_ptr == nullptr) {
+    return WriteStatus::UnmappedPointer;
+  }
+  if (len > file_size) {
+    return WriteStatus::SizeExceeded;
+  }
+  memcpy(mapped_ptr, data, len);
+  return WriteStatus::Success;
+}
 
 Tempfile::Tempfile(Tempfile&& other) noexcept {
   fp = std::move(other.fp);
@@ -62,7 +74,7 @@ Tempfile::Tempfile(Tempfile&& other) noexcept {
 
   other.fd = -1;  // so other doesn't close the file when its destroyed
   other.fp.clear();
-  other.mapped_ptr = nullptr;
+  other.mapped_ptr = MAP_FAILED;
   other.file_size = 0;
 };
 
@@ -70,14 +82,14 @@ Tempfile& Tempfile::operator=(Tempfile&& other) noexcept {
   if (this != &other) {
     close_file();  // close and unlink current file
 
+    fp = std::move(other.fp);
     fd = other.fd;
-    fp = other.fp;
     mapped_ptr = other.mapped_ptr;
     file_size = other.file_size;
 
     other.fd = -1;
     other.fp.clear();
-    other.mapped_ptr = nullptr;
+    other.mapped_ptr = MAP_FAILED;
     other.file_size = 0;
   }
   return *this;
