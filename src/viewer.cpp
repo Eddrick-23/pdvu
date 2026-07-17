@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <print>
 
+#include "keys.h"
 #include "kitty.h"
 #include "parser.h"
 #include "terminal.h"
