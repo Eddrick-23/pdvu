@@ -4,7 +4,7 @@
 #include <csignal>
 #include <string>
 
-#include "keys.h"
+#include "viewer/keys.h"
 struct TermSize {
   int width, height;
   int x, y;  // (pixels)

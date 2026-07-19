@@ -1,7 +1,7 @@
 #pragma once
-#include "parser.h"
-#include "render_engine.h"
-#include "terminal.h"
+#include "render/parser.h"
+#include "render/render_engine.h"
+#include "terminal/terminal.h"
 
 class Viewer {
  public:

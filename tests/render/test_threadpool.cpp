@@ -3,8 +3,8 @@
 
 #include <latch>
 
-#include "parser.h"
-#include "threadpool.h"
+#include "render/parser.h"
+#include "render/threadpool.h"
 
 using namespace pdf;
 

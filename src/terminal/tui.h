@@ -2,7 +2,7 @@
 #include <functional>
 #include <string>
 
-#include "parser.h"
+#include "render/parser.h"
 #include "terminal.h"
 
 namespace TUI::symbols {

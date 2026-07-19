@@ -1,13 +1,13 @@
 set(CORE_SOURCES
-    terminal.cpp
-    kitty.cpp
-    parser.cpp
-    viewer.cpp
+    viewer/viewer.cpp
+    terminal/terminal.cpp
+    terminal/kitty.cpp
+    terminal/tui.cpp
+    render/parser.cpp
+    render/render_engine.cpp
+    render/threadpool.cpp
     utils/tempfile.cpp
     utils/shm.cpp
-    tui.cpp
-    render_engine.cpp
-    threadpool.cpp
 )
 
 # create core library

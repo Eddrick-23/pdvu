@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
-#include "kitty.h"
-#include "kitty_internal.h"
+#include "terminal/kitty.h"
+#include "terminal/kitty_internal.h"
 
 using namespace kitty;
 

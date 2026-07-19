@@ -4,7 +4,7 @@
 
 #include "utils/logging.h"
 #include "utils/profiling.h"
-#include "viewer.h"
+#include "viewer/viewer.h"
 
 int main(int argc, char** argv) {
   CLI::App app("pdvu");

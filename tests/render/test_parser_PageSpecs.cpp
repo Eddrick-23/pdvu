@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "parser.h"
+#include "render/parser.h"
 
 // TODO test for scaling
 TEST(PageSpecsMethod, scale) {
