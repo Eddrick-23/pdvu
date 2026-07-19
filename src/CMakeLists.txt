@@ -1,5 +1,6 @@
 set(CORE_SOURCES
     viewer/viewer.cpp
+    viewer/pageview.cpp
     terminal/terminal.cpp
     terminal/kitty.cpp
     terminal/tui.cpp

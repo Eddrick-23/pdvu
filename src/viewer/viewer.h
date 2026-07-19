@@ -27,10 +27,12 @@ class Viewer {
   void display_latest_frame(int existing_width, int existing_height, int target_width,
                             int target_height);
   void request_page_render(int page_num);
+  // to modify
   void change_zoom_index(int delta);
   CropRect calculate_crop_window(int width, int height);
   void update_viewport(float delta_x, float delta_y);
   void handle_page_pan(char key);
+  // to modify
   void handle_go_to_page();
   void handle_help_page();
   void process_keypress();
