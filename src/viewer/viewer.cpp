@@ -27,7 +27,7 @@ std::string bottom_bar(const TermSize& ts, float current_zoom_level, int rotatio
   return TUI::bottom_status_bar(ts, current_zoom_level, rotation);
 }
 
-constexpr inline bool floats_equal(float a, float b) { return std::fabs(a - b) < 1e-6f; }
+constexpr bool floats_equal(float a, float b) { return std::fabs(a - b) < 1e-6F; }
 }  // namespace
 
 Viewer::Viewer(std::unique_ptr<pdf::Parser> main_parser,
@@ -64,8 +64,10 @@ void Viewer::run() {
     }
 
     if (resizing) {
-      display_latest_frame(m_latest_frame.page_width, m_latest_frame.page_height,
-          m_target_page_specs.width, m_target_page_specs.height);
+      display_latest_frame({
+          .existing = {.height = m_latest_frame.page_height, .width = m_latest_frame.page_width},
+          .target = {.height = m_target_page_specs.height, .width = m_target_page_specs.width},
+      });
       auto now = Clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
       if (duration.count() > 75) {  // wait 75ms from last signal
@@ -74,11 +76,25 @@ void Viewer::run() {
       }
     }
     if (fetch_latest_frame()) {
-      display_latest_frame(m_latest_frame.page_width, m_latest_frame.page_height,
-          m_target_page_specs.width, m_target_page_specs.height);
+      display_latest_frame({
+          .existing = {.height = m_latest_frame.page_height, .width = m_latest_frame.page_width},
+          .target = {.height = m_target_page_specs.height, .width = m_target_page_specs.width},
+      });
     }
   }
 }
+
+Viewer::Dimensions Viewer::available_window() {
+  const TermSize ts = m_term.get_terminal_size();
+  const int available_height_pixels = (ts.height - 2) * ts.pixels_per_row;
+  const int available_width_pixels = ts.width * ts.pixels_per_col;
+
+  return Dimensions{
+      .height = available_height_pixels,
+      .width = available_width_pixels,
+  };
+}
+
 bool Viewer::fetch_latest_frame() {
   std::optional<RenderResult> result_opt = m_renderer->get_result();
   if (!result_opt) {
@@ -99,8 +115,9 @@ bool Viewer::fetch_latest_frame() {
   return true;
 }
 
-void Viewer::display_latest_frame(
-    int existing_width, int existing_height, int target_width, int target_height) {
+void Viewer::display_latest_frame(const FrameDisplayParams& params) {
+  const auto [existing_height, existing_width] = params.existing;
+  const auto [target_height, target_width] = params.target;
   const TermSize ts = m_term.get_terminal_size();
   // prepare screen and cursor
   std::string frame = terminal::reset_screen_and_cursor_string();
@@ -112,14 +129,11 @@ void Viewer::display_latest_frame(
   constexpr int KITTY_SLOT_ID = 1;
 
   // update viewport in case image dimensions changed
-  const int available_height_pixels = (ts.height - 2) * ts.pixels_per_row;
-  const int available_width_pixels = ts.width * ts.pixels_per_col;
-  const auto window_bounds =
-      PageView::ViewportBounds{available_height_pixels, available_width_pixels};
-  m_page_view.update_viewport(0.0, 0.0);
+  const auto [height, width] = available_window();
 
   auto [x_offset_pixels, y_offset_pixels, crop_width, crop_height] =
-      m_page_view.calculate_crop_window(target_width, target_height, window_bounds);
+      m_page_view.calculate_crop_window(
+          target_width, target_height, {.max_height_pixels = height, .max_width_pixels = width});
   // if latest frame dimensions match target, don't need to scale crop
   // if latest frame dimensions don't match target, scale the crop window
   if (m_latest_frame.page_width != target_width || m_latest_frame.page_height != target_height) {
@@ -195,8 +209,10 @@ void Viewer::handle_page_pan(char key) {
 
   // only re-display if viewport offset changed
   if (viewport_changed) {
-    display_latest_frame(m_latest_frame.page_width, m_latest_frame.page_height,
-        m_target_page_specs.width, m_target_page_specs.height);
+    display_latest_frame({
+        .existing = {.height = m_latest_frame.page_height, .width = m_latest_frame.page_width},
+        .target = {.height = m_target_page_specs.height, .width = m_target_page_specs.width},
+    });
   }
 }
 
@@ -218,15 +234,19 @@ void Viewer::handle_go_to_page() {
     TermSize ts = m_term.get_terminal_size();
     // only request new page if dimensions change
     if (last_term_size.width != ts.width || last_term_size.height != ts.height) {
-      display_latest_frame(m_latest_frame.page_width, m_latest_frame.page_height,
-          m_target_page_specs.width, m_target_page_specs.height);
+      display_latest_frame({
+          .existing = {.height = m_latest_frame.page_height, .width = m_latest_frame.page_width},
+          .target = {.height = m_target_page_specs.height, .width = m_target_page_specs.width},
+      });
       request_page_render(m_current_page);
       last_term_size = ts;
     }
     // if not we just check if there is a new frame to render
     if (fetch_latest_frame()) {
-      display_latest_frame(m_latest_frame.page_width, m_latest_frame.page_height,
-          m_target_page_specs.width, m_target_page_specs.height);
+      display_latest_frame({
+          .existing = {.height = m_latest_frame.page_height, .width = m_latest_frame.page_width},
+          .target = {.height = m_target_page_specs.height, .width = m_target_page_specs.width},
+      });
     }
   };
   while (running) {
@@ -368,21 +388,37 @@ void Viewer::process_keypress() {
       }
       if (char_value == '=' || char_value == '+') {  // zoom in
         if (m_page_view.change_zoom_index(1)) {
-          const int existing_frame_width = m_latest_frame.page_width;
-          const int existing_frame_height = m_latest_frame.page_height;
           request_page_render(m_current_page);
-          display_latest_frame(existing_frame_width, existing_frame_height,
-              m_target_page_specs.width, m_target_page_specs.height);
+          display_latest_frame({
+              .existing =
+                  {
+                      .height = m_latest_frame.page_height,
+                      .width = m_latest_frame.page_width,
+                  },
+              .target =
+                  {
+                      .height = m_target_page_specs.height,
+                      .width = m_target_page_specs.width,
+                  },
+          });
         }
         break;
       }
       if (char_value == '-' || char_value == '_') {  // zoom out
         if (m_page_view.change_zoom_index(-1)) {
-          const int existing_frame_width = m_latest_frame.page_width;
-          const int existing_frame_height = m_latest_frame.page_height;
           request_page_render(m_current_page);
-          display_latest_frame(existing_frame_width, existing_frame_height,
-              m_target_page_specs.width, m_target_page_specs.height);
+          display_latest_frame({
+              .existing =
+                  {
+                      .height = m_latest_frame.page_height,
+                      .width = m_latest_frame.page_width,
+                  },
+              .target =
+                  {
+                      .height = m_target_page_specs.height,
+                      .width = m_target_page_specs.width,
+                  },
+          });
         }
         break;
       }
