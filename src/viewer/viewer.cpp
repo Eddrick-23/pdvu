@@ -13,7 +13,13 @@
 #include "utils/logging.h"
 #include "utils/profiling.h"
 #include "utils/ram_usage.h"
-namespace {  // utility functions
+namespace {  // utility functions and constants
+// UI and timing constants
+constexpr int RESIZE_DEBOUNCE_MS = 75;  // Milliseconds to wait after terminal resize
+constexpr int INPUT_POLL_RATE_MS = 16;  // ~60 FPS for responsive main loop input
+constexpr int HELP_POLL_RATE_MS = 50;   // Slower poll rate when idle in help menu
+constexpr float PAN_STEP_RATIO = 0.1F;  // 10% of viewport shifted per pan keypress
+
 std::string top_status_bar_with_stats(const TermSize& ts, const RenderResult& latest_frame,
     const std::string& doc_name, int page, int total_pages) {
   size_t mem_bytes = ram_usage::getCurrentRSS();
@@ -70,7 +76,7 @@ void Viewer::run() {
       });
       auto now = Clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
-      if (duration.count() > 75) {  // wait 75ms from last signal
+      if (duration.count() > RESIZE_DEBOUNCE_MS) {  // wait 75ms from last signal
         request_page_render(m_current_page);
         resizing = false;
       }
@@ -193,16 +199,16 @@ void Viewer::handle_page_pan(char key) {
   key = static_cast<char>(std::tolower(static_cast<unsigned char>(key)));
   switch (key) {
     case 'w':  // pan up
-      viewport_changed = m_page_view.update_viewport(0, -0.1F * factor);
+      viewport_changed = m_page_view.update_viewport(0, -PAN_STEP_RATIO * factor);
       break;
     case 'a':  // pan left
-      viewport_changed = m_page_view.update_viewport(-0.1F * factor, 0);
+      viewport_changed = m_page_view.update_viewport(-PAN_STEP_RATIO * factor, 0);
       break;
     case 's':  // pan down
-      viewport_changed = m_page_view.update_viewport(0, 0.1F * factor);
+      viewport_changed = m_page_view.update_viewport(0, PAN_STEP_RATIO * factor);
       break;
     case 'd':  // pan right
-      viewport_changed = m_page_view.update_viewport(0.1F * factor, 0);
+      viewport_changed = m_page_view.update_viewport(PAN_STEP_RATIO * factor, 0);
     default:  // do nothing for the rest
       break;
   }
@@ -295,7 +301,7 @@ void Viewer::handle_help_page() {
   bool resizing = false;
 
   while (true) {
-    InputEvent input = m_term.read_input(50);
+    InputEvent input = m_term.read_input(HELP_POLL_RATE_MS);
     if (m_term.was_resized()) {
       last_terminal_size = m_term.get_terminal_size();
       start = Clock::now();
@@ -304,7 +310,7 @@ void Viewer::handle_help_page() {
     if (resizing) {
       auto now = Clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
-      if (duration.count() > 75) {
+      if (duration.count() > RESIZE_DEBOUNCE_MS) {
         was_resized = true;
         std::print("{}", clear_overlay(1, last_terminal_size.height, last_terminal_size.width));
         std::fflush(stdout);
@@ -340,7 +346,7 @@ void Viewer::handle_help_page() {
 
 void Viewer::process_keypress() {
   static constexpr std::string_view pan_keys = "wWaAsSdD";
-  auto [key, char_value] = m_term.read_input(16);  // 60fps
+  auto [key, char_value] = m_term.read_input(INPUT_POLL_RATE_MS);  // 60fps
   // if guard message is being displayed, only allow q to quit
   if (TUI::is_window_too_small(m_term.get_terminal_size())) {
     if (key == key_char && char_value == 'q') {  // quit
