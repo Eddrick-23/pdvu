@@ -13,11 +13,6 @@ class PageView {
     int max_width_pixels;
   };
 
-  struct ImageDimensions {
-    int width;
-    int height;
-  };
-
   /**
    * @brief Defines the crop rectangle to crop an image.
    *
@@ -36,8 +31,9 @@ class PageView {
    * @brief Shifts the current zoom level index up or down.
    *
    * @param delta How many indexes to shift by (e.g., 1 to zoom in, -1 to zoom out).
+   * @return boolean representing if zoom index changed at all
    */
-  void change_zoom_index(int delta);
+  bool change_zoom_index(int delta);
 
   /**
    * @brief Calculates the cropping rectangle to fit an image within the allowed viewport bounds.
@@ -55,13 +51,19 @@ class PageView {
    *
    * @param delta_x Amount to shift in the x direction. Should be in range of (-1.0, 1.0)
    * @param delta_y Amount to shift in the y direction. Should be in range of (-1.0, 1.0)
-   * @param vBounds The maximum available pixel boundaries this view is allowed to draw in.
-   * @param imgDim The height and width pixels of the latest image
+   * @return boolean representing if offset changed at all.
    */
-  void update_viewport(
-      const ViewportBounds& vBounds, const ImageDimensions& imgDim, float delta_x, float delta_y);
+  bool update_viewport(float delta_x, float delta_y);
 
-  void handle_page_pan(char key);
+  /**
+   * @brief Returns current zoom multiplier
+   */
+  [[nodiscard]] float current_zoom() const;
+
+  /**
+   * @brief Resets zoom to default of 1.0x
+   */
+  void reset_zoom_to_default();
 
  private:
   /**
@@ -79,16 +81,14 @@ class PageView {
     float
         rel_y_offset;  ///< Fractional vertical start of the crop window, relative to image height.
     int zoom_index;    ///< Index into zoom_levels for the current zoom.
-    float zoom;        ///< Current zoom multiplier, e.g. 1.0 = 100%.
   };
 
-  static constexpr std::array<float, 11> zoom_levels{
+  static constexpr std::array<float, 11> m_zoom_levels{
       0.5F, 0.67F, 0.75F, 0.8F, 0.9F, 1.0F, 1.1F, 1.25F, 1.5F, 1.75F, 2.0F};
-  static constexpr int default_zoom_index = 5;  // 1.0x (100%)
-  Viewport viewport{
+  static constexpr int m_default_zoom_index = 5;  // 1.0x (100%)
+  Viewport m_viewport{
       .rel_x_offset = 0.0,
       .rel_y_offset = 0.0,
-      .zoom_index = default_zoom_index,
-      .zoom = zoom_levels[default_zoom_index],
+      .zoom_index = m_default_zoom_index,
   };
 };
