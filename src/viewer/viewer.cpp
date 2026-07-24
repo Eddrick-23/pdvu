@@ -71,8 +71,8 @@ void Viewer::run() {
 
     if (resizing) {
       display_latest_frame({
-          .existing = {.height = m_latest_frame.page_height, .width = m_latest_frame.page_width},
-          .target = {.height = m_target_page_specs.height, .width = m_target_page_specs.width},
+          .existing = {.width = m_latest_frame.page_width, .height = m_latest_frame.page_height},
+          .target = {.width = m_target_page_specs.width, .height = m_target_page_specs.height},
       });
       auto now = Clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
@@ -83,8 +83,8 @@ void Viewer::run() {
     }
     if (fetch_latest_frame()) {
       display_latest_frame({
-          .existing = {.height = m_latest_frame.page_height, .width = m_latest_frame.page_width},
-          .target = {.height = m_target_page_specs.height, .width = m_target_page_specs.width},
+          .existing = {.width = m_latest_frame.page_width, .height = m_latest_frame.page_height},
+          .target = {.width = m_target_page_specs.width, .height = m_target_page_specs.height},
       });
     }
   }
@@ -96,8 +96,8 @@ Viewer::Dimensions Viewer::available_window() {
   const int available_width_pixels = ts.width * ts.pixels_per_col;
 
   return Dimensions{
-      .height = available_height_pixels,
       .width = available_width_pixels,
+      .height = available_height_pixels,
   };
 }
 
@@ -139,7 +139,7 @@ void Viewer::display_latest_frame(const FrameDisplayParams& params) {
 
   auto [x_offset_pixels, y_offset_pixels, crop_width, crop_height] =
       m_page_view.calculate_crop_window(
-          target_width, target_height, {.max_height_pixels = height, .max_width_pixels = width});
+          target_width, target_height, {.max_width_pixels = width, .max_height_pixels = height});
   // if latest frame dimensions match target, don't need to scale crop
   // if latest frame dimensions don't match target, scale the crop window
   if (m_latest_frame.page_width != target_width || m_latest_frame.page_height != target_height) {
@@ -216,8 +216,8 @@ void Viewer::handle_page_pan(char key) {
   // only re-display if viewport offset changed
   if (viewport_changed) {
     display_latest_frame({
-        .existing = {.height = m_latest_frame.page_height, .width = m_latest_frame.page_width},
-        .target = {.height = m_target_page_specs.height, .width = m_target_page_specs.width},
+        .existing = {.width = m_latest_frame.page_width, .height = m_latest_frame.page_height},
+        .target = {.width = m_target_page_specs.width, .height = m_target_page_specs.height},
     });
   }
 }
@@ -241,8 +241,8 @@ void Viewer::handle_go_to_page() {
     // only request new page if dimensions change
     if (last_term_size.width != ts.width || last_term_size.height != ts.height) {
       display_latest_frame({
-          .existing = {.height = m_latest_frame.page_height, .width = m_latest_frame.page_width},
-          .target = {.height = m_target_page_specs.height, .width = m_target_page_specs.width},
+          .existing = {.width = m_latest_frame.page_width, .height = m_latest_frame.page_height},
+          .target = {.width = m_target_page_specs.width, .height = m_target_page_specs.height},
       });
       request_page_render(m_current_page);
       last_term_size = ts;
@@ -250,8 +250,8 @@ void Viewer::handle_go_to_page() {
     // if not we just check if there is a new frame to render
     if (fetch_latest_frame()) {
       display_latest_frame({
-          .existing = {.height = m_latest_frame.page_height, .width = m_latest_frame.page_width},
-          .target = {.height = m_target_page_specs.height, .width = m_target_page_specs.width},
+          .existing = {.width = m_latest_frame.page_width, .height = m_latest_frame.page_height},
+          .target = {.width = m_target_page_specs.width, .height = m_target_page_specs.height},
       });
     }
   };
@@ -398,13 +398,13 @@ void Viewer::process_keypress() {
           display_latest_frame({
               .existing =
                   {
-                      .height = m_latest_frame.page_height,
                       .width = m_latest_frame.page_width,
+                      .height = m_latest_frame.page_height,
                   },
               .target =
                   {
-                      .height = m_target_page_specs.height,
                       .width = m_target_page_specs.width,
+                      .height = m_target_page_specs.height,
                   },
           });
         }
@@ -416,13 +416,13 @@ void Viewer::process_keypress() {
           display_latest_frame({
               .existing =
                   {
-                      .height = m_latest_frame.page_height,
                       .width = m_latest_frame.page_width,
+                      .height = m_latest_frame.page_height,
                   },
               .target =
                   {
-                      .height = m_target_page_specs.height,
                       .width = m_target_page_specs.width,
+                      .height = m_target_page_specs.height,
                   },
           });
         }

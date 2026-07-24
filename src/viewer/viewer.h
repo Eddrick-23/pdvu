@@ -24,8 +24,8 @@ class Viewer {
    * @brief Wraps standard 2D pixel or grid dimensions
    */
   struct Dimensions {
-    int height;
     int width;
+    int height;
   };
 
   /**

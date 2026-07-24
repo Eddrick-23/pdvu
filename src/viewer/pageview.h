@@ -4,13 +4,17 @@
 
 class PageView {
  public:
+  static constexpr std::array<float, 11> m_zoom_levels{
+      0.5F, 0.67F, 0.75F, 0.8F, 0.9F, 1.0F, 1.1F, 1.25F, 1.5F, 1.75F, 2.0F};
+  static constexpr int m_default_zoom_index = 5;  // 1.0x (100%)
+
   /**
    * @brief Defines the maximum pixel area available for the view.
    * This should be pre-calculated by the caller to account for UI margins, bars, or offsets.
    */
   struct ViewportBounds {
-    int max_height_pixels;
     int max_width_pixels;
+    int max_height_pixels;
   };
 
   /**
@@ -47,7 +51,7 @@ class PageView {
       int width, int height, const ViewportBounds& vBounds) const;
 
   /**
-   * @brief Update x and y offset multipliers relative to latest image dimensions and given bounds
+   * @brief Update x and y offset multipliers
    *
    * @param delta_x Amount to shift in the x direction. Should be in range of (-1.0, 1.0)
    * @param delta_y Amount to shift in the y direction. Should be in range of (-1.0, 1.0)
@@ -66,6 +70,8 @@ class PageView {
   void reset_zoom_to_default();
 
  private:
+  friend struct PageViewTestAccessor;
+
   /**
    * @brief Tracks the current pan and zoom state used to render a page.
    *
@@ -83,9 +89,6 @@ class PageView {
     int zoom_index;    ///< Index into zoom_levels for the current zoom.
   };
 
-  static constexpr std::array<float, 11> m_zoom_levels{
-      0.5F, 0.67F, 0.75F, 0.8F, 0.9F, 1.0F, 1.1F, 1.25F, 1.5F, 1.75F, 2.0F};
-  static constexpr int m_default_zoom_index = 5;  // 1.0x (100%)
   Viewport m_viewport{
       .rel_x_offset = 0.0,
       .rel_y_offset = 0.0,
