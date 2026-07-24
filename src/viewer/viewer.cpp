@@ -122,8 +122,8 @@ bool Viewer::fetch_latest_frame() {
 }
 
 void Viewer::display_latest_frame(const FrameDisplayParams& params) {
-  const auto [existing_height, existing_width] = params.existing;
-  const auto [target_height, target_width] = params.target;
+  const auto [existing_width, existing_height] = params.existing;
+  const auto [target_width, target_height] = params.target;
   const TermSize ts = m_term.get_terminal_size();
   // prepare screen and cursor
   std::string frame = terminal::reset_screen_and_cursor_string();
@@ -135,7 +135,7 @@ void Viewer::display_latest_frame(const FrameDisplayParams& params) {
   constexpr int KITTY_SLOT_ID = 1;
 
   // update viewport in case image dimensions changed
-  const auto [height, width] = available_window();
+  const auto [width, height] = available_window();
 
   auto [x_offset_pixels, y_offset_pixels, crop_width, crop_height] =
       m_page_view.calculate_crop_window(
