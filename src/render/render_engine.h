@@ -67,12 +67,11 @@ class RenderEngine {
   void coordinator_loop();
   void dispatch_page_write(const RenderRequest& req);
   void cache_page(int page_num, float zoom, int rotation, const std::shared_ptr<SharedMemory>& shm,
-                  const std::shared_ptr<Tempfile>& tempfile, const std::string& transmission,
-                  int page_width, int page_height);
+      const std::shared_ptr<Tempfile>& tempfile, const std::string& transmission, int page_width,
+      int page_height);
 
   std::optional<PageCacheData> try_page_cache(const RenderRequest& req,
-                                              std::shared_ptr<SharedMemory>& shm_ptr,
-                                              std::shared_ptr<Tempfile>& tempfile_ptr);
+      std::shared_ptr<SharedMemory>& shm_ptr, std::shared_ptr<Tempfile>& tempfile_ptr);
 
   std::optional<pdf::DisplayListHandle> fetch_display_list(int page_num);
 
@@ -107,7 +106,7 @@ class RenderEngine {
 
   // lru_cache to cache heavy pages
   const int page_cache_size = 10;
-  const std::chrono::milliseconds page_cache_time_limit = std::chrono::milliseconds(5);
+  const std::chrono::milliseconds page_cache_time_limit = std::chrono::milliseconds(100);
   LRUCache<PageDetails, PageCacheData> page_cache =
       LRUCache<PageDetails, PageCacheData>(static_cast<size_t>(page_cache_size));
 };

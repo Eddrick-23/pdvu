@@ -1,57 +1,103 @@
 #pragma once
+#include "pageview.h"
 #include "render/parser.h"
 #include "render/render_engine.h"
 #include "terminal/terminal.h"
 
 class Viewer {
  public:
+  /**
+   * @brief Initializes the Viewer, setting up the parser, render engine, and checking shared memory
+   * support.
+   */
   Viewer(std::unique_ptr<pdf::Parser> main_parser, std::unique_ptr<RenderEngine> render_engine,
-         bool use_shm);
+      bool use_shm);
+
+  /**
+   * @brief Starts the primary application loop, puts the terminal into raw mode. This handles
+   * input, resizing, and rendering until a quit is requested.
+   */
   void run();  // main loop
 
  private:
-  struct CropRect {  // (0,0) is taken to be top left corner
-    int x_offset_pixels;
-    int y_offset_pixels;
+  /**
+   * @brief Wraps standard 2D pixel or grid dimensions
+   */
+  struct Dimensions {
     int width;
     int height;
   };
-  struct Viewport {
-    float rel_x_offset;
-    float rel_y_offset;
-    int zoom_index;
-    float zoom;
+
+  /**
+   * @brief Parameters for redrawing a frame, tracking previous vs. requested size.
+   */
+  struct FrameDisplayParams {
+    Dimensions existing;
+    Dimensions target;
   };
+
   // helper functions
+  /**
+   * @brief Retrieves the most recent rendered frame from the background engine, returning true if a
+   * new frame is successfully fetched.
+   */
   bool fetch_latest_frame();
-  void display_latest_frame(int existing_width, int existing_height, int target_width,
-                            int target_height);
+
+  /**
+   * @brief Calculates viewport cropping and outputs the terminal graphics sequence (Kitty protocol)
+   * to display the frame and top and bottom status bars.
+   */
+  void display_latest_frame(const FrameDisplayParams& params);
+
+  /**
+   * @brief Calculates target page specifications and zoom factor, dispatching a non-blocking render
+   * request to the render engine.
+   */
   void request_page_render(int page_num);
-  void change_zoom_index(int delta);
-  CropRect calculate_crop_window(int width, int height);
-  void update_viewport(float delta_x, float delta_y);
+
+  /**
+   * @brief Translates directional keypresses (w, a, s, d) into viewport offsets and updates the
+   * display if the view bounds change.
+   */
   void handle_page_pan(char key);
+
+  /**
+   * @brief Prompts the user with an interactive input bar to jump to a specific page number,
+   * handling input parsing and triggering the page change.
+   */
   void handle_go_to_page();
+
+  /**
+   * @brief Displays the help overlay and traps input in a sub-loop until dismissed, handling
+   * resizes and cleanly restoring the previous view if no rerender occurs.
+   */
   void handle_help_page();
+
+  /**
+   * @brief Reads raw terminal input and dispatches corresponding actions such as zooming, panning,
+   * rotation, navigation, and quitting.
+   */
   void process_keypress();
+
+  /**
+   * @brief Calculates the usable pixel dimensions of the terminal window, reserving two rows for
+   * the top and bottom status bars.
+   */
+  [[nodiscard]] Dimensions available_window();
+
   // sub systems
-  Terminal term;                           // terminal data and raw mode
-  std::unique_ptr<pdf::Parser> parser;     // parsing pdfs
-  std::unique_ptr<RenderEngine> renderer;  // loading page frames
+  Terminal m_term;                           // terminal data and raw mode
+  std::unique_ptr<pdf::Parser> m_parser;     // parsing pdfs
+  std::unique_ptr<RenderEngine> m_renderer;  // loading page frames
+  PageView m_page_view;                      // zoom and panning handling
 
   // current state
-  int current_page = 0;
-  int total_pages = 0;
-  int rotation_degrees = 0;
-  bool running = false;
-  bool shm_supported = false;
-  size_t last_req_id = 0;
-  pdf::PageSpecs target_page_specs = {};
-  RenderResult latest_frame = RenderResult{};
-
-  // control zoom and panning
-  static constexpr std::array<float, 11> zoom_levels{0.5F, 0.67F, 0.75F, 0.8F,  0.9F, 1.0F,
-                                                     1.1F, 1.25F, 1.5F,  1.75F, 2.0F};
-  static constexpr int default_zoom_index = 5;  // 1.0x (100%)
-  Viewport viewport{0.0, 0.0, default_zoom_index, zoom_levels[default_zoom_index]};
+  int m_current_page = 0;
+  int m_total_pages = 0;
+  int m_rotation_degrees = 0;
+  bool m_running = false;
+  bool m_shm_supported = false;
+  size_t m_last_req_id = 0;
+  pdf::PageSpecs m_target_page_specs = {};
+  RenderResult m_latest_frame = RenderResult{};
 };

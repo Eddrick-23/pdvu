@@ -1,9 +1,11 @@
 ---
 BasedOnStyle: Google
 IndentWidth: 2
+ContinuationIndentWidth: 4
 UseTab: Never
 ColumnLimit: 100
 SortIncludes: CaseSensitive
 FixNamespaceComments: true
 PointerAlignment: Left
+AlignAfterOpenBracket: false
 ---
