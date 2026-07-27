@@ -58,6 +58,6 @@ class ResizeDebouncer {
 
  private:
   int m_debounce_ms;
-  bool m_resizing = false;
+  bool m_resizing{false};
   std::chrono::steady_clock::time_point m_last_signal;
 };

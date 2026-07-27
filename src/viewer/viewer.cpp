@@ -385,7 +385,7 @@ void Viewer::process_keypress() {
       }
       if (char_value == 'z') {  // reset zoom and crop offsets
         if (m_page_view.current_zoom() != 1.0) {
-          m_page_view.update_viewport(-1.0, -1.0);
+          m_page_view.reset_offsets_to_default();
           m_page_view.reset_zoom_to_default();
           request_page_render(m_current_page);
         }
