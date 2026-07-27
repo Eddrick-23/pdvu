@@ -24,7 +24,7 @@ const std::vector<std::array<std::string, 2>> help_text = {
     {"r", "Rotate clockwise 90 degrees"},
     {"+ or =", "Zoom in"},
     {"- or _", "Zoom out"},
-    {"z", "Zoom to fit"},
+    {"z", "Zoom to fit and reset viewport"},
     {"?", "Help page"},
 };
 }

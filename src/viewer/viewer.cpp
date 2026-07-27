@@ -259,7 +259,7 @@ void Viewer::handle_go_to_page() {
   };
 
   while (running) {
-    const auto [input, cancelled, quit_requested] = TUI::bottom_input_bar("Go to page: ", deps);
+    const auto [input, cancelled, quit_requested] = TUI::bottom_input_bar("GO TO PAGE: ", deps);
     if (quit_requested) {
       m_running = false;  // quit viewer entirely
       running = false;
@@ -383,8 +383,9 @@ void Viewer::process_keypress() {
         handle_help_page();
         break;
       }
-      if (char_value == 'z') {  // reset zoom
+      if (char_value == 'z') {  // reset zoom and crop offsets
         if (m_page_view.current_zoom() != 1.0) {
+          m_page_view.update_viewport(-1.0, -1.0);
           m_page_view.reset_zoom_to_default();
           request_page_render(m_current_page);
         }
