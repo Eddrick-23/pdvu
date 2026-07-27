@@ -308,7 +308,8 @@ InputBarResult bottom_input_bar(const std::string& prompt, const InputBarDeps& d
   auto debouncer = ResizeDebouncer(deps.debounce_ms);
 
   while (true) {
-    const ResizeState resize_state = debouncer.poll(deps.was_resized());
+    const ResizeState resize_state =
+        debouncer.poll(deps.was_resized(), std::chrono::steady_clock::now());
     if (resize_state == ResizeState::Resizing) {
       current_term_size = deps.window_dimensions();  // update before re-render
       redraw();

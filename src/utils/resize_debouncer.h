@@ -2,16 +2,20 @@
 #include <chrono>
 
 /**
+ * @brief State transitions returned by the ResizeDebouncer.
+ */
+enum class ResizeState {
+  Idle,      ///< No resizing activity occuring.
+  Resizing,  ///< A resize event is occuring or debounce window not ended yet.
+  Settled,   ///< debounce window has cleared
+};
+
+/**
  * @brief Tracks a debounced "settled" event from a stream of raw signal ticks.
  *
- * Feed it a boolean once per loop tick (e.g. the result of
- * Terminal::was_resized()); it does not query anything itself. Useful for
- * collapsing repeated "resize started... still resizing... resizing stopped"
- * polling loops into a single call.
+ * Feed it a boolean once per loop tick (e.g. the result of Terminal::was_resized()).
+ * It does not query anything itself.
  */
-
-enum class ResizeState { Idle, Resizing, Settled };
-
 class ResizeDebouncer {
  public:
   /**
@@ -28,14 +32,15 @@ class ResizeDebouncer {
    * the debounce window has elapsed since the last (true) signal
    *
    * @param resize_signal_now Whether the raw resize signal fired this tick.
+   * @param now Current time_point
    * @returns ResizeState::Resizing while a resize signal is active or debounce window has not
    * elapsed yet; ResizeState::Settled on the single tick the window elapses; ResizeState::Idle if
    * no resize has been signaled (or prior resizing has already settled)
    */
-  ResizeState poll(bool resize_signal_now) {
+  ResizeState poll(bool resize_signal_now, std::chrono::steady_clock::time_point now) {
     using namespace std::chrono;
     if (resize_signal_now) {
-      m_last_signal = steady_clock::now();
+      m_last_signal = now;
       m_resizing = true;
       return ResizeState::Resizing;
     }
@@ -48,7 +53,7 @@ class ResizeDebouncer {
 
     // previously resizing, check if m_debounce_ms has elapsed
     // then resizing has settled. Else we are still resizing.
-    const auto since = duration_cast<milliseconds>(steady_clock::now() - m_last_signal);
+    const auto since = duration_cast<milliseconds>(now - m_last_signal);
     if (since.count() > m_debounce_ms) {
       m_resizing = false;
       return ResizeState::Settled;

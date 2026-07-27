@@ -1,6 +1,7 @@
 #include "viewer.h"
 
 #include <charconv>
+#include <chrono>
 #include <cstdio>
 #include <print>
 
@@ -63,7 +64,7 @@ void Viewer::run() {
   while (m_running && !static_cast<bool>(Terminal::quit_requested)) {
     process_keypress();
 
-    switch (debouncer.poll(m_term.was_resized())) {
+    switch (debouncer.poll(m_term.was_resized(), std::chrono::steady_clock::now())) {
       case ResizeState::Resizing:
         draw_latest_frame(true, true);
         continue;
@@ -304,7 +305,8 @@ void Viewer::handle_help_page() {
   bool was_resized = false;  // track if window was resized at all
   while (true) {
     InputEvent input = m_term.read_input(HELP_POLL_RATE_MS);
-    const auto resize_state = debouncer.poll(m_term.was_resized());
+    const auto resize_state =
+        debouncer.poll(m_term.was_resized(), std::chrono::steady_clock::now());
     if (resize_state == ResizeState::Resizing) {
       was_resized = true;
     }

@@ -8,7 +8,7 @@ FetchContent_Declare(
 )
 
 if (WIN32)
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 endif ()
 
 FetchContent_MakeAvailable(googletest)
@@ -17,6 +17,7 @@ add_executable(unit_tests
     utils/test_shm.cpp
     utils/test_tempfile.cpp
     utils/test_lru_cache.cpp
+    utils/test_resize_debouncer.cpp
     render/test_threadpool.cpp
     render/test_parser_PageSpecs.cpp
     terminal/test_kitty.cpp
