@@ -1,7 +1,6 @@
 #include "viewer.h"
 
 #include <charconv>
-#include <chrono>
 #include <cstdio>
 #include <print>
 
