@@ -20,11 +20,11 @@ const std::vector<std::array<std::string, 2>> help_text = {
     {"w", "Pan up"},
     {"a", "Pan left"},
     {"s", "Pan down"},
-    {"d", "pan right"},
-    {"r", "rotate clockwise 90 degrees"},
-    {"+ or =", "zoom in"},
-    {"- or _", "zoom out"},
-    {"z", "zoom to fit"},
+    {"d", "Pan right"},
+    {"r", "Rotate clockwise 90 degrees"},
+    {"+ or =", "Zoom in"},
+    {"- or _", "Zoom out"},
+    {"z", "Zoom to fit"},
     {"?", "Help page"},
 };
 }
