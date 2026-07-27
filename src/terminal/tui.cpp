@@ -1,6 +1,5 @@
 #include "tui.h"
 
-#include <chrono>
 #include <cstdio>
 #include <functional>
 #include <print>
@@ -8,6 +7,7 @@
 
 #include "kitty.h"
 #include "terminal.h"
+#include "utils/resize_debouncer.h"
 
 namespace TUI::helplist {
 const std::vector<std::array<std::string, 2>> help_text = {
@@ -21,7 +21,7 @@ const std::vector<std::array<std::string, 2>> help_text = {
     {"a", "Pan left"},
     {"s", "Pan down"},
     {"d", "pan right"},
-    {"r", "rotate clockwise 90 degrees"},  // TODO
+    {"r", "rotate clockwise 90 degrees"},
     {"+ or =", "zoom in"},
     {"- or _", "zoom out"},
     {"z", "zoom to fit"},
@@ -113,8 +113,8 @@ std::string add_centered(int row, int term_width, const std::string& text, int t
   col = col < 1 ? 1 : col;
   return "\033[" + std::to_string(row) + ";" + std::to_string(col) + "H" + text;
 }
-std::string top_status_bar(const TermSize& ts, const std::string& left, const std::string& mid,
-                           const std::string& right) {
+std::string top_status_bar(
+    const TermSize& ts, const std::string& left, const std::string& mid, const std::string& right) {
   std::string result;
   result += terminal::move_cursor(1, 1);
   result += "\033[2K\033[7m";  // invert colours
@@ -152,9 +152,8 @@ std::string bottom_status_bar(const TermSize& ts, float current_zoom_level, int 
       "Help: ? {}",
       symbols::box_single_line.at(179), symbols::box_single_line.at(179),
       symbols::box_single_line.at(179), symbols::box_single_line.at(179));
-  const std::string right_text =
-      std::format("{}{}°{} Zoom : {}%", symbols::box_single_line.at(179), rotation,
-                  symbols::box_single_line.at(179), current_zoom_level * 100);
+  const std::string right_text = std::format("{}{}°{} Zoom : {}%", symbols::box_single_line.at(179),
+      rotation, symbols::box_single_line.at(179), current_zoom_level * 100);
   std::string result;
   result += terminal::move_cursor(ts.height, 1);  // move to last row
   result += "\033[2K\033[7m";                     // clear line and invert colours
@@ -190,8 +189,8 @@ std::string guard_message(const TermSize& ts) {
       add_centered(center_row, ts.width, current_dimensions, visible_length(current_dimensions));
 
   result += green;
-  result += add_centered(center_row + 2, ts.width, required_dimensions,
-                         visible_length(required_dimensions));
+  result += add_centered(
+      center_row + 2, ts.width, required_dimensions, visible_length(required_dimensions));
   result += "\x1b[0m";  // Reset
   return result;
 }
@@ -268,19 +267,14 @@ std::string help_overlay(const TermSize& ts) {
   return result;
 };
 
-std::string bottom_input_bar(Terminal& term, const std::string& prompt,
-                             const std::function<void()>& on_resize) {
-  /* creates a single row text input UI that takes user input */
-  // Might be a better way to handle resizing
-  // but for now we pass in a callback function
-
-  TermSize current_term_size = term.get_terminal_size();
+InputBarResult bottom_input_bar(const std::string& prompt, const InputBarDeps& deps) {
+  TermSize current_term_size = deps.window_dimensions();
   std::string buffer;
 
   size_t cursor_pos = 0;   // cursor index in the buffer
-  size_t visible_pos = 0;  // index of first visible char in buffer
+  size_t visible_pos = 0;  // index of first visible char in the buffer
 
-  auto redraw = [&]() {  // helper to redraw the whole line on input
+  auto redraw = [&]() {
     if (current_term_size.width < MIN_COLS || current_term_size.height < MIN_ROWS) {
       std::print("{}", guard_message(current_term_size));
       std::fflush(stdout);
@@ -288,13 +282,11 @@ std::string bottom_input_bar(Terminal& term, const std::string& prompt,
     }
     int available_width = current_term_size.width - prompt.length();
     available_width = available_width < 1 ? 1 : available_width;
-
     if (cursor_pos < visible_pos) {  // scrolled left off screen
       visible_pos = cursor_pos;
     } else if (cursor_pos >= visible_pos + available_width) {  // scrolled right off screen
       visible_pos = cursor_pos - available_width + 1;
     }
-
     // If buffer is longer than screen, always show the rightmost portion
     if (buffer.length() > available_width) {
       visible_pos = buffer.length() - available_width;
@@ -302,7 +294,7 @@ std::string bottom_input_bar(Terminal& term, const std::string& prompt,
     // clear line and draw prompt
     terminal::show_cursor();
     std::print("{}{}{}{}", terminal::move_cursor(current_term_size.height, 1), "\x1b[2K\x1b[7m",
-               prompt, buffer.substr(visible_pos));
+        prompt, buffer.substr(visible_pos));
     std::fflush(stdout);
 
     // move to proper position on screen
@@ -310,54 +302,48 @@ std::string bottom_input_bar(Terminal& term, const std::string& prompt,
     std::print("{}", terminal::move_cursor(current_term_size.height, screen_col));
     std::fflush(stdout);
   };
+
   InputEvent c;
   redraw();
-  using Clock = std::chrono::steady_clock;
-  auto start = Clock::now();
-  bool resizing = false;
+  auto debouncer = ResizeDebouncer(deps.debounce_ms);
+
   while (true) {
-    if (term.was_resized()) {
-      resizing = true;
-      start = Clock::now();
+    const ResizeState resize_state = debouncer.poll(deps.was_resized());
+    if (resize_state == ResizeState::Resizing) {
+      current_term_size = deps.window_dimensions();  // update before re-render
+      redraw();
       continue;
     }
-    if (resizing) {
-      auto now = Clock::now();
-      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
-      if (duration.count() > 75) {                     // exit and rerender
-        current_term_size = term.get_terminal_size();  // update before rerender
-        resizing = false;
-        on_resize();  // under new implementation, callback must automatically
-                      // render as well
-        redraw();
-        continue;
-      }
-    }
-    c = term.read_input(100);
 
-    if (term.get_terminal_size().width < MIN_COLS || term.get_terminal_size().height < MIN_ROWS) {
-      // TODO find another way to allow direct quit from here?
+    if (resize_state == ResizeState::Settled) {
+      current_term_size = deps.window_dimensions();  // update before re-render
+      deps.on_resize_settled();                      // callback for expensive re-render
+      redraw();
+      continue;
+    }
+
+    c = deps.read_input(100);
+
+    if (deps.window_dimensions().width < MIN_COLS || deps.window_dimensions().height < MIN_ROWS) {
       if (c.key == key_char && c.char_value == 'q') {
-        return "";
+        return {.value = "", .cancelled = false, .quit_requested = true};
       }
-      continue;  // block inputs if guard message is displayed
+      continue;  // block other inputs if guard message is displayed
     }
     if (c.key == key_none) {  // no input, check for new frame to display
-      on_resize();
-      // redraw();
+      deps.on_idle();
+      redraw();
       continue;
     }
-    // break when we get esc and clear buffer
     if (c.key == key_escape) {
-      buffer.clear();
-      break;
+      return {.value = "", .cancelled = true, .quit_requested = false};
     }
     // break when we get enter
     if (c.key == key_enter) {
       break;
     }
     if (c.key == key_backspace) {
-      if (!buffer.empty()) {
+      if (!buffer.empty() && cursor_pos > 0) {
         buffer.erase(cursor_pos - 1, cursor_pos > 0 ? 1 : 0);
         cursor_pos--;
         redraw();
@@ -389,13 +375,13 @@ std::string bottom_input_bar(Terminal& term, const std::string& prompt,
   // reset colours, hide cursor and return buffer
   std::print("{}", "\x1b[0m");
   terminal::hide_cursor();
-  return buffer;
+  return {.value = buffer, .cancelled = false, .quit_requested = false};
 }
 
 bool is_window_too_small(const TermSize& ts) { return ts.width < MIN_COLS || ts.height < MIN_ROWS; }
 
-float calculate_zoom_factor(const TermSize& ts, const pdf::PageSpecs& ps, int content_cols,
-                            int content_rows, float zoom) {
+float calculate_zoom_factor(
+    const TermSize& ts, const pdf::PageSpecs& ps, int content_cols, int content_rows, float zoom) {
   const int max_w_pixels = content_cols * ts.pixels_per_col;
   const int max_h_pixels = content_rows * ts.pixels_per_row;
 
@@ -405,7 +391,7 @@ float calculate_zoom_factor(const TermSize& ts, const pdf::PageSpecs& ps, int co
   return std::min(h_scale, v_scale) * zoom;
 }
 std::string center_cursor(const TermSize& ts, int w_pixels, int h_pixels, int content_cols,
-                          int content_rows, int start_row, int start_col) {
+    int content_rows, int start_row, int start_col) {
   /* center cursor vertically and horizontally so rendered image is centered in
    * window */
 

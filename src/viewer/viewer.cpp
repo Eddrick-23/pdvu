@@ -13,6 +13,7 @@
 #include "utils/logging.h"
 #include "utils/profiling.h"
 #include "utils/ram_usage.h"
+#include "utils/resize_debouncer.h"
 namespace {  // utility functions and constants
 // UI and timing constants
 constexpr int RESIZE_DEBOUNCE_MS = 75;  // Milliseconds to wait after terminal resize
@@ -57,27 +58,23 @@ void Viewer::run() {
   }
   m_term.was_resized();  // force fetch initial sizes and set flag to 0
   request_page_render(m_current_page);
+  draw_latest_frame(true, true);  // force draw guard message if start dimensions too small
 
-  using Clock = std::chrono::steady_clock;
-  auto start = Clock::now();
-  bool resizing = false;
-  while (m_running && !Terminal::quit_requested) {
+  auto debouncer = ResizeDebouncer(RESIZE_DEBOUNCE_MS);
+  while (m_running && !static_cast<bool>(Terminal::quit_requested)) {
     process_keypress();
 
-    if (m_term.was_resized()) {
-      start = Clock::now();
-      resizing = true;
+    switch (debouncer.poll(m_term.was_resized())) {
+      case ResizeState::Resizing:
+        draw_latest_frame(true, true);
+        continue;
+      case ResizeState::Settled:
+        request_page_render(m_current_page);
+        break;
+      case ResizeState::Idle:
+        break;
     }
 
-    if (resizing) {
-      draw_latest_frame(true, true);
-      auto now = Clock::now();
-      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
-      if (duration.count() > RESIZE_DEBOUNCE_MS) {  // wait 75ms from last signal
-        request_page_render(m_current_page);
-        resizing = false;
-      }
-    }
     if (fetch_latest_frame()) {
       draw_latest_frame(true, true);
     }
@@ -162,7 +159,13 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
 }
 
 void Viewer::draw_latest_frame(bool with_top_bar, bool with_bottom_bar) {
-  TermSize ts = m_term.get_terminal_size();
+  const TermSize ts = m_term.get_terminal_size();
+
+  if (TUI::is_window_too_small(ts)) {
+    std::print("{}", TUI::guard_message(ts));
+    std::fflush(stdout);
+    return;
+  }
 
   std::string sequence = latest_frame_sequence({
       .existing = {.width = m_latest_frame.page_width, .height = m_latest_frame.page_height},
@@ -184,12 +187,9 @@ void Viewer::draw_latest_frame(bool with_top_bar, bool with_bottom_bar) {
 }
 
 void Viewer::request_page_render(int page_num) {
-  // sends a request to our render engine to render the page, no blocking
   const TermSize ts = m_term.get_terminal_size();
   if (TUI::is_window_too_small(ts)) {
-    std::print("{}", TUI::guard_message(ts));
-    std::fflush(stdout);
-    return;
+    return;  // draw_latest_frame handles showing of the guard message
   }
   if (const auto specs = m_parser->page_specs(page_num)) {
     m_target_page_specs = specs->rotate_quarter_clockwise(m_rotation_degrees / 90);
@@ -218,6 +218,7 @@ void Viewer::handle_page_pan(char key) {
       break;
     case 'd':  // pan right
       viewport_changed = m_page_view.update_viewport(PAN_STEP_RATIO * factor, 0);
+      break;
     default:  // do nothing for the rest
       break;
   }
@@ -238,24 +239,32 @@ void Viewer::handle_go_to_page() {
     return result.ec == std::errc() && result.ptr == s.data() + s.size();
   };
 
-  TermSize last_term_size = m_term.get_terminal_size();
-
-  auto callback = [&]() {
-    TermSize ts = m_term.get_terminal_size();
-    // only request new page if dimensions change
-    if (last_term_size.width != ts.width || last_term_size.height != ts.height) {
-      draw_latest_frame(true, false);
-      request_page_render(m_current_page);
-      last_term_size = ts;
-    }
-    // if not we just check if there is a new frame to render
+  auto on_idle = [&]() {
     if (fetch_latest_frame()) {
       draw_latest_frame(true, false);
     }
   };
+
+  auto on_resize_settled = [&]() {
+    draw_latest_frame(true, false);
+    request_page_render(m_current_page);
+  };
+
+  const TUI::InputBarDeps deps{
+      .window_dimensions = [this]() { return m_term.get_terminal_size(); },
+      .was_resized = [this]() { return m_term.was_resized(); },
+      .read_input = [this](int timeout_ms) { return m_term.read_input(timeout_ms); },
+      .on_idle = on_idle,
+      .on_resize_settled = on_resize_settled,
+      .debounce_ms = RESIZE_DEBOUNCE_MS,
+  };
+
   while (running) {
-    std::string input = TUI::bottom_input_bar(m_term, "Go to page: ", callback);
-    if (input.empty()) {
+    const auto [input, cancelled, quit_requested] = TUI::bottom_input_bar("Go to page: ", deps);
+    if (quit_requested) {
+      m_running = false;  // quit viewer entirely
+      running = false;
+    } else if (cancelled || input.empty()) {
       running = false;
     } else if (is_whole_number(input)) {
       running = false;
@@ -270,9 +279,8 @@ void Viewer::handle_go_to_page() {
   }
   if (page_change) {
     request_page_render(m_current_page);
-  } else {  // restore bottom bar only if nothing changed
-    std::print("{}", bottom_bar(last_term_size, m_page_view.current_zoom(), m_rotation_degrees));
-    std::fflush(stdout);
+  } else {
+    draw_latest_frame(true, true);
   }
 }
 
@@ -293,31 +301,23 @@ void Viewer::handle_help_page() {
   TermSize last_terminal_size = m_term.get_terminal_size();
   std::print("{}", TUI::help_overlay(last_terminal_size));
   std::fflush(stdout);
-  using Clock = std::chrono::steady_clock;
-  auto start = Clock::now();
-  bool was_resized = false;
-  bool resizing = false;
-
+  auto debouncer = ResizeDebouncer(RESIZE_DEBOUNCE_MS);
+  bool was_resized = false;  // track if window was resized at all
   while (true) {
     InputEvent input = m_term.read_input(HELP_POLL_RATE_MS);
-    if (m_term.was_resized()) {
+    const auto resize_state = debouncer.poll(m_term.was_resized());
+    if (resize_state == ResizeState::Resizing) {
+      was_resized = true;
+    }
+    if (resize_state == ResizeState::Settled) {
+      was_resized = true;
+      std::print("{}", clear_overlay(1, last_terminal_size.height, last_terminal_size.width));
+      std::fflush(stdout);
       last_terminal_size = m_term.get_terminal_size();
-      start = Clock::now();
-      resizing = true;
+      std::print("{}", TUI::help_overlay(last_terminal_size));
+      std::fflush(stdout);
     }
-    if (resizing) {
-      auto now = Clock::now();
-      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start);
-      if (duration.count() > RESIZE_DEBOUNCE_MS) {
-        was_resized = true;
-        std::print("{}", clear_overlay(1, last_terminal_size.height, last_terminal_size.width));
-        std::fflush(stdout);
-        last_terminal_size = m_term.get_terminal_size();
-        std::print("{}", TUI::help_overlay(last_terminal_size));
-        std::fflush(stdout);
-        resizing = false;
-      }
-    }
+
     if (input.key == key_escape && !TUI::is_window_too_small(last_terminal_size)) {
       break;
     }

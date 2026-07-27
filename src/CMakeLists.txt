@@ -9,6 +9,7 @@ set(CORE_SOURCES
     render/threadpool.cpp
     utils/tempfile.cpp
     utils/shm.cpp
+    utils/resize_debouncer.h
 )
 
 # create core library
