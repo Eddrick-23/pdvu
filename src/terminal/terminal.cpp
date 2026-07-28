@@ -29,9 +29,11 @@ void exit_alt_screen() {
   std::fflush(stdout);
 }
 std::string move_cursor(int row, int col) { return std::format("\033[{};{}H", row, col); }
-std::string reset_screen_and_cursor_string() {
+std::string_view reset_screen_and_cursor_string() {
   return "\033[H\033[J";  // avoid [2J since it deletes stored images
 }
+std::string_view save_cursor_string() { return "\0337"; }
+std::string_view restore_cursor_string() { return "\0337"; }
 }  // namespace terminal
 
 Terminal::Terminal() = default;
@@ -96,8 +98,8 @@ TermSize Terminal::get_terminal_size() {
     pixels_per_row = drawable_y_pixels / ws.ws_row;
     pixels_per_col = drawable_x_pixels / ws.ws_col;
 
-    return TermSize(ws.ws_col, ws.ws_row, ws.ws_xpixel, ws.ws_ypixel, pixels_per_row,
-                    pixels_per_col);
+    return TermSize(
+        ws.ws_col, ws.ws_row, ws.ws_xpixel, ws.ws_ypixel, pixels_per_row, pixels_per_col);
   }
   std::println(stderr, "Failed to get terminal size");
   return TermSize(24, 80, 0, 0, 0, 0);

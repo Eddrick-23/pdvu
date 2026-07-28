@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 
+#include "ansi.h"
 #include "kitty.h"
 #include "terminal.h"
 #include "utils/resize_debouncer.h"
@@ -189,6 +190,7 @@ std::string create_box(const BoxBounds& box_bounds, bool fill) {
   return result;
 }
 
+
 /**
  * @brief Computes the leftmost buffer index that should be drawn on screen
  * this frame, given where the cursor currently sits.
@@ -292,29 +294,25 @@ std::string bottom_status_bar(const TermSize& ts, float current_zoom_level, int 
 std::string guard_message(const TermSize& ts) {
   terminal::hide_cursor();
   std::string result;
+  result.reserve(256);  // preallocate rough estimate
   result += terminal::reset_screen_and_cursor_string();
   result += kitty::delete_image_placement();
-  const std::string red = "\x1b[1;31m";
-  const std::string green = "\x1b[1;32m";
   std::string title = "Terminal size too small";
-  std::string current_dimensions =
-      (ts.width >= MIN_COLS ? green : red) + "Width = " + std::to_string(ts.width) +
-      (ts.height >= MIN_ROWS ? green : red) + " Height = " + std::to_string(ts.height);
-  std::string required_dimensions =
-      "Needed: " + std::to_string(MIN_COLS) + " x " + std::to_string(MIN_ROWS);
+  std::string current_dimensions = std::format("{}Width = {} {}Height = {}",
+      ts.width >= MIN_COLS ? TermColor::GreenBg : TermColor::RedBg, ts.width,
+      ts.height >= MIN_ROWS ? TermColor::GreenBg : TermColor::RedBg, ts.height);
+  std::string required_dimensions = std::format("Needed: {} x {}", MIN_COLS, MIN_ROWS);
 
   // centre the text
-
   int center_row = ts.height / 2;
-
   result += add_centered(center_row - 2, ts.width, title, visible_length(title));
   result +=
       add_centered(center_row, ts.width, current_dimensions, visible_length(current_dimensions));
 
-  result += green;
+  result += TermColor::GreenBg;
   result += add_centered(
       center_row + 2, ts.width, required_dimensions, visible_length(required_dimensions));
-  result += "\x1b[0m";  // Reset
+  result += TermColor::Reset;
   return result;
 }
 
@@ -323,15 +321,10 @@ std::string help_overlay(const TermSize& ts) {
     return guard_message(ts);
   }
   std::string result;
-  result += std::format("\x1b{}", 7);
-  const std::string orange_fg = std::format("\x1b[38;5;{}m", 214);
-  const std::string white_fg = std::format("\x1b[38;5;{}m", 255);
-  const std::string bold_text = "\x1b[1m";
-  const std::string reset_bold = "\x1b[22m";
-  const std::string black_bg = std::format("\x1b[48;5;{}m", 16);
+  result += terminal::save_cursor_string();
 
-  result += orange_fg;
-  result += black_bg;
+  result += TermColor::OrangeFg;
+  result += TermColor::BlackBg;
   // overlay background with a black overlay
   result += terminal::move_cursor(1, 1);
   result += std::string(ts.width, ' ');  // erase top bar
@@ -351,14 +344,14 @@ std::string help_overlay(const TermSize& ts) {
   std::istringstream iss(logo);
   std::string line;
   int start_row = 2;
-  result += "\x1b[1m";  // set bold text
+  result += TermText::BoldText;
   while (std::getline(iss, line)) {
     if (!line.empty()) {
       line = trim(line);
       result += add_centered(start_row++, ts.width, line, 33);
     }
   }
-  result += "\x1b[22m";  // reset bold
+  result += TermText::ResetBold;
 
   constexpr int box_height = 30;
   constexpr int box_width = 70;
@@ -379,21 +372,21 @@ std::string help_overlay(const TermSize& ts) {
   constexpr int key_col_width = 15;
   int text_start_row = 11;
   result += terminal::move_cursor(text_start_row, box_start_col + 1);
-  result += black_bg + white_fg + bold_text;
+  result += std::format("{}{}{}", TermColor::BlackBg, TermColor::WhiteFg, TermText::BoldText);
   result += centre_with_space(key_col_width, "Key");
   result += " Description";
   // key text is centered, description text is left aligned
-  result += reset_bold;
+  result += TermText::ResetBold;
   for (auto arr : helplist::help_text) {
     text_start_row++;
     result += terminal::move_cursor(text_start_row, box_start_col + 1);
     const std::string& key_text = arr.front();
     const std::string& desc_text = arr.back();
-    result += orange_fg + centre_with_space(key_col_width, key_text);
-    result += white_fg + " " + desc_text;
+    result += std::format("{}{}", TermColor::OrangeFg, centre_with_space(key_col_width, key_text));
+    result += std::format("{}{}", TermColor::WhiteFg, desc_text);
   }
-  result += "\x1b[0m";                 // reset colors
-  result += std::format("\x1b{}", 8);  // restore
+  result += TermColor::Reset;
+  result += terminal::restore_cursor_string();
   return result;
 };
 
@@ -409,7 +402,12 @@ InputBarResult bottom_input_bar(
 
   auto len = [](std::string_view s) { return static_cast<int>(s.length()); };
   auto redraw = [&]() {
-    std::string active_prompt = showing_error ? error_prompt : prompt;
+    std::string active_prompt;
+    if (showing_error) {
+      active_prompt = std::format("{}{}{}", TermColor::RedBg, error_prompt, TermColor::Reset);
+    } else {
+      active_prompt = prompt;
+    }
 
     // guard message screen too small
     if (current_term_size.width < MIN_COLS || current_term_size.height < MIN_ROWS) {
@@ -420,17 +418,17 @@ InputBarResult bottom_input_bar(
 
     // calculate correct substring start position
     // relative to current cursor and available width
-    const int available_width = current_term_size.width - len(active_prompt);
+    const int available_width = current_term_size.width - visible_length(active_prompt);
     visible_pos = scroll_window_start(cursor_pos, visible_pos, len(buffer), available_width);
 
     // clear line and draw prompt
     terminal::show_cursor();
-    std::print("{}{}{}{}", terminal::move_cursor(current_term_size.height, 1), "\x1b[2K\x1b[7m",
-        active_prompt, buffer.substr(visible_pos));
+    std::print("{}{}{}{}", terminal::move_cursor(current_term_size.height, 1),
+        TermColor::InvertedBg, active_prompt, buffer.substr(visible_pos));
     std::fflush(stdout);
 
     // move to proper position on screen
-    const int screen_col = cursor_pos - visible_pos + len(active_prompt) + 1;
+    const int screen_col = cursor_pos - visible_pos + visible_length(active_prompt) + 1;
     std::print("{}", terminal::move_cursor(current_term_size.height, screen_col));
     std::fflush(stdout);
   };

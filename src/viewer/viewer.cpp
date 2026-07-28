@@ -119,7 +119,8 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
   const auto [target_width, target_height] = params.target;
   const TermSize ts = m_term.get_terminal_size();
   // prepare screen and cursor
-  std::string sequence = terminal::reset_screen_and_cursor_string();
+  std::string sequence;
+  sequence += terminal::reset_screen_and_cursor_string();
   sequence += terminal::move_cursor(2, 1);
 
   // 2 rows taken by top and bottom bar
