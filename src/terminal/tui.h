@@ -101,10 +101,13 @@ struct InputBarResult {
  * @param prompt Text shown before the editable buffer, e.g. "Go to page: ".
  * @param deps Callbacks and terminal queries this function needs - see
  *             InputBarDeps. None of the std::function members may be empty.
+ * @param error_prompt Optional error prompt to pass in if user gives invalid input. Empty strings
+ *                     are taken as no error_prompt
  * @return An InputBarResult - see its field docs for how to distinguish
  *         a submitted value from a cancel or a quit request.
  */
-InputBarResult bottom_input_bar(const std::string& prompt, const InputBarDeps& deps);
+InputBarResult bottom_input_bar(
+    const std::string& prompt, const InputBarDeps& deps, const std::string& error_prompt);
 
 bool is_window_too_small(const TermSize& ts);
 float calculate_zoom_factor(

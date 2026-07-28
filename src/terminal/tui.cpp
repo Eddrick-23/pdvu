@@ -27,6 +27,7 @@ const std::vector<std::array<std::string, 2>> help_text = {
     {"z", "Zoom to fit and reset viewport"},
     {"?", "Help page"},
 };
+
 }
 
 namespace {  // utility function
@@ -75,6 +76,7 @@ std::string trim(const std::string& str, const std::string& whitespace = " \t") 
 
   return str.substr(strBegin, strRange);
 }
+
 std::string create_box(int start_row, int start_col, int width, int height, bool fill) {
   std::string result = fill ? std::format("\x1b[48;5;{}m", 16) : "";
   result += terminal::move_cursor(start_row, start_col);
@@ -102,6 +104,44 @@ std::string create_box(int start_row, int start_col, int width, int height, bool
   result += TUI::symbols::box_double_line.at(188);
   result += fill ? "\x1b[49m" : "";  // reset bg colour
   return result;
+}
+
+/**
+ * @brief Computes the leftmost buffer index that should be drawn on screen
+ * this frame, given where the cursor currently sits.
+ *
+ * The input bar tracks two independent positions into the same buffer: one
+ * for where edits happen, one for where drawing starts. This is a
+ * two-pointer scroll - the cursor is free to move anywhere in the buffer as
+ * the user types, while the visible window only moves the minimum amount
+ * needed to keep the cursor inside it, staying put on every redraw where the
+ * cursor hasn't walked off either edge since the previous frame.
+ *
+ * @param cursor_pos Index of the cursor within the buffer, i.e. the position
+ *                    the next inserted/deleted character will act on.
+ * @param visible_pos Leftmost buffer index shown on screen as of the
+ *                     <i>previous</i> redraw. Passed in so this call can
+ *                     scroll relative to where the window already was,
+ *                     rather than re-centering every frame.
+ * @param buffer_len Total length of the buffer being edited (not just the
+ *                    visible slice).
+ * @param available_width Columns on screen available to draw the buffer in,
+ *                         i.e. terminal width minus the prompt's width.
+ * @return The buffer index that should become the new visible_pos: enough to
+ *         keep the cursor on screen, or - once the buffer overflows the
+ *         width - the index that shows its tail, so text keeps appearing to
+ *         scroll left as the user types past the right edge.
+ */
+int scroll_window_start(int cursor_pos, int visible_pos, int buffer_len, int available_width) {
+  if (cursor_pos < visible_pos) {  // scrolled left off screen
+    visible_pos = cursor_pos;
+  } else if (cursor_pos >= visible_pos + available_width) {  // scrolled right off screen
+    visible_pos = cursor_pos - available_width + 1;
+  }
+  if (buffer_len > available_width) {
+    visible_pos = buffer_len - available_width;
+  }
+  return visible_pos;
 }
 }  // namespace
 
@@ -137,7 +177,7 @@ std::string top_status_bar(
   result += terminal::move_cursor(1, 1);
   result += " " + left_text;
   // add middle text
-  result += add_centered(1, ts.width, mid_text, visible_length((mid_text)));
+  result += add_centered(1, ts.width, mid_text, visible_length(mid_text));
   // add right text
   result += terminal::move_cursor(1, ts.width - visible_length(right_text));
   result += right_text + " ";
@@ -267,38 +307,40 @@ std::string help_overlay(const TermSize& ts) {
   return result;
 };
 
-InputBarResult bottom_input_bar(const std::string& prompt, const InputBarDeps& deps) {
+InputBarResult bottom_input_bar(
+    const std::string& prompt, const InputBarDeps& deps, const std::string& error_prompt) {
   TermSize current_term_size = deps.window_dimensions();
   std::string buffer;
 
-  size_t cursor_pos = 0;   // cursor index in the buffer
-  size_t visible_pos = 0;  // index of first visible char in the buffer
+  int cursor_pos = 0;   // cursor index in the buffer
+  int visible_pos = 0;  // index of first visible char in the buffer
 
+  bool showing_error = !error_prompt.empty();
+
+  auto len = [](std::string_view s) { return static_cast<int>(s.length()); };
   auto redraw = [&]() {
+    std::string active_prompt = showing_error ? error_prompt : prompt;
+
+    // guard message screen too small
     if (current_term_size.width < MIN_COLS || current_term_size.height < MIN_ROWS) {
       std::print("{}", guard_message(current_term_size));
       std::fflush(stdout);
       return;
     }
-    int available_width = current_term_size.width - prompt.length();
-    available_width = available_width < 1 ? 1 : available_width;
-    if (cursor_pos < visible_pos) {  // scrolled left off screen
-      visible_pos = cursor_pos;
-    } else if (cursor_pos >= visible_pos + available_width) {  // scrolled right off screen
-      visible_pos = cursor_pos - available_width + 1;
-    }
-    // If buffer is longer than screen, always show the rightmost portion
-    if (buffer.length() > available_width) {
-      visible_pos = buffer.length() - available_width;
-    }
+
+    // calculate correct substring start position
+    // relative to current cursor and available width
+    const int available_width = current_term_size.width - len(active_prompt);
+    visible_pos = scroll_window_start(cursor_pos, visible_pos, len(buffer), available_width);
+
     // clear line and draw prompt
     terminal::show_cursor();
     std::print("{}{}{}{}", terminal::move_cursor(current_term_size.height, 1), "\x1b[2K\x1b[7m",
-        prompt, buffer.substr(visible_pos));
+        active_prompt, buffer.substr(visible_pos));
     std::fflush(stdout);
 
     // move to proper position on screen
-    size_t screen_col = cursor_pos - visible_pos + prompt.length() + 1;
+    const int screen_col = cursor_pos - visible_pos + len(active_prompt) + 1;
     std::print("{}", terminal::move_cursor(current_term_size.height, screen_col));
     std::fflush(stdout);
   };
@@ -347,6 +389,7 @@ InputBarResult bottom_input_bar(const std::string& prompt, const InputBarDeps& d
       if (!buffer.empty() && cursor_pos > 0) {
         buffer.erase(cursor_pos - 1, cursor_pos > 0 ? 1 : 0);
         cursor_pos--;
+        showing_error = false;
         redraw();
       }
     } else if (c.key == key_alt_backspace) {
@@ -354,14 +397,16 @@ InputBarResult bottom_input_bar(const std::string& prompt, const InputBarDeps& d
         buffer = buffer.substr(cursor_pos);
         cursor_pos = 0;
         visible_pos = 0;
+        showing_error = false;
         redraw();
       }
     } else if (c.key == key_char) {  // printable chars
       buffer.insert(cursor_pos, 1, c.char_value);
       cursor_pos++;
+      showing_error = false;
       redraw();
     } else if (c.key == key_right_arrow) {
-      if (cursor_pos < buffer.length()) {
+      if (cursor_pos < len(buffer)) {
         cursor_pos++;
         redraw();
       }

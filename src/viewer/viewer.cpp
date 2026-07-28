@@ -259,8 +259,11 @@ void Viewer::handle_go_to_page() {
       .debounce_ms = RESIZE_DEBOUNCE_MS,
   };
 
+  std::string error_prompt;
   while (running) {
-    const auto [input, cancelled, quit_requested] = TUI::bottom_input_bar("GO TO PAGE: ", deps);
+    const auto [input, cancelled, quit_requested] =
+        TUI::bottom_input_bar("GO TO PAGE: ", deps, error_prompt);
+    error_prompt.clear();
     if (quit_requested) {
       m_running = false;  // quit viewer entirely
       running = false;
@@ -273,9 +276,9 @@ void Viewer::handle_go_to_page() {
       new_page = new_page >= m_total_pages ? m_total_pages - 1 : new_page;
       page_change = new_page != m_current_page;
       m_current_page = new_page;
+    } else {
+      error_prompt = "INVALID PAGE: ";
     }
-    // else keep prompting until user presses esc
-    // TODO maybe add a text to notify non string inputs?
   }
   if (page_change) {
     request_page_render(m_current_page);
