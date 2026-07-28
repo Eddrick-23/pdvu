@@ -4,6 +4,7 @@
 #include <functional>
 #include <print>
 #include <string>
+#include <string_view>
 
 #include "kitty.h"
 #include "terminal.h"
@@ -516,30 +517,26 @@ InputBarResult bottom_input_bar(
 bool is_window_too_small(const TermSize& ts) { return ts.width < MIN_COLS || ts.height < MIN_ROWS; }
 
 float calculate_zoom_factor(
-    const TermSize& ts, const pdf::PageSpecs& ps, int content_cols, int content_rows, float zoom) {
-  const int max_w_pixels = content_cols * ts.pixels_per_col;
-  const int max_h_pixels = content_rows * ts.pixels_per_row;
+    const TermSize& ts, const pdf::PageSpecs& ps, const ContentArea& area, float zoom) {
+  const int max_w_pixels = area.cols * ts.pixels_per_col;
+  const int max_h_pixels = area.rows * ts.pixels_per_row;
 
   const float h_scale = static_cast<float>(max_w_pixels) / ps.acc_width;
   const float v_scale = static_cast<float>(max_h_pixels) / ps.acc_height;
 
   return std::min(h_scale, v_scale) * zoom;
 }
-std::string center_cursor(const TermSize& ts, int w_pixels, int h_pixels, int content_cols,
-    int content_rows, int start_row, int start_col) {
-  /* center cursor vertically and horizontally so rendered image is centered in
-   * window */
-
+std::string center_cursor(const TermSize& ts, int w_pixels, int h_pixels, const ContentArea& area) {
   const int cols_used =
       static_cast<int>(std::ceil(static_cast<float>(w_pixels) / ts.pixels_per_col));
   const int rows_used =
       static_cast<int>(std::ceil(static_cast<float>(h_pixels) / ts.pixels_per_row));
 
-  int top_margin = (content_rows - rows_used) / 2;
-  int left_margin = (content_cols - cols_used) / 2;
+  int top_margin = (area.rows - rows_used) / 2;
+  int left_margin = (area.cols - cols_used) / 2;
 
   top_margin = top_margin > 0 ? top_margin : 0;
   left_margin = left_margin > 0 ? left_margin : 0;
-  return terminal::move_cursor(top_margin + start_row, left_margin + start_col);
+  return terminal::move_cursor(top_margin + area.start_row, left_margin + area.start_col);
 }
 }  // namespace TUI

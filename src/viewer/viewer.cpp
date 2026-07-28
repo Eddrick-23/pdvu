@@ -1,5 +1,6 @@
 #include "viewer.h"
 
+#include <algorithm>
 #include <charconv>
 #include <chrono>
 #include <cstdio>
@@ -103,8 +104,9 @@ bool Viewer::fetch_latest_frame() {
   }
   if (!result.error_message.empty()) {  // check if there was a render error
     const TermSize ts = m_term.get_terminal_size();
-    std::print("{}", TUI::add_centered(ts.height / 2, ts.width, result.error_message,
-                         result.error_message.length()));
+    const int error_message_length = static_cast<int>(std::ssize(result.error_message));
+    std::print("{}",
+        TUI::add_centered(ts.height / 2, ts.width, result.error_message, error_message_length));
     std::fflush(stdout);
     return false;
   }
@@ -119,7 +121,16 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
   // prepare screen and cursor
   std::string sequence = terminal::reset_screen_and_cursor_string();
   sequence += terminal::move_cursor(2, 1);
-  sequence += TUI::center_cursor(ts, target_width, target_height, ts.width, ts.height - 2, 2, 1);
+
+  // 2 rows taken by top and bottom bar
+  // start drawing from row 2 due to row 1 being taken by top bar.
+  sequence += TUI::center_cursor(ts, target_width, target_height,
+      {
+          .cols = ts.width,
+          .rows = ts.height - 2,
+          .start_row = 2,
+          .start_col = 1,
+      });
 
   // Take into account cropping
   // We always crop using the target dimensions
@@ -142,15 +153,12 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
     crop_height /= scale_factor_y;
   }
 
-  bool need_transmit = m_last_req_id != m_latest_frame.req_id;
+  const bool need_transmit = m_last_req_id != m_latest_frame.req_id;
   if (need_transmit) {
     m_last_req_id = m_latest_frame.req_id;
   }
   // generate sequence to display image
-  int target_rows = ts.height - 2;
-  if (target_height / ts.pixels_per_row < target_rows) {
-    target_rows = target_height / ts.pixels_per_row;
-  }
+  const int target_rows = std::min(target_height / ts.pixels_per_row, ts.height - 2);
   sequence += kitty::get_image_sequence(m_latest_frame.path_to_data, KITTY_SLOT_ID, existing_width,
       existing_height, x_offset_pixels, y_offset_pixels, crop_width, crop_height,
       m_shm_supported ? "shm" : "tempfile", need_transmit, 0, target_rows);
@@ -194,8 +202,12 @@ void Viewer::request_page_render(int page_num) {
   if (const auto specs = m_parser->page_specs(page_num)) {
     m_target_page_specs = specs->rotate_quarter_clockwise(m_rotation_degrees / 90);
     // ts.height - 2 due to rows taken by top and bottom bar
-    const float zoom_factor = TUI::calculate_zoom_factor(
-        ts, m_target_page_specs, ts.width, ts.height - 2, m_page_view.current_zoom());
+    const float zoom_factor = TUI::calculate_zoom_factor(ts, m_target_page_specs,
+        {
+            .cols = ts.width,
+            .rows = ts.height - 2,
+        },
+        m_page_view.current_zoom());
     m_target_page_specs = m_target_page_specs.scale(zoom_factor);
     m_renderer->request_page(
         page_num, zoom_factor, m_target_page_specs, m_shm_supported ? "shm" : "tempfile");
