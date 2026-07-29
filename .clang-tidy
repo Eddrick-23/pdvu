@@ -7,7 +7,10 @@ Checks: >
   misc-include-cleaner,
   -modernize-use-trailing-return-type,
   -readability-braces-around-statements,
-  -readability-magic-numbers
+  -readability-magic-numbers,
+  -readability-avoid-const-params-in-decls,
+  -readability-identifier-length,
+  -misc-const-correctness
 WarningsAsErrors: 'bugprone-*'
 HeaderFilterRegex: '^(src|include|tests)/.*'
 ...

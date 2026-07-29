@@ -17,7 +17,9 @@ void show_cursor();
 void enter_alt_screen();
 void exit_alt_screen();
 std::string move_cursor(int row, int col);
-std::string reset_screen_and_cursor_string();
+std::string_view reset_screen_and_cursor_string();
+std::string_view save_cursor_string();
+std::string_view restore_cursor_string();
 }  // namespace terminal
 
 class Terminal {

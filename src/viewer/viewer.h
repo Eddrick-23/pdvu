@@ -45,9 +45,15 @@ class Viewer {
 
   /**
    * @brief Calculates viewport cropping and outputs the terminal graphics sequence (Kitty protocol)
-   * to display the frame and top and bottom status bars.
+   * to display the frame image only.
    */
-  void display_latest_frame(const FrameDisplayParams& params);
+  std::string latest_frame_sequence(const FrameDisplayParams& params);
+
+  /**
+   * @brief Obtains the terminal graphics sequence and appends sequence to draw
+   * top and bottom status bars if requested. Flushes the sequence to terminal for display.
+   */
+  void draw_latest_frame(bool with_top_bar, bool with_bottom_bar);
 
   /**
    * @brief Calculates target page specifications and zoom factor, dispatching a non-blocking render

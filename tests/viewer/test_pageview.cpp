@@ -64,27 +64,77 @@ TEST(PageView, UpdateViewport) {
   PageView pageview;
 
   // Moving within bounds returns true and updates state
-  EXPECT_TRUE(pageview.update_viewport(0.5F, 0.2F));
-  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_x_offset(pageview), 0.5F);
+  PageViewTestAccessor::set_offsets(pageview, 0.0, 0.0);
+  pageview.update_viewport(0.2F, 0.2F);
+  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_x_offset(pageview), 0.2F);
   EXPECT_FLOAT_EQ(PageViewTestAccessor::get_y_offset(pageview), 0.2F);
 
-  // Zero movement returns false (no change)
+  // Zero movement
+  PageViewTestAccessor::set_offsets(pageview, 0.5, 0.5);
   EXPECT_FALSE(pageview.update_viewport(0.0F, 0.0F));
+  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_x_offset(pageview), 0.5F);
+  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_y_offset(pageview), 0.5F);
 
-  // Clamping to upper bounds updates to max (1.0) and returns true
-  EXPECT_TRUE(pageview.update_viewport(0.8F, 0.0F));
+  // Clamping to upper bounds
+  EXPECT_TRUE(pageview.update_viewport(1.0F, 1.0F));
   EXPECT_FLOAT_EQ(PageViewTestAccessor::get_x_offset(pageview), 1.0F)
       << "Offset should clamp at max boundary (1.0) when delta exceeds bounds";
-
-  // Pushing past upper bounds when already clamped returns false
-  EXPECT_FALSE(pageview.update_viewport(0.5F, 0.0F));
-  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_x_offset(pageview), 1.0F)
+  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_y_offset(pageview), 1.0F)
       << "Offset should clamp at max boundary (1.0) when delta exceeds bounds";
 
-  // Clamping to lower bounds works similarly
-  EXPECT_TRUE(pageview.update_viewport(-1.5F, -1.5F));
-  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_x_offset(pageview), 0.0F);
-  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_y_offset(pageview), 0.0F);
+  // Clamping to lower bounds
+  pageview.update_viewport(-1.5F, -1.5F);
+  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_x_offset(pageview), 0.0F)
+      << "Offset should clamp at min boundary (0.0) when delta exceeds bounds";
+  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_y_offset(pageview), 0.0F)
+      << "Offset should clamp at min boundary (0.0) when delta exceeds bounds";
+}
+
+TEST(PageView, UpdateViewportReturnsIfIndexChanged) {
+  PageView pageview;
+
+  // valid change
+  PageViewTestAccessor::set_offsets(pageview, 0.0, 0.0);
+  EXPECT_TRUE(pageview.update_viewport(0.5, 0.5));
+
+  // valid change one dimension
+  PageViewTestAccessor::set_offsets(pageview, 1.0, 0.0);
+  EXPECT_TRUE(pageview.update_viewport(0.5, 0.5))
+      << "should return true since y direction is not at limit";
+  PageViewTestAccessor::set_offsets(pageview, 0.0, 1.0);
+  EXPECT_TRUE(pageview.update_viewport(0.5, 0.5))
+      << "should return true since x direction is not at limit";
+
+  // Zero movement returns false (no change)
+  EXPECT_FALSE(pageview.update_viewport(0.0, 0.0));
+
+  // No change after values are clamped to upper bound
+  PageViewTestAccessor::set_offsets(pageview, 1.0, 1.0);
+  EXPECT_FALSE(pageview.update_viewport(1.0, 1.0));
+
+  // No change after values are clamped to lower bound
+  PageViewTestAccessor::set_offsets(pageview, 0.0, 0.0);
+  EXPECT_FALSE(pageview.update_viewport(-1.0, -1.0));
+}
+
+TEST(PageView, ResetViewport) {
+  PageView pageview;
+
+  // check default state
+  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_x_offset(pageview), 0.5F);
+  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_y_offset(pageview), 0.5F);
+
+  // at bottom limit
+  PageViewTestAccessor::set_offsets(pageview, 0.0, 0.0);
+  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_x_offset(pageview), 0.0F)
+      << "x offset not set correctly";
+  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_y_offset(pageview), 0.0F)
+      << "y offset not set correctly";
+
+  // check if values are set to default
+  pageview.reset_offsets_to_default();
+  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_x_offset(pageview), 0.5F);
+  EXPECT_FLOAT_EQ(PageViewTestAccessor::get_y_offset(pageview), 0.5F);
 }
 
 struct CropWindowTestCase {

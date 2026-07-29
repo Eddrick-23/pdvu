@@ -69,6 +69,12 @@ class PageView {
    */
   void reset_zoom_to_default();
 
+  /**
+   * @brief Resets x and y offset multipliers to default of 0.5
+   * This causes zoom towards the center.
+   */
+  void reset_offsets_to_default();
+
  private:
   friend struct PageViewTestAccessor;
 
@@ -90,8 +96,8 @@ class PageView {
   };
 
   Viewport m_viewport{
-      .rel_x_offset = 0.0,
-      .rel_y_offset = 0.0,
+      .rel_x_offset = 0.5,
+      .rel_y_offset = 0.5,
       .zoom_index = m_default_zoom_index,
   };
 };

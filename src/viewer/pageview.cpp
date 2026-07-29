@@ -52,3 +52,8 @@ bool PageView::update_viewport(const float delta_x, const float delta_y) {
 float PageView::current_zoom() const { return m_zoom_levels[m_viewport.zoom_index]; }
 
 void PageView::reset_zoom_to_default() { m_viewport.zoom_index = m_default_zoom_index; }
+
+void PageView::reset_offsets_to_default() {
+  m_viewport.rel_x_offset = 0.5;
+  m_viewport.rel_y_offset = 0.5;
+}
