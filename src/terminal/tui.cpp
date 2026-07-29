@@ -399,6 +399,8 @@ InputBarResult bottom_input_bar(
   bool showing_error = !error_prompt.empty();
 
   auto len = [](std::string_view s) { return static_cast<int>(s.length()); };
+
+  // redraw bar on every key action
   auto redraw = [&]() {
     std::string active_prompt;
     if (showing_error) {
@@ -431,9 +433,17 @@ InputBarResult bottom_input_bar(
     std::fflush(stdout);
   };
 
+  // reset colours, hide cursor and return buffer
+  auto cleanup = [&]() {
+    terminal::hide_cursor();
+    std::print(TermColor::Reset);
+    std::fflush(stdout);
+  };
+
   InputEvent c;
   redraw();
   auto debouncer = ResizeDebouncer(deps.debounce_ms);
+  InputBarResult result{};
 
   while (true) {
     const ResizeState resize_state =
@@ -455,7 +465,8 @@ InputBarResult bottom_input_bar(
 
     if (deps.window_dimensions().width < MIN_COLS || deps.window_dimensions().height < MIN_ROWS) {
       if (c.key == key_char && c.char_value == 'q') {
-        return {.value = "", .cancelled = false, .quit_requested = true};
+        result = {.value = "", .cancelled = false, .quit_requested = true};
+        break;
       }
       continue;  // block other inputs if guard message is displayed
     }
@@ -465,10 +476,11 @@ InputBarResult bottom_input_bar(
       continue;
     }
     if (c.key == key_escape) {
-      return {.value = "", .cancelled = true, .quit_requested = false};
+      result = {.value = "", .cancelled = true, .quit_requested = false};
+      break;
     }
-    // break when we get enter
     if (c.key == key_enter) {
+      result = {.value = buffer, .cancelled = false, .quit_requested = false};
       break;
     }
     if (c.key == key_backspace) {
@@ -504,10 +516,8 @@ InputBarResult bottom_input_bar(
     }
   }
 
-  // reset colours, hide cursor and return buffer
-  std::print("{}", "\x1b[0m");
-  terminal::hide_cursor();
-  return {.value = buffer, .cancelled = false, .quit_requested = false};
+  cleanup();
+  return result;
 }
 
 bool is_window_too_small(const TermSize& ts) { return ts.width < MIN_COLS || ts.height < MIN_ROWS; }
