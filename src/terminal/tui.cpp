@@ -12,24 +12,25 @@
 #include "utils/resize_debouncer.h"
 
 namespace TUI::helplist {
-const std::vector<std::array<std::string, 2>> help_text = {
-    {"->", "Next Page"},
-    {"<-", "Previous Page"},
-    {"q", "Quit"},
-    {"g", "Go to Page"},
-    {"Esc", "Exit input textbox"},
-    {"/ or shift+f", "Find text"},  // TODO
-    {"w", "Pan up"},
-    {"a", "Pan left"},
-    {"s", "Pan down"},
-    {"d", "Pan right"},
-    {"r", "Rotate clockwise 90 degrees"},
-    {"+ or =", "Zoom in"},
-    {"- or _", "Zoom out"},
-    {"z", "Zoom to fit and reset viewport"},
-    {"?", "Help page"},
+static constexpr std::array<std::array<std::string_view, 2>, 15> help_text = {
+    {
+        {"->", "Next Page"},
+        {"<-", "Previous Page"},
+        {"q", "Quit"},
+        {"g", "Go to Page"},
+        {"Esc", "Exit input textbox"},
+        {"/ or shift+f", "Find text"},  // TODO
+        {"w", "Pan up"},
+        {"a", "Pan left"},
+        {"s", "Pan down"},
+        {"d", "Pan right"},
+        {"r", "Rotate clockwise 90 degrees"},
+        {"+ or =", "Zoom in"},
+        {"- or _", "Zoom out"},
+        {"z", "Zoom to fit and reset viewport"},
+        {"?", "Help page"},
+    },
 };
-
 }
 
 namespace {  // utility function
@@ -189,7 +190,6 @@ std::string create_box(const BoxBounds& box_bounds, bool fill) {
   result += fill ? "\x1b[49m" : "";  // reset bg colour
   return result;
 }
-
 
 /**
  * @brief Computes the leftmost buffer index that should be drawn on screen
@@ -377,11 +377,9 @@ std::string help_overlay(const TermSize& ts) {
   result += " Description";
   // key text is centered, description text is left aligned
   result += TermText::ResetBold;
-  for (auto arr : helplist::help_text) {
+  for (auto [key_text, desc_text] : helplist::help_text) {
     text_start_row++;
     result += terminal::move_cursor(text_start_row, box_start_col + 1);
-    const std::string& key_text = arr.front();
-    const std::string& desc_text = arr.back();
     result += std::format("{}{}", TermColor::OrangeFg, centre_with_space(key_col_width, key_text));
     result += std::format("{}{}", TermColor::WhiteFg, desc_text);
   }
