@@ -211,5 +211,29 @@ INSTANTIATE_TEST_SUITE_P(PageView, CalculateCropWindowTest,
             // max_x_offset = 1000 * 0.5 = 500
             // max_y_offset = 700 * 0.5 = 350
             .expected = {500, 350, 1000, 800},
+        },
+        CropWindowTestCase{
+            .name = "CropWidthOnlyHeightClampsToImageHeight",
+            .img_width = 2000,
+            .img_height = 800,
+            .bounds = {1000, 1000},
+            .rel_x = 0.5F,
+            .rel_y = 0.5F,
+            // max_x_offset = 1000 * 0.5 = 500
+            // max_y_offset = 0
+            // no y offset, height should shrink to image height (smaller than given bounds)
+            .expected = {500, 0, 1000, 800},
+        },
+        CropWindowTestCase{
+            .name = "CropHeightOnlyWidthClampsToImageWidth",
+            .img_width = 800,
+            .img_height = 1500,
+            .bounds = {1000, 800},
+            .rel_x = 0.5F,
+            .rel_y = 0.5F,
+            // max_x_offset = 0
+            // max_y_offset = 700 * 0.5 = 350
+            // no x offset, width should shrink to image width (smaller than given bounds)
+            .expected = {0, 350, 800, 800},
         }),
     [](const ::testing::TestParamInfo<CropWindowTestCase>& info) { return info.param.name; });
