@@ -5,27 +5,11 @@
 #include <unistd.h>
 
 #include <atomic>
-#include <cerrno>
 #include <chrono>
 #include <cstring>
 
 #include "utils/profiling.h"
 static std::atomic<int> shm_sequence_id{0};
-
-int is_shm_supported() {
-  int shm_fd = shm_open("/test_shm_support", O_CREAT | O_RDWR | O_EXCL, 0600);
-  if (shm_fd == -1) {
-    // handle error
-    if (errno == ENOSYS) {  // not supported
-      return 0;
-    }
-    perror("shm_open");
-    return 0;
-  }
-
-  shm_unlink("/test_shm_support");
-  return 1;
-}
 
 // constructor
 SharedMemory::SharedMemory(const size_t image_size) {

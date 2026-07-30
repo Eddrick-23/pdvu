@@ -1,7 +1,35 @@
 #pragma once
+#include <sys/fcntl.h>
 #include <sys/mman.h>
 
+#include <cerrno>
 #include <string>
+
+namespace Shm {
+/**
+ * @brief Checks if the host operating system supports POSIX shared memory.
+ *
+ * This is tested by attempting to create and immediately unlink a dummy
+ * shared memory object.
+ *
+ * @return true if POSIX shared memory is supported, false otherwise.
+ */
+inline bool is_shm_supported() {
+  const int shm_fd = shm_open("/test_shm_support", O_CREAT | O_RDWR | O_EXCL, 0600);
+  if (shm_fd == -1) {
+    // handle error
+    if (errno == ENOSYS) {  // not supported
+      return false;
+    }
+    perror("shm_open");
+    return false;
+  }
+
+  shm_unlink("/test_shm_support");
+  return true;
+}
+
+}  // namespace Shm
 
 /**
  * @brief An RAII wrapper for managing POSIX shared memory objects.
@@ -101,13 +129,3 @@ class SharedMemory {
   size_t shm_size = 0;            ///< Size of shared memory segment in bytes.
   std::string shm_name;           ///< Unique POSIX name for the shared memory object.
 };
-
-/**
- * @brief Checks if the host operating system supports POSIX shared memory.
- *
- * This is tested by attempting to create and immediately unlink a dummy
- * shared memory object.
- *
- * @return 1 if POSIX shared memory is supported, 0 otherwise.
- */
-int is_shm_supported();

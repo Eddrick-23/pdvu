@@ -45,7 +45,7 @@ Viewer::Viewer(std::unique_ptr<pdf::Parser> main_parser,
   m_parser = std::move(main_parser);
   // setup(file_path, n_threads);
   m_total_pages = m_parser->num_pages();
-  m_shm_supported = use_shm && is_shm_supported();
+  m_shm_supported = use_shm && Shm::is_shm_supported();
 }
 
 void Viewer::run() {
