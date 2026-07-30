@@ -12,23 +12,15 @@ bool PageView::change_zoom_index(const int delta) {
 
 PageView::CropRect PageView::calculate_crop_window(
     const int width, const int height, const ViewportBounds& vBounds) const {
-  // check if no crop needed, whole image fits in window
-  if (width <= vBounds.max_width_pixels && height <= vBounds.max_height_pixels) {
-    return CropRect{
-        .x_offset_pixels = 0,
-        .y_offset_pixels = 0,
-        .width = width,
-        .height = height,
-    };
-  }
+  auto calculate_offset = [](int max_offset_pixels, float rel_offset) {
+    return static_cast<int>(std::floor(static_cast<float>(max_offset_pixels) * rel_offset));
+  };
 
   // calculate window
-  const int max_x_offset_pixels = width - vBounds.max_width_pixels;
-  const int max_y_offset_pixels = height - vBounds.max_height_pixels;
-  const int x_offset_pixels =
-      std::floor(static_cast<float>(max_x_offset_pixels) * m_viewport.rel_x_offset);
-  const int y_offset_pixels =
-      std::floor(static_cast<float>(max_y_offset_pixels) * m_viewport.rel_y_offset);
+  const int max_x_offset_pixels = std::max(0, width - vBounds.max_width_pixels);
+  const int max_y_offset_pixels = std::max(0, height - vBounds.max_height_pixels);
+  const int x_offset_pixels = calculate_offset(max_x_offset_pixels, m_viewport.rel_x_offset);
+  const int y_offset_pixels = calculate_offset(max_y_offset_pixels, m_viewport.rel_y_offset);
   const int crop_w = std::min(vBounds.max_width_pixels, width - x_offset_pixels);
   const int crop_h = std::min(vBounds.max_height_pixels, height - y_offset_pixels);
   return CropRect{
