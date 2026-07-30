@@ -66,34 +66,27 @@ class SharedMemory {
    * @brief Retrieves the generated POSIX name of the shared memory object.
    * @return A constant reference to the name string.
    */
-  const std::string& name() const;
+  [[nodiscard]] const std::string& name() const;
 
   /**
    * @brief Retrieves the allocated size of the shared memory segment.
-   * @return A constant reference to the size in bytes.
+   * @return size of shared memory segment in bytes
    */
-  const size_t& size() const;
+  [[nodiscard]] size_t size() const;
 
   /**
    * @brief Retrieves a pointer to the mapped shared memory.
    * @return A void pointer to the start of the memory segment. Returns MAP_FAILED if unmapped.
    */
-  void* data() const;
+  [[nodiscard]] void* data() const;
 
   /**
    * @brief Writes data into the shared memory segment.
-   * @param data Pointer to the source data buffer to write.
+   * @param data Void pointer to the source data buffer to write.
    * @param len The number of bytes to write.
    * @return A WriteStatus indicating success or the specific error encountered.
    */
-  WriteStatus write_data(const unsigned char* data, size_t len);
-
-  /**
-   * @brief Copies data from the shared memory segment into a destination buffer.
-   * @param dest Pointer to the destination buffer.
-   * @param len The number of bytes to copy. Must not exceed the shared memory size.
-   */
-  void copy_data(void* dest, size_t len) const;
+  WriteStatus write_data(const void* data, size_t len);
 
   /**
    * @brief Manually closes the underlying shared memory file descriptor.
@@ -103,10 +96,10 @@ class SharedMemory {
   void close_mem();
 
  private:
-  int shm_fd = -1;  ///< shared memory file descriptor.
-  void* mapped_ptr = MAP_FAILED; ///< Pointer to the mapped userspace memory.
-  size_t shm_size = 0; ///< Size of shared memory segment in bytes.
-  std::string shm_name; ///< Unique POSIX name for the shared memory object.
+  int shm_fd = -1;                ///< shared memory file descriptor.
+  void* mapped_ptr = MAP_FAILED;  ///< Pointer to the mapped userspace memory.
+  size_t shm_size = 0;            ///< Size of shared memory segment in bytes.
+  std::string shm_name;           ///< Unique POSIX name for the shared memory object.
 };
 
 /**

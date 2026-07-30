@@ -5,7 +5,6 @@
 #include <unistd.h>
 
 #include <atomic>
-#include <cassert>
 #include <cerrno>
 #include <chrono>
 #include <cstring>
@@ -85,11 +84,11 @@ const char* SharedMemory::to_string(const WriteStatus& status) {
 
 const std::string& SharedMemory::name() const { return shm_name; }
 
-const size_t& SharedMemory::size() const { return shm_size; }
+size_t SharedMemory::size() const { return shm_size; }
 
 void* SharedMemory::data() const { return mapped_ptr; }
 
-SharedMemory::WriteStatus SharedMemory::write_data(const unsigned char* data, const size_t len) {
+SharedMemory::WriteStatus SharedMemory::write_data(const void* data, const size_t len) {
   if (data == nullptr) {
     return WriteStatus::NullBuffer;
   }
@@ -102,11 +101,6 @@ SharedMemory::WriteStatus SharedMemory::write_data(const unsigned char* data, co
 
   memcpy(mapped_ptr, data, len);
   return WriteStatus::Success;
-}
-
-void SharedMemory::copy_data(void* dest, size_t len) const {
-  assert(len <= shm_size);
-  std::memcpy(dest, mapped_ptr, len);
 }
 
 void SharedMemory::close_mem() {

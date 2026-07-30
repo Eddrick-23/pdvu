@@ -25,7 +25,7 @@ struct PageDetails {
 
 struct PageCacheData {
   std::string transmission;
-  std::vector<unsigned char> shm_buffer;
+  std::shared_ptr<SharedMemory> shm_data;
   std::shared_ptr<Tempfile> tempfile_data;
   int page_width;
   int page_height;
