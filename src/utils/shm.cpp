@@ -37,7 +37,7 @@ SharedMemory::SharedMemory(const size_t image_size) {
   shm_name = std::format("/pdvu_{}_{}", getpid(), id);
 
   shm_fd = shm_open(shm_name.c_str(), O_CREAT | O_RDWR | O_EXCL,
-                    0600);  // create memory
+      0600);  // create memory
   if (shm_fd == -1) {
     throw std::runtime_error("Failed to open shared memory: " + shm_name);
   }
@@ -45,7 +45,7 @@ SharedMemory::SharedMemory(const size_t image_size) {
   // set size
   if (ftruncate(shm_fd, static_cast<long>(image_size)) == -1) {
     close(shm_fd);
-    unlink(shm_name.c_str());
+    shm_unlink(shm_name.c_str());
     throw std::runtime_error("Failed to set shared memory size: " + shm_name);
   }
 
@@ -53,7 +53,7 @@ SharedMemory::SharedMemory(const size_t image_size) {
   mapped_ptr = mmap(nullptr, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
   if (mapped_ptr == MAP_FAILED) {
     close(shm_fd);
-    unlink(shm_name.c_str());
+    shm_unlink(shm_name.c_str());
     throw std::runtime_error("Failed to map shared memory: " + shm_name);
   }
 }
