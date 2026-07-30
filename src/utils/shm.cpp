@@ -5,28 +5,11 @@
 #include <unistd.h>
 
 #include <atomic>
-#include <cassert>
-#include <cerrno>
 #include <chrono>
 #include <cstring>
 
 #include "utils/profiling.h"
 static std::atomic<int> shm_sequence_id{0};
-
-int is_shm_supported() {
-  int shm_fd = shm_open("/test_shm_support", O_CREAT | O_RDWR | O_EXCL, 0600);
-  if (shm_fd == -1) {
-    // handle error
-    if (errno == ENOSYS) {  // not supported
-      return 0;
-    }
-    perror("shm_open");
-    return 0;
-  }
-
-  shm_unlink("/test_shm_support");
-  return 1;
-}
 
 // constructor
 SharedMemory::SharedMemory(const size_t image_size) {
@@ -37,7 +20,7 @@ SharedMemory::SharedMemory(const size_t image_size) {
   shm_name = std::format("/pdvu_{}_{}", getpid(), id);
 
   shm_fd = shm_open(shm_name.c_str(), O_CREAT | O_RDWR | O_EXCL,
-                    0600);  // create memory
+      0600);  // create memory
   if (shm_fd == -1) {
     throw std::runtime_error("Failed to open shared memory: " + shm_name);
   }
@@ -45,7 +28,7 @@ SharedMemory::SharedMemory(const size_t image_size) {
   // set size
   if (ftruncate(shm_fd, static_cast<long>(image_size)) == -1) {
     close(shm_fd);
-    unlink(shm_name.c_str());
+    shm_unlink(shm_name.c_str());
     throw std::runtime_error("Failed to set shared memory size: " + shm_name);
   }
 
@@ -53,7 +36,7 @@ SharedMemory::SharedMemory(const size_t image_size) {
   mapped_ptr = mmap(nullptr, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
   if (mapped_ptr == MAP_FAILED) {
     close(shm_fd);
-    unlink(shm_name.c_str());
+    shm_unlink(shm_name.c_str());
     throw std::runtime_error("Failed to map shared memory: " + shm_name);
   }
 }
@@ -85,11 +68,11 @@ const char* SharedMemory::to_string(const WriteStatus& status) {
 
 const std::string& SharedMemory::name() const { return shm_name; }
 
-const size_t& SharedMemory::size() const { return shm_size; }
+size_t SharedMemory::size() const { return shm_size; }
 
 void* SharedMemory::data() const { return mapped_ptr; }
 
-SharedMemory::WriteStatus SharedMemory::write_data(const unsigned char* data, const size_t len) {
+SharedMemory::WriteStatus SharedMemory::write_data(const void* data, const size_t len) {
   if (data == nullptr) {
     return WriteStatus::NullBuffer;
   }
@@ -102,11 +85,6 @@ SharedMemory::WriteStatus SharedMemory::write_data(const unsigned char* data, co
 
   memcpy(mapped_ptr, data, len);
   return WriteStatus::Success;
-}
-
-void SharedMemory::copy_data(void* dest, size_t len) const {
-  assert(len <= shm_size);
-  std::memcpy(dest, mapped_ptr, len);
 }
 
 void SharedMemory::close_mem() {

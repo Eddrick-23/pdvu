@@ -88,7 +88,7 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
   // check cache for page data first
   auto cached = use_cache ? try_page_cache(req, new_shm, new_temp) : std::nullopt;
   if (cached.has_value()) {
-    auto data = cached.value();
+    const auto& data = cached.value();
     result.path_to_data = data.transmission == "shm" ? new_shm->name() : new_temp->path();
     update_frame(data.page_width, data.page_height,
         std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -178,13 +178,22 @@ std::optional<pdf::DisplayListHandle> RenderEngine::fetch_display_list(int page_
 void RenderEngine::cache_page(int page_num, float zoom, int rotation,
     const std::shared_ptr<SharedMemory>& shm, const std::shared_ptr<Tempfile>& tempfile,
     const std::string& transmission, int page_width, int page_height) {
-  std::vector<unsigned char> buffer;
-  if (shm) {
-    buffer.resize(shm->size());
-    shm->copy_data(buffer.data(), buffer.size());
-  }
-  page_cache.put({page_num, zoom, rotation},
-      {transmission, std::move(buffer), tempfile, page_width, page_height});
+  // std::vector<unsigned char> buffer;
+  // if (shm) {
+  //   buffer.resize(shm->size());
+  //   shm->copy_data(buffer.data(), buffer.size());
+  // }
+  page_cache.put(
+      {
+          .page_num = page_num,
+          .zoom = zoom,
+          .rotation_degrees = rotation,
+      },
+      {.transmission = transmission,
+          .shm_data = shm,
+          .tempfile_data = tempfile,
+          .page_width = page_width,
+          .page_height = page_height});
 }
 
 std::optional<PageCacheData> RenderEngine::try_page_cache(const RenderRequest& req,
@@ -203,11 +212,13 @@ std::optional<PageCacheData> RenderEngine::try_page_cache(const RenderRequest& r
   // tempfile allows reusing so we reuse the same tempfile pointer
   if (data.transmission == "shm") {
     try {
-      shm_ptr = std::make_unique<SharedMemory>(data.shm_buffer.size());
-      const auto status = shm_ptr->write_data(data.shm_buffer.data(), data.shm_buffer.size());
+      const size_t segment_size = data.shm_data->size();
+      shm_ptr = std::make_unique<SharedMemory>(segment_size);
+      const auto status = shm_ptr->write_data(data.shm_data->data(), segment_size);
       if (status != SharedMemory::WriteStatus::Success) {
         PLOG_ERROR << "Render error: failed to write page " << key.page_num
-                   << " to ui buffer. Reason: " << SharedMemory::to_string(status);
+                   << " to new shm buffer for transmission. Reason: "
+                   << SharedMemory::to_string(status);
         shm_ptr.reset();
       }
     } catch (const std::exception& e) {
