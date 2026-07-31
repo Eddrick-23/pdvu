@@ -46,12 +46,6 @@ jobs:
         if: steps.cache-mupdf-checkout.outputs.cache-hit != 'true'
         run: git submodule update --init --depth 1 --recursive external/mupdf
 
-      - name: Install Linux Compiler
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ${{ matrix.cxx }}
-
       # Cache mupdf builds since they take a long time
       - name: Cache MuPDF Build
         id: cache-mupdf
@@ -69,13 +63,29 @@ jobs:
           cd external/mupdf
           make HAVE_X11=no HAVE_GLUT=no build=release libs -j4
 
+      - name: Fix Homebrew Tap Trust (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew untap aws/tap || true
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ matrix.os }}-${{ matrix.cc }}
+
       - name: Configure CMake
         env:
           CC: ${{ matrix.cc }}
           CXX: ${{ matrix.cxx }}
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_SCAN_FOR_MODULES=OFF \
+            -DBUILD_TESTING=ON \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build and Test
+        env:
+          CCACHE_LOGFILE: ${{ github.workspace }}/ccache.log
         run: |
           cmake --build build
           cd build && ctest --output-on-failure
