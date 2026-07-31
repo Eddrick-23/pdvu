@@ -78,6 +78,7 @@ jobs:
           CXX: ${{ matrix.cxx }}
         run: |
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_SCAN_FOR_MODULES=OFF \
             -DBUILD_TESTING=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
