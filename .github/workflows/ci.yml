@@ -83,6 +83,14 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build and Test
+        env:
+          CCACHE_LOGFILE: ${{ github.workspace }}/ccache.log
         run: |
           cmake --build build
           cd build && ctest --output-on-failure
+
+      - name: Debug ccache Uncacheable reasons
+        if: always()
+        run: |
+          echo "=== ccache failure reasons ==="
+          grep "Uncacheable" ${{ github.workspace }}/ccache.log | sort | uniq -c || echo "No uncacheable lines found."
