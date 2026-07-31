@@ -94,3 +94,5 @@ jobs:
         run: |
           echo "=== ccache failure reasons ==="
           grep "Result:" ${{ github.workspace }}/ccache.log | sort | uniq -c | grep -v "Result: called for link" || true
+          echo "=== unsupported option details ==="
+          grep -B2 "unsupported_compiler_option" ${{ github.workspace }}/ccache.log | grep -E "Compiler options|Command line" | sort -u || true
