@@ -89,14 +89,3 @@ jobs:
         run: |
           cmake --build build
           cd build && ctest --output-on-failure
-
-      - name: Check ccache version
-        run: ccache --version
-
-      - name: Debug ccache Uncacheable reasons
-        if: always()
-        run: |
-          echo "=== ccache failure reasons ==="
-          grep "Result:" ${{ github.workspace }}/ccache.log | sort | uniq -c | grep -v "Result: called for link" || true
-          echo "=== full log for one failing process ==="
-          grep " 2429 \]" ${{ github.workspace }}/ccache.log || true
