@@ -93,4 +93,4 @@ jobs:
         if: always()
         run: |
           echo "=== ccache failure reasons ==="
-          grep "Uncacheable" ${{ github.workspace }}/ccache.log | sort | uniq -c || echo "No uncacheable lines found."
+          grep "Result:" ${{ github.workspace }}/ccache.log | sort | uniq -c | grep -v "Result: called for link" || true
