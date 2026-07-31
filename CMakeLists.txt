@@ -14,25 +14,15 @@ if (NOT DEFINED BUILD_TESTING)
 endif ()
 
 # --- THIRD PARTY: PLOG LOGGER ---
-option(ENABLE_LOGGING "Enable plog logging" OFF)
-
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(ENABLE_LOGGING ON)
-endif ()
-
-if (ENABLE_LOGGING)
-    message(STATUS "Logging ENABLED")
-    include(FetchContent)
-    FetchContent_Declare(
-            plog
-            GIT_REPOSITORY https://github.com/SergiusTheBest/plog.git
-            GIT_TAG 1.1.11
-            GIT_SHALLOW true
-    )
-    FetchContent_MakeAvailable(plog)
-else ()
-    message(STATUS "Logging DISABLED")
-endif ()
+message(STATUS "Fetching PLOG Logger")
+include(FetchContent)
+FetchContent_Declare(
+    plog
+    GIT_REPOSITORY https://github.com/SergiusTheBest/plog.git
+    GIT_TAG 1.1.11
+    GIT_SHALLOW true
+)
+FetchContent_MakeAvailable(plog)
 
 # --- THIRD PARTY: TRACY PROFILER ---
 option(ENABLE_TRACY "Enable Tracy profiler" OFF)
@@ -54,21 +44,21 @@ endif ()
 # --- GLOBAL COMPILER FLAGS ---
 add_library(pdvu_compiler_flags INTERFACE)
 set(BASE_COMPILER_FLAGS
-        $<$<CONFIG:Debug>:-fno-omit-frame-pointer -ggdb -O0>
-        $<$<CONFIG:RelWithDebInfo>:-O2 -ggdb -fno-omit-frame-pointer>
-        $<$<CONFIG:Release>:-O3>
+    $<$<CONFIG:Debug>:-fno-omit-frame-pointer -ggdb -O0>
+    $<$<CONFIG:RelWithDebInfo>:-O2 -ggdb -fno-omit-frame-pointer>
+    $<$<CONFIG:Release>:-O3>
 )
 target_compile_options(pdvu_compiler_flags INTERFACE
-        ${BASE_COMPILER_FLAGS}
-        -Wall
-        -Wextra
-        -Wconversion
-        -Wsign-conversion
-        -Werror
+    ${BASE_COMPILER_FLAGS}
+    -Wall
+    -Wextra
+    -Wconversion
+    -Wsign-conversion
+    -Werror
 )
 target_compile_definitions(pdvu_compiler_flags INTERFACE
-        $<$<BOOL:${ENABLE_LOGGING}>:ENABLE_LOGGING>
-        $<$<BOOL:${ENABLE_TRACY}>:TRACY_ENABLE>)
+    $<$<BOOL:${ENABLE_LOGGING}>:ENABLE_LOGGING>
+    $<$<BOOL:${ENABLE_TRACY}>:TRACY_ENABLE>)
 
 # --- PROJECT SOURCE TARGETS ---
 add_subdirectory(src)
@@ -78,10 +68,10 @@ target_link_libraries(pdvu PRIVATE pdvu_core pdvu_compiler_flags)
 # silence warnings from external library code
 target_include_directories(pdvu SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/external)
 
-# --- LINK OPTIONAL LIBRARIES IF ENABLED ---
-if (ENABLE_LOGGING)
-    target_link_libraries(pdvu_core PUBLIC plog::plog)
-endif ()
+# link logger
+target_link_libraries(pdvu_core PUBLIC plog::plog)
+
+# link tracy if enabled
 if (ENABLE_TRACY)
     target_link_libraries(pdvu_core PUBLIC TracyClient)
 endif ()

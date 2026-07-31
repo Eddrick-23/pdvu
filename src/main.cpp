@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <print>
 
+#include "plog/Log.h"
 #include "utils/logging.h"
 #include "utils/profiling.h"
 #include "viewer/viewer.h"
@@ -16,13 +17,16 @@ int main(int argc, char** argv) {
   app.add_flag("--ICC", enable_ICC, "Enable ICC Colour management. May slow down parsing speed");
 
   bool use_shm = false;
-  app.add_flag("--shm", use_shm,
-               "Use Posix Shared Memory image transmission. Default uses temp file");
+  app.add_flag(
+      "--shm", use_shm, "Use Posix Shared Memory image transmission. Default uses temp file");
 
   bool enable_cache = true;
   app.add_flag("--nocache{false}", enable_cache,
-               "Disable PDVU caching of rendered pages and display lists. "
-               "(MuPDF cache unaffected)");
+      "Disable PDVU caching of rendered pages and display lists. "
+      "(MuPDF cache unaffected)");
+
+  bool enable_logging = false;
+  app.add_flag("--log", enable_logging, "Enable logging. Logs are written to /tmp/pdvu.log file");
 
   int n_threads = 1;
   app.add_option("-j,--jobs,--threads", n_threads, "Number of worker threads to use. Default 1.");
@@ -66,10 +70,13 @@ int main(int argc, char** argv) {
     std::println(stderr, "Error: Pdf file must be provided");
     return 1;
   }
-// logging for debugging
-#ifdef ENABLE_LOGGING
-  plog::init(plog::debug, "/tmp/pdvu.log", 10000000, 1);
-#endif
+
+  // TODO for release can make logfile configurable? or write to safer place like /.local
+  // in case user permissions block /tmp?
+  if (const auto result = Logging::setup_logging(enable_logging, "/tmp/pdvu.log"); !result) {
+    std::println(stderr, "Failed to initialise logging: {}", result.error());
+    return 1;
+  }
 
   // 1) Set up parser and load in document
   std::unique_ptr<pdf::Parser> parser = nullptr;

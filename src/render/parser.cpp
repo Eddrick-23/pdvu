@@ -4,6 +4,7 @@
 #include <mutex>
 #include <print>
 
+#include "plog/Log.h"
 #include "utils/logging.h"
 #include "utils/profiling.h"
 
@@ -130,9 +131,9 @@ std::optional<PageSpecs> MuPDFParser::page_specs(const int page_num) const {
   const float acc_width = raw_bounds.x1 - raw_bounds.x0;
 
   return PageSpecs(raw_bounds.x0, raw_bounds.y0, raw_bounds.x1,
-                   raw_bounds.y1,                       // Base
-                   bbox.x0, bbox.y0, bbox.x1, bbox.y1,  // ints
-                   w, h, size, acc_width, acc_height);  // dims
+      raw_bounds.y1,                       // Base
+      bbox.x0, bbox.y0, bbox.x1, bbox.y1,  // ints
+      w, h, size, acc_width, acc_height);  // dims
 }
 
 std::vector<HorizontalBound> MuPDFParser::split_bounds(PageSpecs ps, int n) {
@@ -197,7 +198,7 @@ DisplayListHandle MuPDFParser::get_display_list(int page_num) {
 }
 
 void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
-                                DisplayListHandle dlist, unsigned char* buffer, fz_rect clip) {
+    DisplayListHandle dlist, unsigned char* buffer, fz_rect clip) {
   /* dlist is created by another thread. That thread will be responsible for
    * dropping it clip is which portion of the dlist we are reading from. it must
    * match with w and h The input buffer must be shifted such that the first
@@ -229,8 +230,8 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
     fz_matrix ctm = fz_scale(zoom, zoom);
     ctm = fz_pre_rotate(ctm, ps.rotation);
     translate_matrix(ctm);
-    pix = fz_new_pixmap_with_bbox_and_data(ctx, fz_device_rgb(ctx), fz_irect_from_rect(clip), NULL,
-                                           0, buffer);
+    pix = fz_new_pixmap_with_bbox_and_data(
+        ctx, fz_device_rgb(ctx), fz_irect_from_rect(clip), NULL, 0, buffer);
     pix->x = static_cast<int>(clip.x0);
     pix->y = static_cast<int>(clip.y0);
     fz_clear_pixmap_with_value(ctx, pix, 255);  // set white background

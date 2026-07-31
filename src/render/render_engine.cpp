@@ -1,5 +1,6 @@
 #include "render_engine.h"
 
+#include "plog/Log.h"
 #include "utils/logging.h"
 #include "utils/profiling.h"
 
