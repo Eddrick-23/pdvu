@@ -4,17 +4,23 @@
 
 #include <cstring>
 #include <iostream>
+#include <string>
+#include <string_view>
 
-Tempfile::Tempfile(size_t size) {
-  file_size = size;
-  char tmp_template[] = "/tmp/pdvu_XXXXXX";
-  fd = mkstemp(tmp_template);  // create actual file
+namespace {
+constexpr std::string_view g_template_fmt = "/tmp/pdvu_XXXXXX";
+}
+
+Tempfile::Tempfile(size_t size) : file_size(size) {
+  std::string tmp_template{g_template_fmt};
+
+  fd = mkstemp(tmp_template.data());  // create actual file
   if (fd == -1) {
     throw std::runtime_error(std::string("mkstemp failed: ") + strerror(errno));
   }
   fp = std::string(tmp_template);  // store the file path
 
-  if (ftruncate(fd, file_size) == -1) {  // set size
+  if (ftruncate(fd, static_cast<long>(file_size)) == -1) {  // set size
     close(fd);
     unlink(fp.c_str());
     throw std::runtime_error("Failed to set temp file size: " + fp);
@@ -52,7 +58,7 @@ const std::string& Tempfile::path() const {  // get path
 
 void* Tempfile::data() const { return mapped_ptr; }
 
-Tempfile::WriteStatus Tempfile::write_data(const unsigned char* data, size_t len) {
+Tempfile::WriteStatus Tempfile::write_data(const void* data, size_t len) {
   if (data == nullptr) {
     return WriteStatus::NullBuffer;
   }

@@ -3,8 +3,6 @@
 
 #include <filesystem>
 
-// TODO test write data
-
 TEST(TempfileTest, CreationAndDeletion) {
   std::string tempfile_path;
   {
@@ -86,7 +84,7 @@ TEST(TempfileTest, WriteData) {
     auto test = Tempfile(1000);
     tempfile_path = test.path();
 
-    auto status = test.write_data(reinterpret_cast<const unsigned char*>(s.data()), s.size());
+    auto status = test.write_data(s.data(), s.size());
     ASSERT_EQ(status, Tempfile::WriteStatus::Success);
 
     void* raw = test.data();
