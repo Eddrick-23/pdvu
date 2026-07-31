@@ -26,7 +26,7 @@ using namespace pdf;
 
 MuPDFParser::MuPDFParser(const bool use_ICC, fz_context* cloned_ctx) {
   // FZ_STORE_DEFAULT = default resource cache size
-  if (cloned_ctx) {
+  if (cloned_ctx != nullptr) {
     // optional param to use a cloned context for duplicating
     ctx = std::move(cloned_ctx);
   } else {
@@ -39,7 +39,7 @@ MuPDFParser::MuPDFParser(const bool use_ICC, fz_context* cloned_ctx) {
   }
   doc = nullptr;
 
-  if (!ctx) {
+  if (ctx == nullptr) {
     throw std::runtime_error("Failed to create MuPDF context");
   }
 
@@ -61,7 +61,7 @@ MuPDFParser::MuPDFParser(const bool use_ICC, fz_context* cloned_ctx) {
 }
 
 void MuPDFParser::clear_doc() {
-  if (doc) {
+  if (doc != nullptr) {
     fz_drop_document(ctx, doc);
     doc = nullptr;
   }
@@ -69,8 +69,8 @@ void MuPDFParser::clear_doc() {
 
 MuPDFParser::~MuPDFParser() {
   // Cleanup
-  clear_doc();
-  if (ctx) {
+  MuPDFParser::clear_doc();
+  if (ctx != nullptr) {
     fz_drop_context(ctx);
     ctx = nullptr;
   }
