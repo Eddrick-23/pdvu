@@ -74,7 +74,7 @@ class Tempfile {
 
   /**
    * @brief Writes data into the memory-mapped temporary file.
-   * @param data Pointer to the source data buffer to write.
+   * @param data Void pointer to the source data buffer to write.
    * @param len The number of bytes to write.
    * @return A WriteStatus indicating success or the specific error encountered.
    */
