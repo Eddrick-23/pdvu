@@ -8,19 +8,45 @@
 #include "utils/logging.h"
 #include "utils/profiling.h"
 
+namespace {
+/**
+ * @brief Wrapper struct for MuPDF's required threading mutexes.
+ *
+ * By default, MuPDF is not thread safe. To allow multiple threads to safely execute
+ * concurrent operations(like parallel rendering), using the same underlying fz_context,
+ * MuPDF requires an array of FZ_LOCK_MAX mutexes
+ */
 struct MutexLocks {
-  std::mutex mutexes[FZ_LOCK_MAX];
+  std::array<std::mutex, FZ_LOCK_MAX> mutexes;
 };
 
-static MutexLocks global_mu_locks;
+/**
+ * @brief Global storage for mutexes used by the primary MuPDF context.
+ *
+ * This instance is passed as an opaque 'user' data pointer into
+ * the fz_locks_context struct during the initial context creation
+ */
+MutexLocks global_mu_locks;
 
-// Callback: Lock
+/**
+ * @brief MuPDF callback invoked when the library needs to acquire a lock.
+ *
+ * @param user Opaque pointer to the user-provided lock state (our MutexLocks instance).
+ * @param lock The internal ID of the mutex to lock (0 to FZ_LOCK_MAX - 1).
+ */
 void lock_callback(void* user, int lock) { static_cast<MutexLocks*>(user)->mutexes[lock].lock(); }
 
-// Callback: Unlock
+/**
+ * @brief MuPDF callback invoked when the library needs to release a lock.
+ *
+ * @param user Opaque pointer to the user-provided lock state (our MutexLocks instance).
+ * @param lock The internal ID of the mutex to unlock.
+ */
 void unlock_callback(void* user, int lock) {
   static_cast<MutexLocks*>(user)->mutexes[lock].unlock();
 }
+
+}  // namespace
 
 using namespace pdf;
 
