@@ -46,11 +46,11 @@ jobs:
         if: steps.cache-mupdf-checkout.outputs.cache-hit != 'true'
         run: git submodule update --init --depth 1 --recursive external/mupdf
 
-      - name: Install Linux Compiler
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ${{ matrix.cxx }}
+      #      - name: Install Linux Compiler
+      #        if: matrix.os == 'ubuntu-latest'
+      #        run: |
+      #          sudo apt-get update
+      #          sudo apt-get install -y ${{ matrix.cxx }}
 
       # Cache mupdf builds since they take a long time
       - name: Cache MuPDF Build
