@@ -78,7 +78,7 @@ class Tempfile {
    * @param len The number of bytes to write.
    * @return A WriteStatus indicating success or the specific error encountered.
    */
-  WriteStatus write_data(const unsigned char* data, size_t len);
+  WriteStatus write_data(const void* data, size_t len);
 
  private:
   int fd;                         ///< File descriptor for the temporary file

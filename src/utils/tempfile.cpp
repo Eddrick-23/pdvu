@@ -58,7 +58,7 @@ const std::string& Tempfile::path() const {  // get path
 
 void* Tempfile::data() const { return mapped_ptr; }
 
-Tempfile::WriteStatus Tempfile::write_data(const unsigned char* data, size_t len) {
+Tempfile::WriteStatus Tempfile::write_data(const void* data, size_t len) {
   if (data == nullptr) {
     return WriteStatus::NullBuffer;
   }
