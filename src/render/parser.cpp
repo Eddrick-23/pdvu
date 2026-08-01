@@ -4,6 +4,7 @@
 #include <mutex>
 #include <print>
 
+#include "page_specs.h"
 #include "pdf_constants.h"
 #include "plog/Log.h"
 #include "utils/logging.h"

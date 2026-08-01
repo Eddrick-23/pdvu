@@ -2,7 +2,7 @@
 #include <format>
 #include <vector>
 
-#include "parser.h"
+#include "page_specs.h"
 #include "pdf_constants.h"
 #include "plog/Log.h"
 #include "utils/profiling.h"

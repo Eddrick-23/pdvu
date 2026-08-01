@@ -1,5 +1,7 @@
 #pragma once
-#include "parser.h"
+#include <vector>
+
+#include "page_specs.h"
 
 namespace pdf {
 /**

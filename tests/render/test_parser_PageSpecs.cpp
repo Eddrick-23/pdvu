@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-#include "render/parser.h"
+#include "render/page_specs.h"
 
 namespace {
 // Mirrors fz_round_rect, which does NOT do nearest-rounding on each
