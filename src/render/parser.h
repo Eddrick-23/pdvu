@@ -50,10 +50,10 @@ struct Parser {
 
   /**
    * @brief Retrieves the dimensional specifications for a given page.
-   * @param page The 0-indexed page number.
+   * @param page_num The 0-indexed page number.
    * @return std::optional containing PageSpecs if successful.
    */
-  [[nodiscard]] virtual std::optional<PageSpecs> page_specs(int page) const = 0;
+  [[nodiscard]] virtual std::optional<PageSpecs> page_specs(int page_num) const = 0;
 
   /** @return The total number of pages in the loaded document. */
   [[nodiscard]] virtual int num_pages() const = 0;
@@ -121,7 +121,7 @@ class MuPDFParser : public Parser {
   void clear_doc() override;
   bool load_document(const std::string& filepath) override;
   [[nodiscard]] const std::string& get_document_name() const override;
-  [[nodiscard]] std::optional<PageSpecs> page_specs(int page) const override;
+  [[nodiscard]] std::optional<PageSpecs> page_specs(int page_num) const override;
   [[nodiscard]] int num_pages() const override;
   [[nodiscard]] std::optional<DisplayListHandle> get_display_list(int page_num) override;
   void write_section(int w, int h, float zoom, const PageSpecs& ps, DisplayListHandle dlist,

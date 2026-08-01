@@ -148,7 +148,7 @@ int MuPDFParser::num_pages() const {
   return count;
 }
 
-std::optional<PageSpecs> MuPDFParser::page_specs(const int page_num) const {
+std::optional<PageSpecs> MuPDFParser::page_specs(int page_num) const {
   ZoneScoped;
   fz_page* page = nullptr;
   fz_try(ctx) { page = fz_load_page(ctx, doc, page_num); }
@@ -156,6 +156,9 @@ std::optional<PageSpecs> MuPDFParser::page_specs(const int page_num) const {
     PLOG_ERROR << std::format("Error: Failed to load page. PageNum: {}", page_num);
     return {};
   }
+
+  // create a scaling matrix to determine how much to scale the page
+  // relative to its original base size
   fz_matrix ctm = fz_scale(g_base_zoom, g_base_zoom);
 
   // raw data
@@ -173,19 +176,21 @@ std::optional<PageSpecs> MuPDFParser::page_specs(const int page_num) const {
   const float acc_height = raw_bounds.y1 - raw_bounds.y0;
   const float acc_width = raw_bounds.x1 - raw_bounds.x0;
 
-  return PageSpecs(raw_bounds.x0,
-                   raw_bounds.y0,
-                   raw_bounds.x1,
-                   raw_bounds.y1,  // Base
-                   bbox.x0,
-                   bbox.y0,
-                   bbox.x1,
-                   bbox.y1,  // ints
-                   w,
-                   h,
-                   size,
-                   acc_width,
-                   acc_height);  // dims
+  return PageSpecs{
+      .base_x0 = raw_bounds.x0,
+      .base_y0 = raw_bounds.y0,
+      .base_x1 = raw_bounds.x1,
+      .base_y1 = raw_bounds.y1,
+      .x0 = bbox.x0,
+      .y0 = bbox.y0,
+      .x1 = bbox.x1,
+      .y1 = bbox.y1,
+      .width = w,
+      .height = h,
+      .size = size,
+      .acc_width = acc_width,
+      .acc_height = acc_height,
+  };
 }
 
 std::optional<DisplayListHandle> MuPDFParser::get_display_list(int page_num) {
@@ -206,9 +211,7 @@ std::optional<DisplayListHandle> MuPDFParser::get_display_list(int page_num) {
       fz_drop_page(ctx, page);
     }
     PLOG_ERROR << "MuPDFParser failed to create display list";
-    // TODO change this to return std::optional to follow PageSpecs?
-    return std::nullopt;  // coordinator will check if displaylist was created
-    // successfully
+    return std::nullopt;
   }
   fz_context* captured_ctx = this->ctx;  // capture for custom deleter
   return DisplayListHandle(raw_display_list, [captured_ctx](fz_display_list* ptr) {
