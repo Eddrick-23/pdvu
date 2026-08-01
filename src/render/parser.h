@@ -117,10 +117,17 @@ struct PageSpecs {
 };
 
 /**
+ * @brief defines a rectangle with (x0, y0) at the top left and (x1, y1) at the bottom right.
+ */
+struct Rect {
+  float x0, y0, x1, y1;
+};
+
+/**
  * @brief Represents a horizontal slice of a page for parallel processing.
  */
 struct HorizontalBound {
-  fz_rect rect;   ///< The MuPDF rectangle defining the physical bounds of this strip.
+  Rect rect;      ///< The MuPDF rectangle defining the physical bounds of this strip.
   int width;      ///< Pixel width of the strip.
   int height;     ///< Pixel height of the strip.
   size_t bytes;   ///< Total bytes contained in this strip.
@@ -159,6 +166,18 @@ struct Parser {
 
   /**
    * @brief Partitions a page into n horizontal strips for parallel rendering.
+   *
+   * Boundary Coordinates:
+   * The calculated regions use half-open intervals [start, end). The lower bounds
+   * (x0, y0) are inclusive, and the upper bounds (x1, y1) are exclusive. This guarantees
+   * that adjacent strips do not overlap and that their combined heights exactly match
+   * the original page height without off-by-one errors.
+   *
+   * Memory Layout:
+   * The `offset` field provides the exact byte starting position for each strip. This allows
+   * parallel threads to write their rendered chunks directly into a single, contiguous
+   * shared memory cache safely, preparing the buffer for a single-pass transfer to the
+   * terminal window.
    * @param ps The PageSpecs of the page to split.
    * @param n The number of horizontal strips to generate.
    * @return A vector of HorizontalBound definitions.
@@ -195,7 +214,7 @@ struct Parser {
    * @param clip The exact fz_rect sub-region to render.
    */
   virtual void write_section(int w, int h, float zoom, const PageSpecs& ps, DisplayListHandle dlist,
-      unsigned char* buffer, fz_rect clip) = 0;
+                             unsigned char* buffer, Rect clip) = 0;
 
   /**
    * @brief Clones the current parser state, creating a new context and loading the same document.
@@ -236,7 +255,7 @@ class MuPDFParser : public Parser {
   [[nodiscard]] int num_pages() const override;
   [[nodiscard]] DisplayListHandle get_display_list(int page_num) override;
   void write_section(int w, int h, float zoom, const PageSpecs& ps, DisplayListHandle dlist,
-      unsigned char* buffer, fz_rect clip) override;
+                     unsigned char* buffer, Rect clip) override;
   [[nodiscard]] std::unique_ptr<Parser> duplicate() const override;
 
  private:

@@ -46,6 +46,8 @@ void unlock_callback(void* user, int lock) {
   static_cast<MutexLocks*>(user)->mutexes[lock].unlock();
 }
 
+constexpr int g_pad = 3;  ///< 3 bytes per pixel for RGB format data
+constexpr float g_base_zoom = 1.0;
 }  // namespace
 
 using namespace pdf;
@@ -133,13 +135,12 @@ int MuPDFParser::num_pages() const {
 std::optional<PageSpecs> MuPDFParser::page_specs(const int page_num) const {
   ZoneScoped;
   fz_page* page = nullptr;
-  constexpr float base_zoom = 1.0;
   fz_try(ctx) { page = fz_load_page(ctx, doc, page_num); }
   fz_catch(ctx) {
     PLOG_ERROR << std::format("Error: Failed to load page. PageNum: {}", page_num);
     return {};
   }
-  fz_matrix ctm = fz_scale(base_zoom, base_zoom);
+  fz_matrix ctm = fz_scale(g_base_zoom, g_base_zoom);
 
   // raw data
   fz_rect raw_bounds = fz_bound_page(ctx, page);
@@ -152,41 +153,81 @@ std::optional<PageSpecs> MuPDFParser::page_specs(const int page_num) const {
   // dimensions
   const int w = bbox.x1 - bbox.x0;
   const int h = bbox.y1 - bbox.y0;
-  const size_t size = w * 3 * h;
+  const size_t size = static_cast<size_t>(w) * g_pad * h;
   const float acc_height = raw_bounds.y1 - raw_bounds.y0;
   const float acc_width = raw_bounds.x1 - raw_bounds.x0;
 
-  return PageSpecs(raw_bounds.x0, raw_bounds.y0, raw_bounds.x1,
-      raw_bounds.y1,                       // Base
-      bbox.x0, bbox.y0, bbox.x1, bbox.y1,  // ints
-      w, h, size, acc_width, acc_height);  // dims
+  return PageSpecs(raw_bounds.x0,
+                   raw_bounds.y0,
+                   raw_bounds.x1,
+                   raw_bounds.y1,  // Base
+                   bbox.x0,
+                   bbox.y0,
+                   bbox.x1,
+                   bbox.y1,  // ints
+                   w,
+                   h,
+                   size,
+                   acc_width,
+                   acc_height);  // dims
 }
 
 std::vector<HorizontalBound> MuPDFParser::split_bounds(PageSpecs ps, int n) {
   ZoneScoped;
   // split the page into n horizontal strips represented by fz_rect
-  constexpr int pad = 3;  // data is in rgb format
+  // The height is divided evenly, while the remainder is tracked to ensure
+  // no pixels are dropped at the bottom of the page due to integer division.
   std::vector<HorizontalBound> bounds;
-  int y_step = ps.height / n;
-  int remainder = ps.height % n;
+  const int y_step = ps.height / n;
+  const int remainder = ps.height % n;
+
+  // horizontal bounds remain constant for every strip
   const int x0 = ps.x0;
   const int x1 = ps.x1;
-  // only y0 and y1 will be shifted
+
+  // Init vertical window for first horizontal strip(from the top)
   int y0 = ps.y0;
   int y1 = ps.y0 + y_step;
   size_t offset = 0;
   for (int i = 0; i < n - 1; i++) {
-    const size_t pixels = (x1 - x0) * (y1 - y0) * pad;
-    auto data = HorizontalBound{fz_make_rect(x0, y0, x1, y1), x1 - x0, y1 - y0, pixels, offset};
+    const size_t pixels = static_cast<size_t>(x1 - x0) * (y1 - y0) * g_pad;
+    auto data = HorizontalBound{
+        .rect =
+            Rect{
+                .x0 = static_cast<float>(x0),
+                .y0 = static_cast<float>(y0),
+                .x1 = static_cast<float>(x1),
+                .y1 = static_cast<float>(y1),
+            },
+        .width = x1 - x0,
+        .height = y1 - y0,
+        .bytes = pixels,
+        .offset = offset,
+    };
     bounds.push_back(data);
+    // slide vertical boundary down
     y0 = y1;
     y1 += y_step;
+    // Advance buffer offset by exact byte size of current strip
     offset += pixels;
   }
-  // last iteration
+
+  // last iteration: expand final strip's lower boundary by remaining pixels
   y1 += remainder;
-  const size_t pixels = (x1 - x0) * (y1 - y0) * pad;
-  const auto data = HorizontalBound{fz_make_rect(x0, y0, x1, y1), x1 - x0, y1 - y0, pixels, offset};
+  const size_t pixels = static_cast<size_t>(x1 - x0) * (y1 - y0) * g_pad;
+  const auto data = HorizontalBound{
+      .rect =
+          Rect{
+              .x0 = static_cast<float>(x0),
+              .y0 = static_cast<float>(y0),
+              .x1 = static_cast<float>(x1),
+              .y1 = static_cast<float>(y1),
+          },
+      .width = x1 - x0,
+      .height = y1 - y0,
+      .bytes = pixels,
+      .offset = offset,
+  };
   bounds.push_back(data);
   return bounds;
 }
@@ -222,7 +263,7 @@ DisplayListHandle MuPDFParser::get_display_list(int page_num) {
 }
 
 void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
-    DisplayListHandle dlist, unsigned char* buffer, fz_rect clip) {
+                                DisplayListHandle dlist, unsigned char* buffer, Rect clip) {
   /* dlist is created by another thread. That thread will be responsible for
    * dropping it clip is which portion of the dlist we are reading from. it must
    * match with w and h The input buffer must be shifted such that the first
@@ -246,21 +287,28 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
     PLOG_ERROR << std::format(
         "clip dimensions do not match w:{} and "
         "h:{}. clip data: x0:{},y0:{},x1:{},y1:{}",
-        w, h, clip.x0, clip.y0, clip.x1, clip.y1);
+        w,
+        h,
+        clip.x0,
+        clip.y0,
+        clip.x1,
+        clip.y1);
     return;
   }
+
+  const auto rect = fz_rect(clip.x0, clip.y0, clip.x1, clip.y1);
   fz_pixmap* pix = nullptr;
   fz_try(ctx) {
     fz_matrix ctm = fz_scale(zoom, zoom);
     ctm = fz_pre_rotate(ctm, ps.rotation);
     translate_matrix(ctm);
     pix = fz_new_pixmap_with_bbox_and_data(
-        ctx, fz_device_rgb(ctx), fz_irect_from_rect(clip), NULL, 0, buffer);
+        ctx, fz_device_rgb(ctx), fz_irect_from_rect(rect), NULL, 0, buffer);
     pix->x = static_cast<int>(clip.x0);
     pix->y = static_cast<int>(clip.y0);
     fz_clear_pixmap_with_value(ctx, pix, 255);  // set white background
     fz_device* dev = fz_new_draw_device(ctx, fz_identity, pix);
-    fz_run_display_list(ctx, dlist.get(), dev, ctm, clip, NULL);
+    fz_run_display_list(ctx, dlist.get(), dev, ctm, rect, NULL);
 
     // free memory
     fz_close_device(ctx, dev);
