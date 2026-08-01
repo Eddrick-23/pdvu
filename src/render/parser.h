@@ -131,6 +131,9 @@ struct HorizontalBound {
  * @brief Abstract interface defining the core operations of a PDF parser.
  */
 struct Parser {
+  /**
+   * @brief Concrete implementations should override destructor for resource cleanup
+   */
   virtual ~Parser() = default;
   /**
    * @brief Clears the currently loaded document and frees resources

@@ -118,7 +118,7 @@ bool MuPDFParser::load_document(const std::string& filepath) {
 const std::string& MuPDFParser::get_document_name() const { return doc_name; }
 
 int MuPDFParser::num_pages() const {
-  if (!doc) {
+  if (doc == nullptr) {
     return 0;
   }
   int count = 0;
@@ -190,8 +190,6 @@ std::vector<HorizontalBound> MuPDFParser::split_bounds(PageSpecs ps, int n) {
   bounds.push_back(data);
   return bounds;
 }
-
-using DisplayListHandle = std::shared_ptr<fz_display_list>;
 
 DisplayListHandle MuPDFParser::get_display_list(int page_num) {
   ZoneScoped;
@@ -270,7 +268,7 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
     fz_drop_pixmap(ctx, pix);
   }
   fz_catch(ctx) {
-    if (pix) {
+    if (pix != nullptr) {
       fz_drop_pixmap(ctx, pix);
     }
     PLOG_ERROR << "Failed to draw page";
@@ -306,7 +304,7 @@ MuPDFParser& MuPDFParser::operator=(MuPDFParser&& other) noexcept {
   if (this != &other) {
     // clear current processes
     clear_doc();
-    if (ctx) {
+    if (ctx != nullptr) {
       fz_drop_context(ctx);
     }
 
