@@ -15,7 +15,7 @@ class MockParser : public Parser {
   MOCK_METHOD(const std::string&, get_document_name, (), (const, override));
   MOCK_METHOD(std::optional<PageSpecs>, page_specs, (int), (const, override));
   MOCK_METHOD(int, num_pages, (), (const, override));
-  MOCK_METHOD(DisplayListHandle, get_display_list, (int), (override));
+  MOCK_METHOD(std::optional<DisplayListHandle>, get_display_list, (int), (override));
   MOCK_METHOD(void, write_section,
               (int, int, float, const pdf::PageSpecs&, DisplayListHandle, unsigned char*, Rect),
               (override));

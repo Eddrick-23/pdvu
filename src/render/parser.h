@@ -68,7 +68,7 @@ struct Parser {
    * @param page_num The 0-indexed page number to parse.
    * @return A shared DisplayListHandle containing the cached draw commands.
    */
-  virtual DisplayListHandle get_display_list(int page_num) = 0;
+  virtual std::optional<DisplayListHandle> get_display_list(int page_num) = 0;
 
   /**
    * @brief Writes a specific clipped section of a display list to a buffer.
@@ -123,7 +123,7 @@ class MuPDFParser : public Parser {
   [[nodiscard]] const std::string& get_document_name() const override;
   [[nodiscard]] std::optional<PageSpecs> page_specs(int page) const override;
   [[nodiscard]] int num_pages() const override;
-  [[nodiscard]] DisplayListHandle get_display_list(int page_num) override;
+  [[nodiscard]] std::optional<DisplayListHandle> get_display_list(int page_num) override;
   void write_section(int w, int h, float zoom, const PageSpecs& ps, DisplayListHandle dlist,
                      unsigned char* buffer, Rect clip) override;
   [[nodiscard]] std::unique_ptr<Parser> duplicate() const override;

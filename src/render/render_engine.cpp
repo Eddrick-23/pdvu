@@ -172,17 +172,17 @@ std::optional<pdf::DisplayListHandle> RenderEngine::fetch_display_list(int page_
   if (use_cache) {
     auto cache_check = dlist_cache.get(page_num);
     if (cache_check.has_value()) {  // exists, use cache
-      return cache_check.value();
+      return cache_check;
     }
   }
   const auto start = std::chrono::steady_clock::now();
   auto dlist = parser->get_display_list(page_num);
   const auto end = std::chrono::steady_clock::now();
 
-  if (dlist) {
+  if (dlist.has_value()) {
     const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     if (use_cache && duration >= dlist_cache_time_limit) {
-      dlist_cache.put(page_num, dlist);
+      dlist_cache.put(page_num, dlist.value());
     }
     return dlist;
   }
@@ -193,22 +193,19 @@ void RenderEngine::cache_page(int page_num, float zoom, int rotation,
                               const std::shared_ptr<SharedMemory>& shm,
                               const std::shared_ptr<Tempfile>& tempfile,
                               const std::string& transmission, int page_width, int page_height) {
-  // std::vector<unsigned char> buffer;
-  // if (shm) {
-  //   buffer.resize(shm->size());
-  //   shm->copy_data(buffer.data(), buffer.size());
-  // }
   page_cache.put(
       {
           .page_num = page_num,
           .zoom = zoom,
           .rotation_degrees = rotation,
       },
-      {.transmission = transmission,
-       .shm_data = shm,
-       .tempfile_data = tempfile,
-       .page_width = page_width,
-       .page_height = page_height});
+      {
+          .transmission = transmission,
+          .shm_data = shm,
+          .tempfile_data = tempfile,
+          .page_width = page_width,
+          .page_height = page_height,
+      });
 }
 
 std::optional<PageCacheData> RenderEngine::try_page_cache(const RenderRequest& req,

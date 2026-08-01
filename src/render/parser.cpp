@@ -48,25 +48,42 @@ void unlock_callback(void* user, int lock) {
   static_cast<MutexLocks*>(user)->mutexes[lock].unlock();
 }
 
+/**
+ * @brief Configure an fz_locks_context to be used with cloned contexts
+ *        to enable thread safe library operations.
+ * @return a static fz_lock_context to be passed into fz_new_context()
+ */
+fz_locks_context make_locks_context() {
+  static fz_locks_context locks_ctx{
+      .user = &global_mu_locks,
+      .lock = lock_callback,
+      .unlock = unlock_callback,
+  };
+  return locks_ctx;
+}
+
+/**
+ * @brief Creates a fresh MuPDF context with thread-safe locking configured.
+ * @return A newly-created context, or nullptr if creation failed.
+ */
+fz_context* create_locked_context() {
+  // FZ_STORE_DEFAULT = default resource cache size
+  static fz_locks_context locks_context = make_locks_context();
+  fz_context* new_ctx = fz_new_context(NULL, &locks_context, FZ_STORE_DEFAULT);
+  if (new_ctx != nullptr) {
+    fz_register_document_handlers(new_ctx);
+  }
+  return new_ctx;
+}
+
 }  // namespace
 
 using namespace pdf;
 
-MuPDFParser::MuPDFParser(const bool use_ICC, fz_context* cloned_ctx) {
-  // FZ_STORE_DEFAULT = default resource cache size
-  if (cloned_ctx != nullptr) {
-    // optional param to use a cloned context for duplicating
-    ctx = std::move(cloned_ctx);
-  } else {
-    static fz_locks_context locks_ctx;
-    locks_ctx.user = &global_mu_locks;
-    locks_ctx.lock = lock_callback;
-    locks_ctx.unlock = unlock_callback;
-    ctx = fz_new_context(NULL, &locks_ctx, FZ_STORE_DEFAULT);
-    fz_register_document_handlers(ctx);
-  }
-  doc = nullptr;
-
+MuPDFParser::MuPDFParser(const bool use_ICC, fz_context* cloned_ctx)
+    : ctx(cloned_ctx != nullptr ? cloned_ctx : create_locked_context()),
+      doc(nullptr),
+      use_icc_profile(use_ICC) {
   if (ctx == nullptr) {
     throw std::runtime_error("Failed to create MuPDF context");
   }
@@ -76,7 +93,6 @@ MuPDFParser::MuPDFParser(const bool use_ICC, fz_context* cloned_ctx) {
     fz_try(ctx) { fz_disable_icc(ctx); }
     fz_catch(ctx) { PLOG_WARNING << "Failed to configure ICC"; }
   }
-  use_icc_profile = use_ICC;
 
   // fz_try(ctx) { // configuring anti-aliasing level
   //     // fz_set_aa_level(ctx, 0);
@@ -172,30 +188,30 @@ std::optional<PageSpecs> MuPDFParser::page_specs(const int page_num) const {
                    acc_height);  // dims
 }
 
-DisplayListHandle MuPDFParser::get_display_list(int page_num) {
+std::optional<DisplayListHandle> MuPDFParser::get_display_list(int page_num) {
   ZoneScoped;
   fz_page* page = nullptr;
-  fz_display_list* raw_list = nullptr;
+  fz_display_list* raw_display_list = nullptr;
   fz_try(ctx) { page = fz_load_page(ctx, doc, page_num); }
   fz_catch(ctx) {
-    PLOG_ERROR << "Failed to load page";
-    return nullptr;
+    PLOG_ERROR << "MuPDFParser failed to load page";
+    return std::nullopt;
   }
   fz_try(ctx) {
-    raw_list = fz_new_display_list_from_page(ctx, page);
+    raw_display_list = fz_new_display_list_from_page(ctx, page);
     fz_drop_page(ctx, page);
   }
   fz_catch(ctx) {
-    if (page) {
+    if (page != nullptr) {
       fz_drop_page(ctx, page);
     }
-    PLOG_ERROR << "Failed to create display list";
+    PLOG_ERROR << "MuPDFParser failed to create display list";
     // TODO change this to return std::optional to follow PageSpecs?
-    return nullptr;  // coordinator will check if displaylist was created
+    return std::nullopt;  // coordinator will check if displaylist was created
     // successfully
   }
   fz_context* captured_ctx = this->ctx;  // capture for custom deleter
-  return DisplayListHandle(raw_list, [captured_ctx](fz_display_list* ptr) {
+  return DisplayListHandle(raw_display_list, [captured_ctx](fz_display_list* ptr) {
     if (ptr) {
       fz_drop_display_list(captured_ctx, ptr);
     }
