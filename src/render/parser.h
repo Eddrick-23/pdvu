@@ -164,26 +164,6 @@ struct Parser {
    */
   [[nodiscard]] virtual std::optional<PageSpecs> page_specs(int page) const = 0;
 
-  /**
-   * @brief Partitions a page into n horizontal strips for parallel rendering.
-   *
-   * Boundary Coordinates:
-   * The calculated regions use half-open intervals [start, end). The lower bounds
-   * (x0, y0) are inclusive, and the upper bounds (x1, y1) are exclusive. This guarantees
-   * that adjacent strips do not overlap and that their combined heights exactly match
-   * the original page height without off-by-one errors.
-   *
-   * Memory Layout:
-   * The `offset` field provides the exact byte starting position for each strip. This allows
-   * parallel threads to write their rendered chunks directly into a single, contiguous
-   * shared memory cache safely, preparing the buffer for a single-pass transfer to the
-   * terminal window.
-   * @param ps The PageSpecs of the page to split.
-   * @param n The number of horizontal strips to generate.
-   * @return A vector of HorizontalBound definitions.
-   */
-  [[nodiscard]] virtual std::vector<HorizontalBound> split_bounds(PageSpecs ps, int n) = 0;
-
   /** @return The total number of pages in the loaded document. */
   [[nodiscard]] virtual int num_pages() const = 0;
 
@@ -251,7 +231,6 @@ class MuPDFParser : public Parser {
   bool load_document(const std::string& filepath) override;
   [[nodiscard]] const std::string& get_document_name() const override;
   [[nodiscard]] std::optional<PageSpecs> page_specs(int page) const override;
-  [[nodiscard]] std::vector<HorizontalBound> split_bounds(PageSpecs ps, int n) override;
   [[nodiscard]] int num_pages() const override;
   [[nodiscard]] DisplayListHandle get_display_list(int page_num) override;
   void write_section(int w, int h, float zoom, const PageSpecs& ps, DisplayListHandle dlist,

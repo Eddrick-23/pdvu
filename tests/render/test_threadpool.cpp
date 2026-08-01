@@ -14,7 +14,6 @@ class MockParser : public Parser {
   MOCK_METHOD(bool, load_document, (const std::string&), (override));
   MOCK_METHOD(const std::string&, get_document_name, (), (const, override));
   MOCK_METHOD(std::optional<PageSpecs>, page_specs, (int), (const, override));
-  MOCK_METHOD(std::vector<HorizontalBound>, split_bounds, (PageSpecs, int), (override));
   MOCK_METHOD(int, num_pages, (), (const, override));
   MOCK_METHOD(DisplayListHandle, get_display_list, (int), (override));
   MOCK_METHOD(void, write_section,
