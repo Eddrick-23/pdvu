@@ -19,6 +19,7 @@ add_executable(unit_tests
     utils/test_lru_cache.cpp
     utils/test_resize_debouncer.cpp
     render/test_threadpool.cpp
+    render/test_bounds.cpp
     render/test_parser.cpp
     render/test_parser_PageSpecs.cpp
     terminal/test_kitty.cpp

@@ -5,6 +5,11 @@ namespace pdf {
 /**
  * @brief Partitions a page into n horizontal strips for parallel rendering.
  *
+ * Note for invalid inputs:
+ * - n < 1 values will be clamped to n = 1
+ * - Negative heights in page specs will be clamped to height 0 and
+ * return a single empty strip
+ *
  * Boundary Coordinates:
  * The calculated regions use half-open intervals [start, end). The lower bounds
  * (x0, y0) are inclusive, and the upper bounds (x1, y1) are exclusive. This guarantees
