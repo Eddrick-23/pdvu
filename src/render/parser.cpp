@@ -71,7 +71,7 @@ fz_locks_context make_locks_context() {
 fz_context* create_locked_context() {
   // FZ_STORE_DEFAULT = default resource cache size
   static fz_locks_context locks_context = make_locks_context();
-  fz_context* new_ctx = fz_new_context(NULL, &locks_context, FZ_STORE_DEFAULT);
+  fz_context* new_ctx = fz_new_context(nullptr, &locks_context, FZ_STORE_DEFAULT);
   if (new_ctx != nullptr) {
     fz_register_document_handlers(new_ctx);
   }
@@ -117,6 +117,9 @@ void MuPDFParser::clear_doc() {
     fz_drop_document(context->borrow(), doc);
     doc = nullptr;
   }
+
+  doc_name.clear();
+  full_filepath.clear();
 }
 
 MuPDFParser::~MuPDFParser() { MuPDFParser::clear_doc(); }
@@ -153,6 +156,9 @@ int MuPDFParser::num_pages() const {
 
 std::optional<PageSpecs> MuPDFParser::page_specs(int page_num) const {
   ZoneScoped;
+  if (doc == nullptr) {
+    return std::nullopt;
+  }
   fz_context* ctx = context->borrow();
   fz_page* page = nullptr;
   fz_try(ctx) { page = fz_load_page(ctx, doc, page_num); }
@@ -199,6 +205,9 @@ std::optional<PageSpecs> MuPDFParser::page_specs(int page_num) const {
 
 std::optional<DisplayListHandle> MuPDFParser::get_display_list(int page_num) {
   ZoneScoped;
+  if (doc == nullptr) {
+    return std::nullopt;
+  }
   fz_context* ctx = context->borrow();
   fz_page* page = nullptr;
   fz_display_list* raw_display_list = nullptr;
@@ -267,12 +276,12 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
     ctm = fz_pre_rotate(ctm, ps.rotation);
     translate_matrix(ctm);
     pix = fz_new_pixmap_with_bbox_and_data(
-        ctx, fz_device_rgb(ctx), fz_irect_from_rect(rect), NULL, 0, buffer);
+        ctx, fz_device_rgb(ctx), fz_irect_from_rect(rect), nullptr, 0, buffer);
     pix->x = static_cast<int>(clip.x0);
     pix->y = static_cast<int>(clip.y0);
     fz_clear_pixmap_with_value(ctx, pix, 255);  // set white background
     fz_device* dev = fz_new_draw_device(ctx, fz_identity, pix);
-    fz_run_display_list(ctx, dlist.get(), dev, ctm, rect, NULL);
+    fz_run_display_list(ctx, dlist.get(), dev, ctm, rect, nullptr);
 
     // free memory
     fz_close_device(ctx, dev);
@@ -289,6 +298,10 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
 
 std::unique_ptr<Parser> MuPDFParser::duplicate() const {
   fz_context* cloned_raw = fz_clone_context(context->borrow());
+
+  if (cloned_raw == nullptr) {
+    throw std::runtime_error("Failed to clone MuPDF context");
+  }
 
   auto cloned_ctx = std::make_shared<MuPDFContext>(cloned_raw);
 

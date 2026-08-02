@@ -30,7 +30,8 @@ struct Parser {
    */
   virtual ~Parser() = default;
   /**
-   * @brief Clears the currently loaded document and frees resources
+   * @brief Clears the currently loaded document and resets underlying tracked
+   * document name and filepath
    */
   virtual void clear_doc() = 0;
 
