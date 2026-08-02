@@ -3,12 +3,8 @@
 #include <optional>
 #include <string>
 
+#include "mupdf_resources.h"
 #include "page_specs.h"
-
-// Tell C++ compiler to treat these includes as C code
-extern "C" {
-#include <mupdf/fitz.h>
-}
 
 namespace pdf {
 
@@ -103,14 +99,14 @@ class MuPDFParser : public Parser {
  public:
   /**
    * @brief Constructs the parser, initializing or cloning the MuPDF context.
+   *        Creates a new underlying context with global locks.
    * @param use_ICC Whether to enable ICC color management.
-   * @param cloned_ctx An optional existing context to clone for multi-threading. If null, a new
-   * context with global locks is created.
+   * @throws std::runtime_error if context creation fails.
    */
-  explicit MuPDFParser(bool use_ICC, fz_context* cloned_ctx = nullptr);
+  explicit MuPDFParser(bool use_ICC);
   ~MuPDFParser() override;
 
-  // Enforce unique ownership over mupdf context
+  // Parser instances are non-copyable.
   MuPDFParser(const MuPDFParser&) = delete;
   MuPDFParser& operator=(const MuPDFParser&) = delete;
 
@@ -129,10 +125,18 @@ class MuPDFParser : public Parser {
   [[nodiscard]] std::unique_ptr<Parser> duplicate() const override;
 
  private:
-  fz_context* ctx;            ///< The core MuPDF context required for all operations
-  fz_document* doc;           ///< Pointer to the currently opened document
-  std::string doc_name;       ///< The filename of the document
-  std::string full_filepath;  ///< Absolute path used for duplication
-  bool use_icc_profile;       ///< Flag indicating if ICC colour profiles are active
+  /**
+   * @brief Constructs the parser, initializing or cloning the MuPDF context.
+   * @param use_ICC Whether to enable ICC color management.
+   * @param cloned_ctx A cloned context from fz_clone_context
+   * @throws std::invalid_argument if a null cloned_context is given
+   */
+  explicit MuPDFParser(bool use_ICC, std::shared_ptr<MuPDFContext> cloned_ctx);
+
+  std::shared_ptr<MuPDFContext> context;  ///< RAII wrapper over core MuPDF context.
+  fz_document* doc;                       ///< Pointer to the currently opened document
+  std::string doc_name;                   ///< The filename of the document
+  std::string full_filepath;              ///< Absolute path used for duplication
+  bool use_icc_profile;                   ///< Flag indicating if ICC colour profiles are active
 };
 }  // namespace pdf

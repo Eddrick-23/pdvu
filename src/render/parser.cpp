@@ -1,8 +1,10 @@
 #include "parser.h"
 
+#include <array>
 #include <filesystem>
+#include <format>
 #include <mutex>
-#include <print>
+#include <utility>
 
 #include "page_specs.h"
 #include "pdf_constants.h"
@@ -80,48 +82,48 @@ fz_context* create_locked_context() {
 
 using namespace pdf;
 
-MuPDFParser::MuPDFParser(const bool use_ICC, fz_context* cloned_ctx)
-    : ctx(cloned_ctx != nullptr ? cloned_ctx : create_locked_context()),
+MuPDFParser::MuPDFParser(bool use_ICC) try
+    : context(std::make_shared<MuPDFContext>(create_locked_context())),
       doc(nullptr),
       use_icc_profile(use_ICC) {
-  if (ctx == nullptr) {
-    throw std::runtime_error("Failed to create MuPDF context");
-  }
+  fz_context* ctx = context->borrow();
 
   // Disable ICC colour management for performance
   if (!use_ICC) {
     fz_try(ctx) { fz_disable_icc(ctx); }
     fz_catch(ctx) { PLOG_WARNING << "Failed to configure ICC"; }
   }
+} catch (const std::invalid_argument&) {
+  throw std::runtime_error("Failed to create MuPDF context");
+}
 
-  // fz_try(ctx) { // configuring anti-aliasing level
-  //     // fz_set_aa_level(ctx, 0);
-  //     fz_set_text_aa_level(ctx, 0);
-  //     fz_set_graphics_aa_level(ctx, 0);
-  // }
-  // fz_catch(ctx) {
-  //     std::cerr << "WARNING: Failed to configure AAC." << std::endl;
-  // }
+MuPDFParser::MuPDFParser(const bool use_ICC, std::shared_ptr<MuPDFContext> cloned_ctx)
+    : context(std::move(cloned_ctx)), doc(nullptr), use_icc_profile(use_ICC) {
+  if (context == nullptr) {
+    throw std::invalid_argument("Null MuPDF context");
+  }
+
+  // Disable ICC colour management for performance
+  fz_context* ctx = context->borrow();
+
+  if (!use_ICC) {
+    fz_try(ctx) { fz_disable_icc(ctx); }
+    fz_catch(ctx) { PLOG_WARNING << "Failed to configure ICC"; }
+  }
 }
 
 void MuPDFParser::clear_doc() {
   if (doc != nullptr) {
-    fz_drop_document(ctx, doc);
+    fz_drop_document(context->borrow(), doc);
     doc = nullptr;
   }
 }
 
-MuPDFParser::~MuPDFParser() {
-  // Cleanup
-  MuPDFParser::clear_doc();
-  if (ctx != nullptr) {
-    fz_drop_context(ctx);
-    ctx = nullptr;
-  }
-}
+MuPDFParser::~MuPDFParser() { MuPDFParser::clear_doc(); }
 
 bool MuPDFParser::load_document(const std::string& filepath) {
   clear_doc();
+  fz_context* ctx = context->borrow();
   fz_try(ctx) { doc = fz_open_document(ctx, filepath.c_str()); }
   fz_catch(ctx) {
     PLOG_ERROR << std::format("Could not open file: {}", filepath);
@@ -140,6 +142,7 @@ int MuPDFParser::num_pages() const {
     return 0;
   }
   int count = 0;
+  fz_context* ctx = context->borrow();
   fz_try(ctx) { count = fz_count_pages(ctx, doc); }
   fz_catch(ctx) {
     PLOG_ERROR << "Error: Failed to count pages.";
@@ -150,6 +153,7 @@ int MuPDFParser::num_pages() const {
 
 std::optional<PageSpecs> MuPDFParser::page_specs(int page_num) const {
   ZoneScoped;
+  fz_context* ctx = context->borrow();
   fz_page* page = nullptr;
   fz_try(ctx) { page = fz_load_page(ctx, doc, page_num); }
   fz_catch(ctx) {
@@ -195,6 +199,7 @@ std::optional<PageSpecs> MuPDFParser::page_specs(int page_num) const {
 
 std::optional<DisplayListHandle> MuPDFParser::get_display_list(int page_num) {
   ZoneScoped;
+  fz_context* ctx = context->borrow();
   fz_page* page = nullptr;
   fz_display_list* raw_display_list = nullptr;
   fz_try(ctx) { page = fz_load_page(ctx, doc, page_num); }
@@ -213,10 +218,9 @@ std::optional<DisplayListHandle> MuPDFParser::get_display_list(int page_num) {
     PLOG_ERROR << "MuPDFParser failed to create display list";
     return std::nullopt;
   }
-  fz_context* captured_ctx = this->ctx;  // capture for custom deleter
-  return DisplayListHandle(raw_display_list, [captured_ctx](fz_display_list* ptr) {
+  return DisplayListHandle(raw_display_list, [dlist_context = context](fz_display_list* ptr) {
     if (ptr) {
-      fz_drop_display_list(captured_ctx, ptr);
+      fz_drop_display_list(dlist_context->borrow(), ptr);
     }
   });
 }
@@ -256,6 +260,7 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
   }
 
   const auto rect = fz_rect(clip.x0, clip.y0, clip.x1, clip.y1);
+  fz_context* ctx = context->borrow();
   fz_pixmap* pix = nullptr;
   fz_try(ctx) {
     fz_matrix ctm = fz_scale(zoom, zoom);
@@ -283,9 +288,12 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
 }
 
 std::unique_ptr<Parser> MuPDFParser::duplicate() const {
-  fz_context* clone_ctx = fz_clone_context(ctx);
+  fz_context* cloned_raw = fz_clone_context(context->borrow());
+
+  auto cloned_ctx = std::make_shared<MuPDFContext>(cloned_raw);
+
   auto new_parser =
-      std::make_unique<MuPDFParser>(this->use_icc_profile, clone_ctx);  // debug try without clone
+      std::unique_ptr<MuPDFParser>(new MuPDFParser(this->use_icc_profile, std::move(cloned_ctx)));
 
   if (!full_filepath.empty()) {
     if (!new_parser->load_document(this->full_filepath)) {
@@ -295,35 +303,24 @@ std::unique_ptr<Parser> MuPDFParser::duplicate() const {
   return new_parser;
 }
 
-MuPDFParser::MuPDFParser(MuPDFParser&& other) noexcept {
-  ctx = other.ctx;
-  doc = other.doc;
-  doc_name = other.doc_name;
-  use_icc_profile = other.use_icc_profile;
-
-  other.ctx = nullptr;
-  other.doc = nullptr;
-  other.doc_name.clear();
-  other.use_icc_profile = false;
-}
+MuPDFParser::MuPDFParser(MuPDFParser&& other) noexcept
+    : context(std::move(other.context)),
+      doc(std::exchange(other.doc, nullptr)),
+      doc_name(std::move(other.doc_name)),
+      full_filepath(std::move(other.full_filepath)),
+      use_icc_profile(std::exchange(other.use_icc_profile, false)) {}
 
 MuPDFParser& MuPDFParser::operator=(MuPDFParser&& other) noexcept {
-  if (this != &other) {
-    // clear current processes
-    clear_doc();
-    if (ctx != nullptr) {
-      fz_drop_context(ctx);
-    }
-
-    ctx = other.ctx;
-    doc = other.doc;
-    doc_name = other.doc_name;
-    use_icc_profile = other.use_icc_profile;
-
-    other.ctx = nullptr;
-    other.doc = nullptr;
-    other.doc_name.clear();
-    other.use_icc_profile = false;
+  if (this == &other) {
+    return *this;
   }
+
+  clear_doc();  // drop old document using current context first
+  context = std::move(other.context);
+  doc = std::exchange(other.doc, nullptr);
+  doc_name = std::move(other.doc_name);
+  full_filepath = std::move(other.full_filepath);
+  use_icc_profile = std::exchange(other.use_icc_profile, false);
+
   return *this;
 }
