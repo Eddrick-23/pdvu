@@ -271,6 +271,12 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
   const auto rect = fz_rect(clip.x0, clip.y0, clip.x1, clip.y1);
   fz_context* ctx = context->borrow();
   fz_pixmap* pix = nullptr;
+  fz_device* dev = nullptr;
+
+  // required for locals modified inside fz_try
+  fz_var(pix);
+  fz_var(dev);
+
   fz_try(ctx) {
     fz_matrix ctm = fz_scale(zoom, zoom);
     ctm = fz_pre_rotate(ctm, ps.rotation);
@@ -280,20 +286,21 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
     pix->x = static_cast<int>(clip.x0);
     pix->y = static_cast<int>(clip.y0);
     fz_clear_pixmap_with_value(ctx, pix, 255);  // set white background
-    fz_device* dev = fz_new_draw_device(ctx, fz_identity, pix);
+    dev = fz_new_draw_device(ctx, fz_identity, pix);
     fz_run_display_list(ctx, dlist.get(), dev, ctm, rect, nullptr);
 
-    // free memory
+    // close if nothing happened
     fz_close_device(ctx, dev);
-    fz_drop_device(ctx, dev);
-    fz_drop_pixmap(ctx, pix);
   }
-  fz_catch(ctx) {
+  fz_always(ctx) {
+    if (dev != nullptr) {
+      fz_drop_device(ctx, dev);
+    }
     if (pix != nullptr) {
       fz_drop_pixmap(ctx, pix);
     }
-    PLOG_ERROR << "Failed to draw page";
   }
+  fz_catch(ctx) { PLOG_ERROR << "Failed to draw page"; }
 }
 
 std::unique_ptr<Parser> MuPDFParser::duplicate() const {
