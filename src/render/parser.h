@@ -89,7 +89,7 @@ struct Parser {
 
   /**
    * @brief Clones the current parser state, creating a new context and loading the same document.
-   * @return A unique pointer to the duplicated parser[cite: 6].
+   * @return A unique pointer to the duplicated parser.
    */
   [[nodiscard]] virtual std::unique_ptr<Parser> duplicate() const = 0;
 };
