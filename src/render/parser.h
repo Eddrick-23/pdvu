@@ -9,17 +9,23 @@
 namespace pdf {
 
 /**
- * @brief A thread-safe handle for a cached sequence of MuPDF drawing commands.
+ * @brief Shared owning handle to an immutable MuPDF display list.
  *
- * An fz_display_list stores a read-only, intermediate representation of a parsed
- * PDF page. Because it caches the drawing operations (paths, text, images) rather
- * than the raw page data, it allows multiple threads to concurrently render different
- * clipping regions or zoom levels of the same page without data races or re-parsing overhead.
+ * An fz_display_list contains a cached sequence of drawing commands for a
+ * parsed page. The display list can be reused to render the page at different
+ * zoom levels or clipping regions without parsing the page again.
  *
- * This alias uses a custom deleter to ensure the list is properly freed within the
- * correct fz_context when all references are dropped.
+ * The MuPDFDisplayList wrapper owns the underlying fz_display_list and retains
+ * shared ownership of the MuPDFContext required to destroy it. Consequently,
+ * the display list and its originating context remain alive until the final
+ * DisplayListHandle is released.
+ *
+ * Copies of this handle may safely be passed between threads because
+ * std::shared_ptr synchronizes access to its ownership control block. This does
+ * not make an individual MuPDFContext safe for simultaneous use; rendering
+ * operations must still use the appropriate thread-local or cloned context.
  */
-using DisplayListHandle = std::shared_ptr<fz_display_list>;
+using DisplayListHandle = std::shared_ptr<MuPDFDisplayList>;
 
 /**
  * @brief Abstract interface defining the core operations of a PDF parser.

@@ -3,6 +3,7 @@
 #include <array>
 #include <filesystem>
 #include <format>
+#include <memory>
 #include <mutex>
 #include <utility>
 
@@ -239,11 +240,18 @@ std::optional<DisplayListHandle> MuPDFParser::get_display_list(int page_num) {
     PLOG_ERROR << "MuPDFParser failed to create display list";
     return std::nullopt;
   }
-  return DisplayListHandle(raw_display_list, [dlist_context = context](fz_display_list* ptr) {
-    if (ptr) {
-      fz_drop_display_list(dlist_context->borrow(), ptr);
-    }
-  });
+  try {
+    return std::make_shared<MuPDFDisplayList>(context, raw_display_list);
+  } catch (const std::invalid_argument& e) {
+    // In case internal invariants fail and null pointers passed to constructor.
+    fz_drop_display_list(ctx, raw_display_list);
+    PLOG_ERROR << "Invalid display list resources: " << e.what();
+    return std::nullopt;
+  } catch (...) {
+    // any other unexpected error, clear resource and propagate
+    fz_drop_display_list(ctx, raw_display_list);
+    throw;
+  }
 }
 
 void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
@@ -256,6 +264,12 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
    */
   ZoneScoped;
   ensure_valid_context();
+
+  if (!dlist || buffer == nullptr) {
+    PLOG_ERROR << "Cannot render with null display list or buffer";
+    return;
+  }
+
   auto translate_matrix = [ps](fz_matrix& ctm) {
     const int rot = ps.rotation;
     const int total_w = ps.width;
@@ -300,7 +314,7 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
     pix->y = static_cast<int>(clip.y0);
     fz_clear_pixmap_with_value(ctx, pix, 255);  // set white background
     dev = fz_new_draw_device(ctx, fz_identity, pix);
-    fz_run_display_list(ctx, dlist.get(), dev, ctm, rect, nullptr);
+    fz_run_display_list(ctx, dlist->borrow(), dev, ctm, rect, nullptr);
 
     // close if nothing happened
     fz_close_device(ctx, dev);
