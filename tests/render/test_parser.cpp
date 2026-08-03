@@ -43,7 +43,7 @@ pdf::PageSpecs make_page_specs(int width, int height, int rotation = 0) {
 bool contains_rgb_pixel(const std::vector<unsigned char>& buffer,
                         const std::array<unsigned char, pdf::g_pad>& expected) {
   for (std::size_t i = 0; i + pdf::g_pad <= buffer.size(); i += pdf::g_pad) {
-    if (buffer[i] == expected[0] && buffer[i + 1] == expected[1] && buffer[i + 1] == expected[2]) {
+    if (buffer[i] == expected[0] && buffer[i + 1] == expected[1] && buffer[i + 2] == expected[2]) {
       return true;
     }
   }
@@ -56,9 +56,7 @@ bool contains_rgb_pixel(const std::vector<unsigned char>& buffer,
 TEST(MuPDFIntegration, MultiPagePDFReturnsCorrectMetadata) {
   const std::unique_ptr<pdf::Parser> p = std::make_unique<pdf::MuPDFParser>(false);
 
-  const bool res = p->load_document(pdf_file_path("multi_page.pdf"));
-
-  ASSERT_TRUE(res) << "failed to load valid document";
+  ASSERT_TRUE(p->load_document(pdf_file_path("multi_page.pdf")));
 
   constexpr int expected_pages = 3;
   EXPECT_EQ(p->num_pages(), expected_pages);
@@ -106,7 +104,7 @@ TEST(MuPDFIntegration, NullOptDisplayListOnUnloadedDoc) {
 TEST(MuPDFIntegration, ClearDocProduceEmptyParser) {
   const std::unique_ptr<pdf::Parser> p = std::make_unique<pdf::MuPDFParser>(false);
 
-  EXPECT_TRUE(p->load_document(pdf_file_path("single_page.pdf")));
+  ASSERT_TRUE(p->load_document(pdf_file_path("single_page.pdf")));
 
   p->clear_doc();
 
@@ -135,7 +133,7 @@ TEST(MuPDFIntegration, FailedLoadProduceEmptyParser) {
 TEST(MuPDFIntegration, ThrowsExceptionWhenUsedAfterMove) {
   auto original_parser = pdf::MuPDFParser(false);
 
-  EXPECT_TRUE(original_parser.load_document(pdf_file_path("multi_page.pdf")));
+  ASSERT_TRUE(original_parser.load_document(pdf_file_path("multi_page.pdf")));
 
   const auto target_parser = std::move(original_parser);
 
@@ -156,7 +154,7 @@ TEST(MuPDFIntegration, MovedParserCanBeDuplicated) {
   // and that duplicate is a valid parser (can still load pdfs)
   auto original_parser = pdf::MuPDFParser(false);
 
-  EXPECT_TRUE(original_parser.load_document(pdf_file_path("multi_page.pdf")));
+  ASSERT_TRUE(original_parser.load_document(pdf_file_path("multi_page.pdf")));
 
   const auto target_parser = std::move(original_parser);
 
