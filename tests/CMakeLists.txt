@@ -21,11 +21,13 @@ add_executable(unit_tests
     render/test_threadpool.cpp
     render/test_bounds.cpp
     render/test_parser.cpp
-    render/test_parser_PageSpecs.cpp
+    render/test_PageSpecs.cpp
     terminal/test_kitty.cpp
     viewer/test_pageview.cpp
     # Add new test files here
 )
+
+target_compile_definitions(unit_tests PRIVATE PDVU_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 
 target_link_libraries(unit_tests
     PRIVATE

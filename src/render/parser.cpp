@@ -112,6 +112,14 @@ MuPDFParser::MuPDFParser(const bool use_ICC, std::shared_ptr<MuPDFContext> clone
   }
 }
 
+void MuPDFParser::ensure_valid_context() const {
+  if (context == nullptr) {
+    throw std::runtime_error(
+        "Parser underlying context is null, calling object may have been "
+        "moved from");
+  }
+}
+
 void MuPDFParser::clear_doc() {
   if (doc != nullptr) {
     fz_drop_document(context->borrow(), doc);
@@ -125,6 +133,7 @@ void MuPDFParser::clear_doc() {
 MuPDFParser::~MuPDFParser() { MuPDFParser::clear_doc(); }
 
 bool MuPDFParser::load_document(const std::string& filepath) {
+  ensure_valid_context();
   clear_doc();
   fz_context* ctx = context->borrow();
   fz_try(ctx) { doc = fz_open_document(ctx, filepath.c_str()); }
@@ -141,6 +150,7 @@ bool MuPDFParser::load_document(const std::string& filepath) {
 const std::string& MuPDFParser::get_document_name() const { return doc_name; }
 
 int MuPDFParser::num_pages() const {
+  ensure_valid_context();
   if (doc == nullptr) {
     return 0;
   }
@@ -156,6 +166,7 @@ int MuPDFParser::num_pages() const {
 
 std::optional<PageSpecs> MuPDFParser::page_specs(int page_num) const {
   ZoneScoped;
+  ensure_valid_context();
   if (doc == nullptr) {
     return std::nullopt;
   }
@@ -205,6 +216,7 @@ std::optional<PageSpecs> MuPDFParser::page_specs(int page_num) const {
 
 std::optional<DisplayListHandle> MuPDFParser::get_display_list(int page_num) {
   ZoneScoped;
+  ensure_valid_context();
   if (doc == nullptr) {
     return std::nullopt;
   }
@@ -243,6 +255,7 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
    * write to the buffer in parallel all to different sections at once
    */
   ZoneScoped;
+  ensure_valid_context();
   auto translate_matrix = [ps](fz_matrix& ctm) {
     const int rot = ps.rotation;
     const int total_w = ps.width;
@@ -304,6 +317,7 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
 }
 
 std::unique_ptr<Parser> MuPDFParser::duplicate() const {
+  ensure_valid_context();
   fz_context* cloned_raw = fz_clone_context(context->borrow());
 
   if (cloned_raw == nullptr) {

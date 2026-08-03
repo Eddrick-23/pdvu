@@ -134,6 +134,13 @@ class MuPDFParser : public Parser {
    */
   explicit MuPDFParser(bool use_ICC, std::shared_ptr<MuPDFContext> cloned_ctx);
 
+  /**
+   * @brief checks if context is still valid (not nullptr)
+   * @throws std::runtime_error if context is invalid (e.g. calling parser methods after
+   * it is moved).
+   */
+  void ensure_valid_context() const;
+
   std::shared_ptr<MuPDFContext> context;  ///< RAII wrapper over core MuPDF context.
   fz_document* doc;                       ///< Pointer to the currently opened document
   std::string doc_name;                   ///< The filename of the document

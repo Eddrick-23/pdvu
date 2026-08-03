@@ -21,6 +21,8 @@ struct PageSpecs {
   float acc_width, acc_height;               ///< Accurate unrounded floating-point dimensions
   int rotation;                              ///< Current rotation of the page in degrees
 
+  auto operator<=>(const PageSpecs&) const = default;
+
   /**
    * @brief Scales the page specifications manually without reloading the page bounds.
    *
