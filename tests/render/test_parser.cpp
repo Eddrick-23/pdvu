@@ -241,3 +241,61 @@ TEST(MuPDFIntegration, IntrinsicallyRotatedPageReportsDisplayedBounds) {
   EXPECT_EQ(specs->height, 300);
   EXPECT_TRUE(parser.get_display_list(0).has_value());
 }
+
+TEST(MuPDFIntegration, RendersManualQuarterTurnRotations) {
+  pdf::MuPDFParser parser(false);
+  ASSERT_TRUE(parser.load_document(pdf_file_path("single_page.pdf")));
+
+  const auto base_specs = parser.page_specs(0);
+  ASSERT_TRUE(base_specs.has_value());
+
+  const auto dlist = parser.get_display_list(0);
+  ASSERT_TRUE(dlist.has_value());
+
+  constexpr std::array<int, 3> quarter_turns{1, 2, 3};
+  constexpr std::array<unsigned char, pdf::g_pad> white{255, 255, 255};
+  constexpr std::array<unsigned char, pdf::g_pad> black{0, 0, 0};
+
+  // we rotate 3 times and assert that each rotation preserves the image
+  // It should be all white pixels if some rotation calculation fails
+  for (const int turns : quarter_turns) {
+    SCOPED_TRACE(::testing::Message()
+                 << "quarter turns: " << turns << ", rotation: " << turns * 90);
+
+    const pdf::PageSpecs rotated = base_specs->rotate_quarter_clockwise(turns);
+
+    if (turns % 2 == 0) {
+      EXPECT_EQ(rotated.width, base_specs->width);
+      EXPECT_EQ(rotated.height, base_specs->height);
+    } else {
+      EXPECT_EQ(rotated.width, base_specs->height);
+      EXPECT_EQ(rotated.height, base_specs->width);
+    }
+
+    EXPECT_EQ(rotated.rotation, turns * 90);
+    EXPECT_EQ(rotated.size,
+              static_cast<std::size_t>(rotated.width) * static_cast<std::size_t>(rotated.height) *
+                  pdf::g_pad);
+
+    std::vector<unsigned char> buffer(rotated.size, 0xCD);
+
+    parser.write_section(rotated.width,
+                         rotated.height,
+                         1.0F,
+                         rotated,
+                         dlist.value(),
+                         buffer.data(),
+                         pdf::Rect{
+                             .x0 = static_cast<float>(rotated.x0),
+                             .y0 = static_cast<float>(rotated.y0),
+                             .x1 = static_cast<float>(rotated.x1),
+                             .y1 = static_cast<float>(rotated.y1),
+                         });
+
+    EXPECT_TRUE(contains_rgb_pixel(buffer, white))
+        << "rotated render should contain the white page background";
+
+    EXPECT_TRUE(contains_rgb_pixel(buffer, black))
+        << "rotated render should contain the fixture's black rectangle";
+  }
+}
