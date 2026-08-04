@@ -369,8 +369,8 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
 
   auto translate_matrix = [ps](fz_matrix& ctm) {
     const int rot = ps.rotation;
-    const int total_w = ps.width;
-    const int total_h = ps.height;
+    const auto total_w = static_cast<float>(ps.width);
+    const auto total_h = static_cast<float>(ps.height);
     if (rot == 90) {
       ctm = fz_concat(ctm, fz_translate(total_w, 0));
     } else if (rot == 180) {
@@ -379,7 +379,7 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
       ctm = fz_concat(ctm, fz_translate(0, total_h));
     }
   };
-  if (w != clip.x1 - clip.x0 || h != clip.y1 - clip.y0) {
+  if (static_cast<float>(w) != clip.x1 - clip.x0 || static_cast<float>(h) != clip.y1 - clip.y0) {
     PLOG_ERROR << std::format(
         "clip dimensions do not match w:{} and "
         "h:{}. clip data: x0:{},y0:{},x1:{},y1:{}",
@@ -403,7 +403,7 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
 
   fz_try(ctx) {
     fz_matrix ctm = fz_scale(zoom, zoom);
-    ctm = fz_pre_rotate(ctm, ps.rotation);
+    ctm = fz_pre_rotate(ctm, static_cast<float>(ps.rotation));
     translate_matrix(ctm);
     pix = fz_new_pixmap_with_bbox_and_data(
         ctx, fz_device_rgb(ctx), fz_irect_from_rect(rect), nullptr, 0, buffer);
