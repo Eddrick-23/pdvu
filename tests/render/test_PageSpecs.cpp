@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <array>
+#include <cmath>
 #include <cstddef>
 
 #include "render/page_specs.h"

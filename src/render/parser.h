@@ -71,7 +71,7 @@ struct Parser {
    * @param page_num The 0-indexed page number to parse.
    * @return A shared DisplayListHandle containing the cached draw commands.
    */
-  virtual std::optional<DisplayListHandle> get_display_list(int page_num) = 0;
+  [[nodiscard]] virtual std::optional<DisplayListHandle> get_display_list(int page_num) = 0;
 
   /**
    * @brief Writes a specific clipped section of a display list to a buffer.

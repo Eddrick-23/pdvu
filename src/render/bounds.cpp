@@ -1,4 +1,6 @@
+#include "bounds.h"
 
+#include <algorithm>
 #include <format>
 #include <vector>
 
