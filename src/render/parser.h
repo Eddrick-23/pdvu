@@ -168,9 +168,9 @@ class MuPDFParser : public Parser {
    */
   void ensure_valid_context() const;
 
-  std::shared_ptr<MuPDFContext> context;  ///< RAII wrapper over core MuPDF context.
-  fz_document* doc;                       ///< Pointer to the currently opened document
-  std::string doc_name;                   ///< The filename of the document
+  std::shared_ptr<MuPDFContext> m_context;  ///< RAII wrapper over core MuPDF context.
+  fz_document* m_doc;                       ///< Pointer to the currently opened document
+  std::string m_doc_name;                   ///< The filename of the document
   /**
    * Absolute, lexically normalized path of the loaded document.
    *
@@ -178,7 +178,7 @@ class MuPDFParser : public Parser {
    * reloads continue referring to the path originally opened by the user.
    * Empty when no document is loaded.
    */
-  std::filesystem::path document_path;
-  bool use_icc_profile;  ///< Flag indicating if ICC colour profiles are active
+  std::filesystem::path m_document_path;
+  bool m_use_icc_profile;  ///< Flag indicating if ICC colour profiles are active
 };
 }  // namespace pdf
