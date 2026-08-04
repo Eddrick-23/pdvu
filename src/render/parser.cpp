@@ -256,8 +256,9 @@ std::optional<DisplayListHandle> MuPDFParser::get_display_list(int page_num) {
 
 void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
                                 DisplayListHandle dlist, unsigned char* buffer, Rect clip) {
-  /* dlist is created by another thread. That thread will be responsible for
-   * dropping it clip is which portion of the dlist we are reading from. it must
+   /* dlist is a wrapper over a fz_display_list. It will perform cleanup automatically
+   * when no one else owns it.
+   * clip is which portion of the dlist we are reading from. it must
    * match with w and h The input buffer must be shifted such that the first
    * pixel drawn is at its correct position This allows multiple threads to
    * write to the buffer in parallel all to different sections at once

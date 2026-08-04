@@ -106,7 +106,7 @@ struct Parser {
 /**
  * @brief Concrete implementation of the Parser interface utilizing the MuPDF library.
  *
- * Manages the global MuPDF context (with thread-safe mutex locks) and document state.
+ * Owns a MuPDF context (configured with thread-safe mutex locks)
  */
 class MuPDFParser : public Parser {
  public:
