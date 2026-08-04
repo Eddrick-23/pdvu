@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <csignal>
+#include <cstddef>
 #include <cstdio>
 #include <fstream>
 #include <print>
@@ -44,8 +45,8 @@ Terminal::~Terminal() {
   terminal::show_cursor();
 }
 
-void Terminal::handle_sigwinch(int sig) { window_resized = 1; }
-void Terminal::handle_sigterm(int sig) { quit_requested = 1; }
+void Terminal::handle_sigwinch(int /*sig*/) { window_resized = 1; }
+void Terminal::handle_sigterm(int /*sig*/) { quit_requested = 1; }
 
 void Terminal::setup_signal_handlers() {
   struct sigaction sa_resize;
@@ -113,7 +114,7 @@ void Terminal::enter_raw_mode() {
   struct termios raw = orig_termios;
   // TURN OFF: ECHO(printing), ICANON(enter key), ISIG(ctrl-c/z signals)
   // Keep ISIG for debugging
-  raw.c_lflag &= ~(ECHO | ICANON | ISIG);
+  raw.c_lflag &= ~static_cast<tcflag_t>(ECHO | ICANON | ISIG);
 
   if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) {
     die("tctsetattr");
@@ -152,7 +153,7 @@ InputEvent Terminal::read_input(int timeout_ms) {
   }
 
   char c;
-  int nread = read(STDIN_FILENO, &c, 1);
+  ssize_t nread = read(STDIN_FILENO, &c, 1);
   if (nread == -1) {
     if (errno == EINTR) {
       return InputEvent{key_none};

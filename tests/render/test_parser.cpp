@@ -71,9 +71,11 @@ TEST(MuPDFIntegration, MultiPagePDFReturnsCorrectMetadata) {
       make_page_specs(150, 150),
   };
 
-  for (int i = 0; i < expected_pages; i++) {
-    auto ps = p->page_specs(i);
-    EXPECT_THAT(ps, testing::Optional(expected_page_specs[i]));
+  int page_num = 0;
+  for (const auto& expected : expected_page_specs) {
+    const auto specs = p->page_specs(page_num);
+    EXPECT_THAT(specs, testing::Optional(expected));
+    ++page_num;
   }
 }
 
@@ -170,9 +172,11 @@ TEST(MuPDFIntegration, MovedParserCanBeDuplicated) {
       make_page_specs(150, 150),
   };
 
-  for (int i = 0; i < 3; i++) {
-    auto ps = duplicated_parser->page_specs(i);
-    EXPECT_THAT(ps, testing::Optional(expected_page_specs[i]));
+  int page_num = 0;
+  for (const auto& expected : expected_page_specs) {
+    const auto specs = duplicated_parser->page_specs(page_num);
+    EXPECT_THAT(specs, testing::Optional(expected));
+    ++page_num;
   }
 }
 

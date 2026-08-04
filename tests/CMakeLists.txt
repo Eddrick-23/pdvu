@@ -32,6 +32,7 @@ target_compile_definitions(unit_tests PRIVATE PDVU_TEST_FIXTURES_DIR="${CMAKE_CU
 target_link_libraries(unit_tests
     PRIVATE
     pdvu_core
+    pdvu_compiler_flags
     GTest::gtest_main
     GTest::gmock_main
 )

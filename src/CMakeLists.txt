@@ -17,8 +17,6 @@ add_library(pdvu_core STATIC ${CORE_SOURCES})
 
 target_include_directories(pdvu_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/external
-
 )
 
 set(MUPDF_ROOT "${CMAKE_SOURCE_DIR}/external/mupdf")
@@ -32,7 +30,10 @@ add_library(mupdf_third STATIC IMPORTED)
 set_target_properties(mupdf_third PROPERTIES
     IMPORTED_LOCATION "${MUPDF_ROOT}/build/release/libmupdf-third.a"
 )
-target_link_libraries(pdvu_core PUBLIC
+target_link_libraries(pdvu_core
+    PRIVATE
+    pdvu_compiler_flags
+    PUBLIC
     mupdf
     mupdf_third
 )

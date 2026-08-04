@@ -63,6 +63,7 @@ void RenderEngine::coordinator_loop() {
 
 void RenderEngine::dispatch_page_write(const RenderRequest& req) {
   ZoneScopedN("dispatch_page_write");
+  using namespace std::chrono;
   auto start = std::chrono::steady_clock::now();
   RenderResult result;
   result.req_id = req.req_id;
@@ -92,11 +93,9 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
   if (cached.has_value()) {
     const auto& data = cached.value();
     result.path_to_data = data.transmission == "shm" ? new_shm->name() : new_temp->path();
-    update_frame(data.page_width,
-                 data.page_height,
-                 std::chrono::duration_cast<std::chrono::milliseconds>(
-                     std::chrono::steady_clock::now() - start)
-                     .count());
+    int duration_ms =
+        static_cast<int>(duration_cast<milliseconds>(steady_clock::now() - start).count());
+    update_frame(data.page_width, data.page_height, duration_ms);
     return;
   }
   // prepare data then enqueue to threadpool
@@ -148,9 +147,9 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
 
     result.transmission = req.transmission;
     result.zoom = req.zoom;
-    auto end = std::chrono::steady_clock::now();
-    auto write_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_parse);
-    auto full_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto end = steady_clock::now();
+    auto write_duration = duration_cast<milliseconds>(end - start_parse);
+    auto full_duration = duration_cast<milliseconds>(end - start);
     if (use_cache && write_duration > page_cache_time_limit) {
       cache_page(req.page_num,
                  req.zoom,
@@ -161,7 +160,7 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
                  ps.width,
                  ps.height);
     }
-    update_frame(ps.width, ps.height, full_duration.count());
+    update_frame(ps.width, ps.height, static_cast<int>(full_duration.count()));
   } catch (const std::exception& e) {
     result.error_message = e.what();
   }
@@ -205,6 +204,7 @@ void RenderEngine::cache_page(int page_num, float zoom, int rotation,
           .tempfile_data = tempfile,
           .page_width = page_width,
           .page_height = page_height,
+          .rotation_degrees = rotation,
       });
 }
 

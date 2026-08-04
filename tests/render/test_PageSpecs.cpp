@@ -34,7 +34,7 @@ TEST(PageSpecsMethod, scale) {
       .rotation = 0,
   };
 
-  const std::array<float, 5> zoom_factors = {0.5, 0.67, 1.0, 1.5, 2.0};
+  const std::array<float, 5> zoom_factors = {0.5F, 0.67F, 1.0F, 1.5F, 2.0F};
   for (float zoom_factor : zoom_factors) {
     const pdf::PageSpecs scaled = ps.scale(zoom_factor);
 
@@ -89,12 +89,13 @@ TEST(PageSpecsMethod, rotate_quarter_clockwise) {
       .size = static_cast<size_t>(3 * 100 * 200),
       .acc_width = 100.0,
       .acc_height = 200.0,
+      .rotation = 0,
   };
 
   const std::array<int, 8> ns = {0, 1, 2, 3, 4, -1, -2, -5};
   const std::array<int, 8> expected_rotation = {0, 90, 180, 270, 0, 270, 180, 270};
 
-  for (int i = 0; i < ns.size(); i++) {
+  for (std::size_t i = 0; i < ns.size(); i++) {
     const int n = ns[i];
     const pdf::PageSpecs rotated = ps.rotate_quarter_clockwise(n);
     const bool flipped = std::abs(n) % 2 != 0;

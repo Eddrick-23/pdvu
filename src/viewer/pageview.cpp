@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 
 bool PageView::change_zoom_index(const int delta) {
   static constexpr int max_idx = m_zoom_levels.size() - 1;
@@ -10,8 +11,8 @@ bool PageView::change_zoom_index(const int delta) {
   return old_zoom_index != m_viewport.zoom_index;
 }
 
-PageView::CropRect PageView::calculate_crop_window(
-    const int width, const int height, const ViewportBounds& vBounds) const {
+PageView::CropRect PageView::calculate_crop_window(const int width, const int height,
+                                                   const ViewportBounds& vBounds) const {
   auto calculate_offset = [](int max_offset_pixels, float rel_offset) {
     return static_cast<int>(std::floor(static_cast<float>(max_offset_pixels) * rel_offset));
   };
@@ -41,7 +42,9 @@ bool PageView::update_viewport(const float delta_x, const float delta_y) {
   return old_x_offset != m_viewport.rel_x_offset || old_y_offset != m_viewport.rel_y_offset;
 }
 
-float PageView::current_zoom() const { return m_zoom_levels[m_viewport.zoom_index]; }
+float PageView::current_zoom() const {
+  return m_zoom_levels[static_cast<std::size_t>(m_viewport.zoom_index)];
+}
 
 void PageView::reset_zoom_to_default() { m_viewport.zoom_index = m_default_zoom_index; }
 

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <charconv>
 #include <chrono>
+#include <cstddef>
 #include <cstdio>
 #include <print>
 
@@ -23,9 +24,9 @@ constexpr int HELP_POLL_RATE_MS = 50;   // Slower poll rate when idle in help me
 constexpr float PAN_STEP_RATIO = 0.1F;  // 10% of viewport shifted per pan keypress
 
 std::string top_status_bar_with_stats(const TermSize& ts, const RenderResult& latest_frame,
-    const std::string& doc_name, int page, int total_pages) {
-  size_t mem_bytes = ram_usage::getCurrentRSS();
-  double mem_usage_mb = mem_bytes / (1024.0 * 1024.0);
+                                      const std::string& doc_name, int page, int total_pages) {
+  std::size_t mem_bytes = ram_usage::getCurrentRSS();
+  double mem_usage_mb = static_cast<double>(mem_bytes) / (1024.0 * 1024.0);
   std::string stats = std::to_string(latest_frame.render_time_ms) +
                       std::format("ms {} ", TUI::symbols::box_single_line.at(179)) +
                       std::format("{:.1f}MB", mem_usage_mb);
@@ -34,12 +35,10 @@ std::string top_status_bar_with_stats(const TermSize& ts, const RenderResult& la
 std::string bottom_bar(const TermSize& ts, float current_zoom_level, int rotation) {
   return TUI::bottom_status_bar(ts, current_zoom_level, rotation);
 }
-
-constexpr bool floats_equal(float a, float b) { return std::fabs(a - b) < 1e-6F; }
 }  // namespace
 
 Viewer::Viewer(std::unique_ptr<pdf::Parser> main_parser,
-    std::unique_ptr<RenderEngine> render_engine, bool use_shm) {
+               std::unique_ptr<RenderEngine> render_engine, bool use_shm) {
   ZoneScopedN("Viewer setup");
   m_renderer = std::move(render_engine);
   m_parser = std::move(main_parser);
@@ -105,7 +104,8 @@ bool Viewer::fetch_latest_frame() {
   if (!result.error_message.empty()) {  // check if there was a render error
     const TermSize ts = m_term.get_terminal_size();
     const int error_message_length = static_cast<int>(std::ssize(result.error_message));
-    std::print("{}",
+    std::print(
+        "{}",
         TUI::add_centered(ts.height / 2, ts.width, result.error_message, error_message_length));
     std::fflush(stdout);
     return false;
@@ -125,13 +125,15 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
 
   // 2 rows taken by top and bottom bar
   // start drawing from row 2 due to row 1 being taken by top bar.
-  sequence += TUI::center_cursor(ts, target_width, target_height,
-      {
-          .cols = ts.width,
-          .rows = ts.height - 2,
-          .start_row = 2,
-          .start_col = 1,
-      });
+  sequence += TUI::center_cursor(ts,
+                                 target_width,
+                                 target_height,
+                                 {
+                                     .cols = ts.width,
+                                     .rows = ts.height - 2,
+                                     .start_row = 2,
+                                     .start_col = 1,
+                                 });
 
   // Take into account cropping
   // We always crop using the target dimensions
@@ -146,12 +148,14 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
   // if latest frame dimensions match target, don't need to scale crop
   // if latest frame dimensions don't match target, scale the crop window
   if (m_latest_frame.page_width != target_width || m_latest_frame.page_height != target_height) {
-    const float scale_factor_x = static_cast<float>(target_width) / existing_width;
-    const float scale_factor_y = static_cast<float>(target_height) / existing_height;
-    x_offset_pixels /= scale_factor_x;
-    crop_width /= scale_factor_x;
-    y_offset_pixels /= scale_factor_y;
-    crop_height /= scale_factor_y;
+    const float scale_factor_x =
+        static_cast<float>(target_width) / static_cast<float>(existing_width);
+    const float scale_factor_y =
+        static_cast<float>(target_height) / static_cast<float>(existing_height);
+    x_offset_pixels = static_cast<int>(static_cast<float>(x_offset_pixels) / scale_factor_x);
+    crop_width = static_cast<int>(static_cast<float>(crop_width) / scale_factor_x);
+    y_offset_pixels = static_cast<int>(static_cast<float>(y_offset_pixels) / scale_factor_y);
+    crop_height = static_cast<int>(static_cast<float>(crop_height) / scale_factor_y);
   }
 
   const bool need_transmit = m_last_req_id != m_latest_frame.req_id;
@@ -160,9 +164,18 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
   }
   // generate sequence to display image
   const int target_rows = std::min(target_height / ts.pixels_per_row, ts.height - 2);
-  sequence += kitty::get_image_sequence(m_latest_frame.path_to_data, KITTY_SLOT_ID, existing_width,
-      existing_height, x_offset_pixels, y_offset_pixels, crop_width, crop_height,
-      m_shm_supported ? "shm" : "tempfile", need_transmit, 0, target_rows);
+  sequence += kitty::get_image_sequence(m_latest_frame.path_to_data,
+                                        KITTY_SLOT_ID,
+                                        existing_width,
+                                        existing_height,
+                                        x_offset_pixels,
+                                        y_offset_pixels,
+                                        crop_width,
+                                        crop_height,
+                                        m_shm_supported ? "shm" : "tempfile",
+                                        need_transmit,
+                                        0,
+                                        target_rows);
 
   return sequence;
 }
@@ -203,12 +216,13 @@ void Viewer::request_page_render(int page_num) {
   if (const auto specs = m_parser->page_specs(page_num)) {
     m_target_page_specs = specs->rotate_quarter_clockwise(m_rotation_degrees / 90);
     // ts.height - 2 due to rows taken by top and bottom bar
-    const float zoom_factor = TUI::calculate_zoom_factor(ts, m_target_page_specs,
-        {
-            .cols = ts.width,
-            .rows = ts.height - 2,
-        },
-        m_page_view.current_zoom());
+    const float zoom_factor = TUI::calculate_zoom_factor(ts,
+                                                         m_target_page_specs,
+                                                         {
+                                                             .cols = ts.width,
+                                                             .rows = ts.height - 2,
+                                                         },
+                                                         m_page_view.current_zoom());
     m_target_page_specs = m_target_page_specs.scale(zoom_factor);
     m_renderer->request_page(
         page_num, zoom_factor, m_target_page_specs, m_shm_supported ? "shm" : "tempfile");
@@ -305,7 +319,7 @@ void Viewer::handle_help_page() {
     std::string sequence;
     sequence += terminal::reset_screen_and_cursor_string();
     sequence += kitty::clear_dim_layer();
-    const std::string blank_line = std::string(width, ' ');
+    const std::string blank_line = std::string(static_cast<size_t>(width), ' ');
     for (int row = start_row; row <= end_row; row++) {
       sequence += terminal::move_cursor(row, 1);
       sequence += blank_line;
@@ -352,8 +366,11 @@ void Viewer::handle_help_page() {
     return;
   }
   // redraw top and bottom bar
-  sequence += top_status_bar_with_stats(last_terminal_size, m_latest_frame,
-      m_parser->get_document_name(), m_current_page, m_total_pages);
+  sequence += top_status_bar_with_stats(last_terminal_size,
+                                        m_latest_frame,
+                                        m_parser->get_document_name(),
+                                        m_current_page,
+                                        m_total_pages);
   sequence += bottom_bar(last_terminal_size, m_page_view.current_zoom(), m_rotation_degrees);
   std::print("{}", sequence);
   std::fflush(stdout);

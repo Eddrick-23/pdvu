@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <cstddef>
 #include <iterator>
 #include <mutex>
 #include <vector>
@@ -50,11 +51,12 @@ class LRUCache {
     std::scoped_lock lock(mut);
     // linear search vector, on hit, we shift that entry to front, and slide the
     // rest back
-    for (size_t i = 0; i < entries.size(); i++) {
+    for (std::size_t i = 0; i < entries.size(); i++) {
       if (entries[i].key == key) {
         // move to current element to front and shift everything before to the
         // right by 1
-        std::rotate(entries.begin(), entries.begin() + i, entries.begin() + i + 1);
+        auto offset = static_cast<std::ptrdiff_t>(i);
+        std::rotate(entries.begin(), entries.begin() + offset, entries.begin() + offset + 1);
         return entries[0].value;
       }
     }
@@ -80,7 +82,8 @@ class LRUCache {
       if (entries[i].key == key) {
         entries[i].value = std::move(val);
         // shift to front
-        std::rotate(entries.begin(), entries.begin() + i, entries.begin() + i + 1);
+        auto offset = static_cast<std::ptrdiff_t>(i);
+        std::rotate(entries.begin(), entries.begin() + offset, entries.begin() + offset + 1);
         return;
       }
     }
