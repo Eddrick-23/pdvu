@@ -20,10 +20,9 @@ namespace pdf {
  * the display list and its originating context remain alive until the final
  * DisplayListHandle is released.
  *
- * Copies of this handle may safely be passed between threads because
- * std::shared_ptr synchronizes access to its ownership control block. This does
- * not make an individual MuPDFContext safe for simultaneous use; rendering
- * operations must still use the appropriate thread-local or cloned context.
+ * Handles may be copied across threads to keep the display list alive. Each rendering thread must
+ * use its own cloned MuPDF context, and the owner must retain a coordinating handle until all
+ * concurrent operations finish.
  */
 using DisplayListHandle = std::shared_ptr<MuPDFDisplayList>;
 
@@ -43,6 +42,10 @@ struct Parser {
 
   /**
    * @brief Loads a PDF document from the filesystem.
+   *
+   * Clears any currently loaded document before attempting the load
+   * A failed load leaves the parser unloaded.
+   *
    * @param filepath The path to the PDF file.
    * @return True if loaded successfully, false otherwise.
    */
@@ -69,15 +72,17 @@ struct Parser {
    * be passed to concurrent workers for rapid, parallel rendering of distinct page segments.
    *
    * @param page_num The 0-indexed page number to parse.
-   * @return A shared DisplayListHandle containing the cached draw commands.
+   * @return std::nullopt when no document is loaded, the page index is invalid, or MuPDF cannot
+   * construct the display list. An engaged optional always contains a non-null handle.
    */
   [[nodiscard]] virtual std::optional<DisplayListHandle> get_display_list(int page_num) = 0;
 
   /**
    * @brief Writes a specific clipped section of a display list to a buffer.
    *
-   * Designed to be called by multiple threads concurrently. Each thread targets
-   * a different clip and writes directly into the shared buffer offset.
+   * Performs synchronous, best-effort rendering. Invalid inputs and MuPDF rendering failures are
+   * logged and do not throw; the destination buffer may be partially written. The caller must
+   * provide at least w * h * g_pad writable bytes.
    *
    * @param w The width of the clip.
    * @param h The height of the clip.
@@ -91,8 +96,9 @@ struct Parser {
                              unsigned char* buffer, Rect clip) = 0;
 
   /**
-   * @brief Clones the current parser state, creating a new context and loading the same document.
+   * @brief Clones the MuPDF context and reopens the currently loaded document.
    * @return A unique pointer to the duplicated parser.
+   * @throw std::runtime_error if context cloning or document reopening fails.
    */
   [[nodiscard]] virtual std::unique_ptr<Parser> duplicate() const = 0;
 };

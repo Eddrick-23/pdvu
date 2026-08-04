@@ -9,6 +9,7 @@ namespace pdf {
  *
  * Note for invalid inputs:
  * - n < 1 values will be clamped to n = 1
+ * - n > height is clamped to height (num pixel rows)
  * - Negative heights in page specs will be clamped to height 0 and
  * return a single empty strip
  *
