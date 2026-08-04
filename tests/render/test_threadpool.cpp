@@ -1,6 +1,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <filesystem>
 #include <latch>
 
 #include "render/parser.h"
@@ -11,7 +12,7 @@ using namespace pdf;
 class MockParser : public Parser {
  public:
   MOCK_METHOD(void, clear_doc, (), (override));
-  MOCK_METHOD(bool, load_document, (const std::string&), (override));
+  MOCK_METHOD(bool, load_document, (const std::filesystem::path&), (override));
   MOCK_METHOD(const std::string&, get_document_name, (), (const, override));
   MOCK_METHOD(std::optional<PageSpecs>, page_specs, (int), (const, override));
   MOCK_METHOD(int, num_pages, (), (const, override));

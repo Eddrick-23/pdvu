@@ -220,23 +220,41 @@ void MuPDFParser::clear_doc() {
   }
 
   doc_name.clear();
-  full_filepath.clear();
+  document_path.clear();
 }
 
 MuPDFParser::~MuPDFParser() { MuPDFParser::clear_doc(); }
 
-bool MuPDFParser::load_document(const std::string& filepath) {
+bool MuPDFParser::load_document(const std::filesystem::path& filepath) {
   ensure_valid_context();
   clear_doc();
-  fz_context* ctx = context->borrow();
-  fz_try(ctx) { doc = fz_open_document(ctx, filepath.c_str()); }
-  fz_catch(ctx) {
-    PLOG_ERROR << std::format("Could not open file: {}", filepath);
+  if (filepath.empty()) {
+    PLOG_ERROR << "Cannot load empty document path";
     return false;
   }
-  full_filepath = filepath;  // save path for duplicating
-  std::filesystem::path p(filepath);
-  doc_name = p.filename().string();
+
+  // first resolve the filepath of given path. We store absolute, lexically normalised path(no .
+  // or ..)
+  std::error_code error;
+  std::filesystem::path resolved_path = std::filesystem::absolute(filepath, error);
+
+  if (error) {
+    PLOG_ERROR << std::format(
+        "Could not resolve document path '{}': {}", filepath.string(), error.message());
+    return false;
+  }
+
+  resolved_path = resolved_path.lexically_normal();
+  const std::string resolved_path_string = resolved_path.string();
+
+  fz_context* ctx = context->borrow();
+  fz_try(ctx) { doc = fz_open_document(ctx, resolved_path_string.c_str()); }
+  fz_catch(ctx) {
+    PLOG_ERROR << std::format("Could not open file: {}", resolved_path_string);
+    return false;
+  }
+  document_path = resolved_path;  // save path for duplicating
+  doc_name = document_path.filename().string();
   return true;
 }
 
@@ -374,8 +392,8 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
     if (rot == 90) {
       ctm = fz_concat(ctm, fz_translate(total_w, 0));
     } else if (rot == 180) {
-    } else if (rot == 270) {
       ctm = fz_concat(ctm, fz_translate(total_w, total_h));
+    } else if (rot == 270) {
       ctm = fz_concat(ctm, fz_translate(0, total_h));
     }
   };
@@ -435,8 +453,8 @@ std::unique_ptr<Parser> MuPDFParser::duplicate() const {
   auto new_parser =
       std::unique_ptr<MuPDFParser>(new MuPDFParser(this->use_icc_profile, std::move(cloned_ctx)));
 
-  if (!full_filepath.empty()) {
-    if (!new_parser->load_document(this->full_filepath)) {
+  if (!document_path.empty()) {
+    if (!new_parser->load_document(this->document_path)) {
       throw std::runtime_error("Failed to load document for cloned parser");
     }
   }
@@ -447,7 +465,7 @@ MuPDFParser::MuPDFParser(MuPDFParser&& other) noexcept
     : context(std::move(other.context)),
       doc(std::exchange(other.doc, nullptr)),
       doc_name(std::move(other.doc_name)),
-      full_filepath(std::move(other.full_filepath)),
+      document_path(std::move(other.document_path)),
       use_icc_profile(std::exchange(other.use_icc_profile, false)) {}
 
 MuPDFParser& MuPDFParser::operator=(MuPDFParser&& other) noexcept {
@@ -459,7 +477,7 @@ MuPDFParser& MuPDFParser::operator=(MuPDFParser&& other) noexcept {
   context = std::move(other.context);
   doc = std::exchange(other.doc, nullptr);
   doc_name = std::move(other.doc_name);
-  full_filepath = std::move(other.full_filepath);
+  document_path = std::move(other.document_path);
   use_icc_profile = std::exchange(other.use_icc_profile, false);
 
   return *this;

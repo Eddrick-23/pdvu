@@ -1,4 +1,6 @@
 #pragma once
+
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
@@ -49,7 +51,7 @@ struct Parser {
    * @param filepath The path to the PDF file.
    * @return True if loaded successfully, false otherwise.
    */
-  virtual bool load_document(const std::string& filepath) = 0;
+  virtual bool load_document(const std::filesystem::path& filepath) = 0;
 
   /** @return The filename of the currently loaded document. */
   [[nodiscard]] virtual const std::string& get_document_name() const = 0;
@@ -141,7 +143,7 @@ class MuPDFParser : public Parser {
   MuPDFParser& operator=(MuPDFParser&& other) noexcept;
 
   void clear_doc() override;
-  bool load_document(const std::string& filepath) override;
+  bool load_document(const std::filesystem::path& filepath) override;
   [[nodiscard]] const std::string& get_document_name() const override;
   [[nodiscard]] std::optional<PageSpecs> page_specs(int page_num) const override;
   [[nodiscard]] int num_pages() const override;
@@ -169,7 +171,14 @@ class MuPDFParser : public Parser {
   std::shared_ptr<MuPDFContext> context;  ///< RAII wrapper over core MuPDF context.
   fz_document* doc;                       ///< Pointer to the currently opened document
   std::string doc_name;                   ///< The filename of the document
-  std::string full_filepath;              ///< Absolute path used for duplication
-  bool use_icc_profile;                   ///< Flag indicating if ICC colour profiles are active
+  /**
+   * Absolute, lexically normalized path of the loaded document.
+   *
+   * Symlinks are intentionally not resolved so duplication and future hot
+   * reloads continue referring to the path originally opened by the user.
+   * Empty when no document is loaded.
+   */
+  std::filesystem::path document_path;
+  bool use_icc_profile;  ///< Flag indicating if ICC colour profiles are active
 };
 }  // namespace pdf
