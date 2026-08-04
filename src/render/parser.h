@@ -43,7 +43,7 @@ struct Parser {
   /**
    * @brief Loads a PDF document from the filesystem.
    *
-   * Clears any currently loaded document before attempting the load
+   * Clears any currently loaded document before attempting the load.
    * A failed load leaves the parser unloaded.
    *
    * @param filepath The path to the PDF file.
@@ -80,9 +80,9 @@ struct Parser {
   /**
    * @brief Writes a specific clipped section of a display list to a buffer.
    *
-   * Performs synchronous, best-effort rendering. Invalid inputs and MuPDF rendering failures are
-   * logged and do not throw; the destination buffer may be partially written. The caller must
-   * provide at least w * h * g_pad writable bytes.
+   * Performs synchronous, best-effort rendering. For a valid parser,  Invalid inputs and MuPDF
+   * rendering failures are logged and do not throw; the destination buffer may be partially
+   * written. The caller must provide at least w * h * g_pad writable bytes.
    *
    * @param w The width of the clip.
    * @param h The height of the clip.
@@ -90,7 +90,8 @@ struct Parser {
    * @param ps The dimensions and rotation state of the page.
    * @param dlist The pre-computed display list to execute.
    * @param buffer Pointer to the start of the target memory buffer.
-   * @param clip The exact fz_rect sub-region to render.
+   * @param clip The exact rectangular sub-region to render.
+   * @throws std::runtime_error if called from an invalid (e.g. moved from) parser.
    */
   virtual void write_section(int w, int h, float zoom, const PageSpecs& ps, DisplayListHandle dlist,
                              unsigned char* buffer, Rect clip) = 0;
@@ -98,7 +99,7 @@ struct Parser {
   /**
    * @brief Clones the MuPDF context and reopens the currently loaded document.
    * @return A unique pointer to the duplicated parser.
-   * @throw std::runtime_error if context cloning or document reopening fails.
+   * @throws std::runtime_error if context cloning or document reopening fails.
    */
   [[nodiscard]] virtual std::unique_ptr<Parser> duplicate() const = 0;
 };
@@ -111,8 +112,7 @@ struct Parser {
 class MuPDFParser : public Parser {
  public:
   /**
-   * @brief Constructs the parser, initializing or cloning the MuPDF context.
-   *        Creates a new underlying context with global locks.
+   * @brief Constructs the parser, initializing a fresh MuPDF context with global locks
    * @param use_ICC Whether to enable ICC color management.
    * @throws std::runtime_error if context creation fails.
    */
@@ -139,10 +139,10 @@ class MuPDFParser : public Parser {
 
  private:
   /**
-   * @brief Constructs the parser, initializing or cloning the MuPDF context.
+   * @brief Constructs the parser, with a cloned MuPDF context.
    * @param use_ICC Whether to enable ICC color management.
-   * @param cloned_ctx A cloned context from fz_clone_context
-   * @throws std::invalid_argument if a null cloned_context is given
+   * @param cloned_ctx Shared ownership of a cloned MuPDF context.
+   * @throws std::invalid_argument if a null cloned_context is given.
    */
   explicit MuPDFParser(bool use_ICC, std::shared_ptr<MuPDFContext> cloned_ctx);
 

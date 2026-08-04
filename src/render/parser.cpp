@@ -73,8 +73,14 @@ fz_context* create_locked_context() {
   // FZ_STORE_DEFAULT = default resource cache size
   static fz_locks_context locks_context = make_locks_context();
   fz_context* new_ctx = fz_new_context(nullptr, &locks_context, FZ_STORE_DEFAULT);
-  if (new_ctx != nullptr) {
-    fz_register_document_handlers(new_ctx);
+  if (new_ctx == nullptr) {
+    return nullptr;
+  }
+  fz_try(new_ctx) { fz_register_document_handlers(new_ctx); }
+
+  fz_catch(new_ctx) {
+    fz_drop_context(new_ctx);
+    return nullptr;
   }
   return new_ctx;
 }
@@ -173,23 +179,27 @@ std::optional<PageSpecs> MuPDFParser::page_specs(int page_num) const {
   }
   fz_context* ctx = context->borrow();
   fz_page* page = nullptr;
-  fz_try(ctx) { page = fz_load_page(ctx, doc, page_num); }
+  fz_rect raw_bounds{};
+  fz_var(page);
+  fz_try(ctx) {
+    page = fz_load_page(ctx, doc, page_num);
+    raw_bounds = fz_bound_page(ctx, page);
+  }
+  fz_always(ctx) { fz_drop_page(ctx, page); }
   fz_catch(ctx) {
-    PLOG_ERROR << std::format("Error: Failed to load page. PageNum: {}", page_num);
-    return {};
+    PLOG_ERROR << std::format("Failed to inspect page. PageNum: {}", page_num);
+    return std::nullopt;
   }
 
   // create a scaling matrix to determine how much to scale the page
   // relative to its original base size
-  fz_matrix ctm = fz_scale(g_base_zoom, g_base_zoom);
+  const fz_matrix ctm = fz_scale(g_base_zoom, g_base_zoom);
 
-  // raw data
-  fz_rect raw_bounds = fz_bound_page(ctx, page);
+  // raw page bounds with scaling applied
   raw_bounds = fz_transform_rect(raw_bounds, ctm);
 
   // round to int
   const fz_irect bbox = fz_round_rect(raw_bounds);
-  fz_drop_page(ctx, page);
 
   // dimensions
   const int w = bbox.x1 - bbox.x0;
@@ -256,7 +266,7 @@ std::optional<DisplayListHandle> MuPDFParser::get_display_list(int page_num) {
 
 void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
                                 DisplayListHandle dlist, unsigned char* buffer, Rect clip) {
-   /* dlist is a wrapper over a fz_display_list. It will perform cleanup automatically
+  /* dlist is a wrapper over a fz_display_list. It will perform cleanup automatically
    * when no one else owns it.
    * clip is which portion of the dlist we are reading from. it must
    * match with w and h The input buffer must be shifted such that the first
