@@ -5,6 +5,7 @@ set(CORE_SOURCES
     terminal/kitty.cpp
     terminal/tui.cpp
     render/parser.cpp
+    render/bounds.cpp
     render/render_engine.cpp
     render/threadpool.cpp
     utils/tempfile.cpp

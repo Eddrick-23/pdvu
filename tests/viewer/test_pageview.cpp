@@ -33,8 +33,8 @@ TEST(PageView, ResetZoomIndex) {
   // Test zooming in if not already at max zoom
   if (PageView::m_default_zoom_index + 1 < PageView::m_zoom_levels.size()) {
     pageview.change_zoom_index(1);
-    EXPECT_FLOAT_EQ(
-        PageView::m_zoom_levels[PageView::m_default_zoom_index + 1], pageview.current_zoom());
+    EXPECT_FLOAT_EQ(PageView::m_zoom_levels[PageView::m_default_zoom_index + 1],
+                    pageview.current_zoom());
 
     pageview.reset_zoom_to_default();
     EXPECT_FLOAT_EQ(initial_zoom, pageview.current_zoom());
@@ -43,8 +43,8 @@ TEST(PageView, ResetZoomIndex) {
   // Test zooming out if not already at min zoom
   if (PageView::m_default_zoom_index > 0) {
     pageview.change_zoom_index(-1);
-    EXPECT_FLOAT_EQ(
-        PageView::m_zoom_levels[PageView::m_default_zoom_index - 1], pageview.current_zoom());
+    EXPECT_FLOAT_EQ(PageView::m_zoom_levels[PageView::m_default_zoom_index - 1],
+                    pageview.current_zoom());
 
     pageview.reset_zoom_to_default();
     EXPECT_FLOAT_EQ(initial_zoom, pageview.current_zoom());
@@ -145,10 +145,6 @@ struct CropWindowTestCase {
   float rel_x;
   float rel_y;
   PageView::CropRect expected;
-
-  friend std::ostream& operator<<(std::ostream& os, const CropWindowTestCase& tc) {
-    return os << tc.name;
-  }
 };
 
 class CalculateCropWindowTest : public ::testing::TestWithParam<CropWindowTestCase> {};
@@ -169,7 +165,8 @@ TEST_P(CalculateCropWindowTest, ComputesCorrectCrop) {
   EXPECT_EQ(param.expected.height, result.height);
 }
 
-INSTANTIATE_TEST_SUITE_P(PageView, CalculateCropWindowTest,
+INSTANTIATE_TEST_SUITE_P(
+    PageView, CalculateCropWindowTest,
     ::testing::Values(
         CropWindowTestCase{
             .name = "NoCropNeeded",

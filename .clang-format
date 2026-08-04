@@ -7,5 +7,6 @@ ColumnLimit: 100
 SortIncludes: CaseSensitive
 FixNamespaceComments: true
 PointerAlignment: Left
-AlignAfterOpenBracket: false
+BinPackArguments: false
+AlignAfterOpenBracket: Align
 ---
