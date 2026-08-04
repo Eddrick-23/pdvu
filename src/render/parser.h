@@ -88,7 +88,7 @@ struct Parser {
   /**
    * @brief Writes a specific clipped section of a display list to a buffer.
    *
-   * Performs synchronous, best-effort rendering. For a valid parser,  Invalid inputs and MuPDF
+   * Performs synchronous, best-effort rendering. For a valid parser, invalid inputs and MuPDF
    * rendering failures are logged and do not throw; the destination buffer may be partially
    * written. The caller must provide at least w * h * g_pad writable bytes.
    *
@@ -126,12 +126,12 @@ class MuPDFParser : public Parser {
   /**
    * @brief Constructs a parser with a fresh, lock-enabled MuPDF context.
    *
-   * @param use_ICC Whether to enable ICC color management.
+   * @param use_icc Whether to enable ICC color management.
    * @throws std::runtime_error If context allocation or document-handler
    * registration fails.
    * @throws std::bad_alloc If C++ ownership state cannot be allocated.
    */
-  explicit MuPDFParser(bool use_ICC);
+  explicit MuPDFParser(bool use_icc);
   ~MuPDFParser() override;
 
   // Parser instances are non-copyable.
@@ -157,7 +157,7 @@ class MuPDFParser : public Parser {
    * @brief Constructs the parser, with a cloned MuPDF context.
    * @param use_ICC Whether to enable ICC color management.
    * @param cloned_ctx Shared ownership of a cloned MuPDF context.
-   * @throws std::invalid_argument if a null cloned_context is given.
+   * @throws std::invalid_argument if a null cloned_ctx is given.
    */
   explicit MuPDFParser(bool use_ICC, std::shared_ptr<MuPDFContext> cloned_ctx);
 

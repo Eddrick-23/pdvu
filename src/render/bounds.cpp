@@ -17,7 +17,7 @@ std::vector<HorizontalBound> split_bounds(PageSpecs ps, int n) {
   // no pixels are dropped at the bottom of the page due to integer division.
 
   if (n <= 0) {
-    PLOG_ERROR << std::format("split bounds called with invalie n={}, clamping to 1", n);
+    PLOG_ERROR << std::format("split bounds called with invalid n={}, clamping to 1", n);
     n = 1;
   }
 

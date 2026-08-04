@@ -3,6 +3,8 @@
 #include <compare>
 #include <cstddef>
 
+#include "pdf_constants.h"
+
 extern "C" {
 #include <mupdf/fitz.h>
 }
@@ -41,7 +43,8 @@ struct PageSpecs {
         fz_round_rect({.x0 = new_x0, .y0 = new_y0, .x1 = new_x1, .y1 = new_y1});
     const int new_width = std::abs(new_rect.x1 - new_rect.x0);
     const int new_height = std::abs(new_rect.y1 - new_rect.y0);
-    const size_t new_size = static_cast<size_t>(new_width) * 3 * static_cast<size_t>(new_height);
+    const size_t new_size =
+        static_cast<size_t>(new_width) * g_pad * static_cast<size_t>(new_height);
 
     return PageSpecs{
         .base_x0 = base_x0,  // Preserve original unscaled base

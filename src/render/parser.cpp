@@ -139,7 +139,7 @@ SharedContext create_locked_context() {
   fz_context* ctx = owner.get();
   fz_try(ctx) { fz_register_document_handlers(ctx); }
   fz_catch(ctx) {
-    // since fz_context is wrapper with with a custom deleter
+    // since fz_context is wrapper with a custom deleter
     // The deleter will cleanup resources for us.
     throw std::runtime_error("Failed to register MuPDF document handlers");
   }
@@ -233,8 +233,8 @@ bool MuPDFParser::load_document(const std::filesystem::path& filepath) {
     return false;
   }
 
-  // first resolve the filepath of given path. We store absolute, lexically normalised path(no .
-  // or ..)
+  // first resolve the filepath of given path.
+  // We store absolute, lexically normalised path(no . or ..)
   std::error_code error;
   std::filesystem::path resolved_path = std::filesystem::absolute(filepath, error);
 
@@ -466,7 +466,10 @@ MuPDFParser::MuPDFParser(MuPDFParser&& other) noexcept
       m_doc(std::exchange(other.m_doc, nullptr)),
       m_doc_name(std::move(other.m_doc_name)),
       m_document_path(std::move(other.m_document_path)),
-      m_use_icc_profile(std::exchange(other.m_use_icc_profile, false)) {}
+      m_use_icc_profile(std::exchange(other.m_use_icc_profile, false)) {
+  other.m_doc_name.clear();
+  other.m_document_path.clear();
+}
 
 MuPDFParser& MuPDFParser::operator=(MuPDFParser&& other) noexcept {
   if (this == &other) {
@@ -477,7 +480,9 @@ MuPDFParser& MuPDFParser::operator=(MuPDFParser&& other) noexcept {
   m_context = std::move(other.m_context);
   m_doc = std::exchange(other.m_doc, nullptr);
   m_doc_name = std::move(other.m_doc_name);
+  other.m_doc_name.clear();
   m_document_path = std::move(other.m_document_path);
+  other.m_document_path.clear();
   m_use_icc_profile = std::exchange(other.m_use_icc_profile, false);
 
   return *this;
