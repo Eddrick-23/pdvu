@@ -11,25 +11,56 @@ extern "C" {
 namespace pdf {
 
 /**
- * @brief RAII wrapper over core mupdf context.
+ * @brief Exclusive RAII owner of a non-null MuPDF context.
  *
- * This is meant to be used with std::shared_ptr or std::unique_ptr.
- * Use std::shared_ptr to ensure any exposed mupdf resources do not
- * outlive the core fz_context itself.
+ * Internally stores the raw `fz_context` in a `UniqueHandle`, ensuring
+ * `fz_drop_context()` is called exactly once when this wrapper is destroyed.
+ *
+ * Instances are normally managed through `std::shared_ptr` so dependent MuPDF
+ * resources, such as display lists, can extend the context's lifetime.
+ *
+ * Sharing this wrapper controls lifetime only. It does not make simultaneous
+ * operations on the same `fz_context` thread-safe; concurrent workers must use
+ * appropriately cloned contexts.
  */
 class MuPDFContext final {
  public:
   /**
-   * @param ctx A non null fz_context*
-   * @throws std::invalid_argument if nullptr passed in
+   * @brief Stateless deleter used by UniqueHandle.
+   *
+   * Releases a non-null context with `fz_drop_context()`. Calling the deleter
+   * with `nullptr` has no effect.
    */
-  explicit MuPDFContext(fz_context* ctx) : m_ctx(ctx) {
+  struct ContextDeleter {
+    void operator()(fz_context* ctx) const noexcept {
+      if (ctx != nullptr) {
+        fz_drop_context(ctx);
+      }
+    }
+  };
+
+  /**
+   * @brief Exclusive owning handle for a raw MuPDF context.
+   *
+   * Used while acquiring, initializing, or transferring a context before shared
+   * ownership is published. Destruction releases the context automatically.
+   */
+  using UniqueHandle = std::unique_ptr<fz_context, ContextDeleter>;
+
+  /**
+   * @brief Constructs a wrapper by taking exclusive ownership of a context.
+   *
+   * @param ctx Non-null unique owner whose context is transferred into this
+   * wrapper.
+   * @throws std::invalid_argument If ctx is empty.
+   */
+  explicit MuPDFContext(UniqueHandle ctx) : m_ctx(std::move(ctx)) {
     if (m_ctx == nullptr) {
       throw std::invalid_argument("Null MuPDF context");
     }
   }
 
-  ~MuPDFContext() noexcept { fz_drop_context(m_ctx); }
+  ~MuPDFContext() noexcept = default;
 
   // no copy and no move
   MuPDFContext(const MuPDFContext&) = delete;
@@ -38,15 +69,17 @@ class MuPDFContext final {
   MuPDFContext& operator=(MuPDFContext&&) = delete;
 
   /**
-   * Returns a non-owning pointer to the managed MuPDF context.
+   * Returns a non-owning pointer.
    *
    * The caller must not call fz_drop_context() on this pointer or retain it
    * beyond the lifetime of this MuPDFContext.
+   *
+   * @return The managed, non-null `fz_context`.
    */
-  [[nodiscard]] fz_context* borrow() const noexcept { return m_ctx; }
+  [[nodiscard]] fz_context* borrow() const noexcept { return m_ctx.get(); }
 
  private:
-  fz_context* m_ctx;
+  UniqueHandle m_ctx;
 };
 
 /**

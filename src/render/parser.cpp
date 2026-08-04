@@ -14,6 +14,16 @@
 #include "utils/profiling.h"
 
 namespace {
+
+/**
+ * @brief Internal facilities for creating and adopting MuPDF contexts.
+ */
+namespace mupdf_context_factory {
+
+// -----------------------------------------------------------------------------
+// MuPDF locking configuration
+// -----------------------------------------------------------------------------
+
 /**
  * @brief Wrapper struct for MuPDF's required threading mutexes.
  *
@@ -65,32 +75,108 @@ fz_locks_context make_locks_context() {
   return locks_ctx;
 }
 
-/**
- * @brief Creates a fresh MuPDF context with thread-safe locking configured.
- * @return A newly-created context, or nullptr if creation failed.
- */
-fz_context* create_locked_context() {
-  // FZ_STORE_DEFAULT = default resource cache size
-  static fz_locks_context locks_context = make_locks_context();
-  fz_context* new_ctx = fz_new_context(nullptr, &locks_context, FZ_STORE_DEFAULT);
-  if (new_ctx == nullptr) {
-    return nullptr;
-  }
-  fz_try(new_ctx) { fz_register_document_handlers(new_ctx); }
+// -----------------------------------------------------------------------------
+// Context ownership and publication
+// -----------------------------------------------------------------------------
 
-  fz_catch(new_ctx) {
-    fz_drop_context(new_ctx);
-    return nullptr;
-  }
-  return new_ctx;
+/**
+ * @brief Exclusive ownership of a raw MuPDF context.
+ *
+ * A ContextOwner is used during context acquisition and initialization. If an
+ * operation fails before shared ownership is established, its deleter releases
+ * the context automatically.
+ */
+using ContextOwner = pdf::MuPDFContext::UniqueHandle;
+
+/**
+ * @brief Shared ownership of a fully initialized MuPDF context wrapper.
+ *
+ * Copies extend the lifetime of the same underlying context. Shared ownership
+ * does not permit simultaneous MuPDF operations using that context.
+ */
+using SharedContext = std::shared_ptr<pdf::MuPDFContext>;
+
+/**
+ * @brief Publishes an exclusively owned context through shared ownership.
+ *
+ * Transfers `owner` into a newly allocated `MuPDFContext`. If allocation or
+ * construction fails, either the local ContextOwner or the partially
+ * constructed wrapper releases the context.
+ *
+ * @param owner Non-null exclusive owner to transfer.
+ * @return A non-null shared owner of the initialized context.
+ * @throws std::invalid_argument If `owner` is empty.
+ * @throws std::bad_alloc If the wrapper or shared ownership control block
+ * cannot be allocated.
+ */
+SharedContext publish_context(ContextOwner owner) {
+  return std::make_shared<pdf::MuPDFContext>(std::move(owner));
 }
 
+/**
+ * @brief Creates and initializes a MuPDF context with shared locking.
+ *
+ * Acquires a new raw context, immediately places it under exclusive ownership,
+ * and registers MuPDF's document handlers. Shared ownership is published only
+ * after initialization completes successfully.
+ *
+ * @return A non-null shared owner of the initialized context.
+ * @throws std::runtime_error If MuPDF cannot allocate the context or register
+ * its document handlers.
+ * @throws std::bad_alloc If the C++ wrapper or shared ownership control block
+ * cannot be allocated.
+ *
+ * @note The acquired context is released automatically on every failure path.
+ */
+SharedContext create_locked_context() {
+  // FZ_STORE_DEFAULT = default resource cache size
+  static fz_locks_context locks_context = make_locks_context();
+  ContextOwner owner{fz_new_context(nullptr, &locks_context, FZ_STORE_DEFAULT)};
+
+  if (owner == nullptr) {
+    throw std::runtime_error("Failed to allocate MuPDF context");
+  }
+  fz_context* ctx = owner.get();
+  fz_try(ctx) { fz_register_document_handlers(ctx); }
+  fz_catch(ctx) {
+    // since fz_context is wrapper with with a custom deleter
+    // The deleter will cleanup resources for us.
+    throw std::runtime_error("Failed to register MuPDF document handlers");
+  }
+  return publish_context(std::move(owner));
+}
+
+/**
+ * @brief Adopts a raw cloned context and publishes shared ownership.
+ *
+ * Ownership of `raw_context` transfers to this function immediately. After
+ * calling this function, the caller must not use or drop the raw pointer,
+ * regardless of whether the function succeeds.
+ *
+ * @param raw_context Context returned by `fz_clone_context()`.
+ * @return A non-null shared owner of the cloned context.
+ * @throws std::runtime_error If `raw_context` is null.
+ * @throws std::bad_alloc If the C++ wrapper or shared ownership control block
+ * cannot be allocated.
+ *
+ * @note A non-null context is released automatically if publication fails.
+ */
+SharedContext adopt_context(fz_context* raw_context) {
+  ContextOwner owner{raw_context};
+
+  if (owner == nullptr) {
+    throw std::runtime_error("Failed to clone MuPDF context");
+  }
+
+  return publish_context(std::move(owner));
+}
+}  // namespace mupdf_context_factory
 }  // namespace
 
 using namespace pdf;
 
 MuPDFParser::MuPDFParser(bool use_ICC) try
-    : context(std::make_shared<MuPDFContext>(create_locked_context())),
+    : context(mupdf_context_factory::create_locked_context()),
       doc(nullptr),
       use_icc_profile(use_ICC) {
   fz_context* ctx = context->borrow();
@@ -288,8 +374,8 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
     if (rot == 90) {
       ctm = fz_concat(ctm, fz_translate(total_w, 0));
     } else if (rot == 180) {
-      ctm = fz_concat(ctm, fz_translate(total_w, total_h));
     } else if (rot == 270) {
+      ctm = fz_concat(ctm, fz_translate(total_w, total_h));
       ctm = fz_concat(ctm, fz_translate(0, total_h));
     }
   };
@@ -343,13 +429,8 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
 
 std::unique_ptr<Parser> MuPDFParser::duplicate() const {
   ensure_valid_context();
-  fz_context* cloned_raw = fz_clone_context(context->borrow());
 
-  if (cloned_raw == nullptr) {
-    throw std::runtime_error("Failed to clone MuPDF context");
-  }
-
-  auto cloned_ctx = std::make_shared<MuPDFContext>(cloned_raw);
+  auto cloned_ctx = mupdf_context_factory::adopt_context(fz_clone_context(context->borrow()));
 
   auto new_parser =
       std::unique_ptr<MuPDFParser>(new MuPDFParser(this->use_icc_profile, std::move(cloned_ctx)));

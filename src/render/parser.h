@@ -65,15 +65,21 @@ struct Parser {
   [[nodiscard]] virtual int num_pages() const = 0;
 
   /**
-   * @brief Parses a PDF page and caches its rendering commands into a display list.
+   * @brief Parses a page into a reusable MuPDF display list.
    *
-   * This method performs the heavy lifting of interpreting the raw PDF page data once.
-   * The resulting display list acts as a lightweight, thread-safe blueprint that can
-   * be passed to concurrent workers for rapid, parallel rendering of distinct page segments.
+   * Display list acts as a blueprint which contains instructions for rendering pages.
+   * Can be passed to concurrent workers for parallel rendering.
    *
-   * @param page_num The 0-indexed page number to parse.
-   * @return std::nullopt when no document is loaded, the page index is invalid, or MuPDF cannot
-   * construct the display list. An engaged optional always contains a non-null handle.
+   * @param page_num The zero-based page index.
+   * @return A non-null display-list handle on success, or `std::nullopt`
+   * if no document is loaded, the page index is invalid, or MuPDF cannot
+   * construct the display list.
+   *
+   * @throws std::runtime_error If called on a moved-from parser.
+   * @throws std::bad_alloc If the display-list ownership state cannot be
+   * allocated.
+   *
+   * @note MuPDF parsing errors are logged and converted to `std::nullopt`.
    */
   [[nodiscard]] virtual std::optional<DisplayListHandle> get_display_list(int page_num) = 0;
 
@@ -98,8 +104,12 @@ struct Parser {
 
   /**
    * @brief Clones the MuPDF context and reopens the currently loaded document.
+   *
    * @return A unique pointer to the duplicated parser.
-   * @throws std::runtime_error if context cloning or document reopening fails.
+   * @throws std::runtime_error If the parser is moved-from, context cloning
+   * fails, or the document cannot be reopened.
+   * @throws std::bad_alloc If the cloned parser or its ownership state cannot be
+   * allocated.
    */
   [[nodiscard]] virtual std::unique_ptr<Parser> duplicate() const = 0;
 };
@@ -112,9 +122,12 @@ struct Parser {
 class MuPDFParser : public Parser {
  public:
   /**
-   * @brief Constructs the parser, initializing a fresh MuPDF context with global locks
+   * @brief Constructs a parser with a fresh, lock-enabled MuPDF context.
+   *
    * @param use_ICC Whether to enable ICC color management.
-   * @throws std::runtime_error if context creation fails.
+   * @throws std::runtime_error If context allocation or document-handler
+   * registration fails.
+   * @throws std::bad_alloc If C++ ownership state cannot be allocated.
    */
   explicit MuPDFParser(bool use_ICC);
   ~MuPDFParser() override;
