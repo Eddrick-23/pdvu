@@ -1,6 +1,7 @@
 #include <CLI11.hpp>
 #include <cstdio>
 #include <print>
+#include <system_error>
 
 #include "plog/Log.h"
 #include "utils/logging.h"
@@ -21,9 +22,10 @@ int main(int argc, char** argv) {
       "--shm", use_shm, "Use Posix Shared Memory image transmission. Default uses temp file");
 
   bool enable_cache = true;
-  app.add_flag("--nocache{false}", enable_cache,
-      "Disable PDVU caching of rendered pages and display lists. "
-      "(MuPDF cache unaffected)");
+  app.add_flag("--nocache{false}",
+               enable_cache,
+               "Disable PDVU caching of rendered pages and display lists. "
+               "(MuPDF cache unaffected)");
 
   bool enable_logging = false;
   app.add_flag("--log", enable_logging, "Enable logging. Logs are written to /tmp/pdvu.log file");
@@ -96,9 +98,15 @@ int main(int argc, char** argv) {
   }
 
   // 3) set up viewer and run
-  Viewer viewer(std::move(parser), std::move(render_engine), use_shm);
-  PLOG_INFO << "Start up complete, starting loop";
-  viewer.run();  // start main loop
-  PLOG_INFO << "Shutdown session";
+  try {
+    Viewer viewer(std::move(parser), std::move(render_engine), use_shm);
+    PLOG_INFO << "Start up complete, starting loop";
+    viewer.run();  // start main loop
+    PLOG_INFO << "Shutdown session";
+  } catch (const std::system_error& e) {
+    std::println(stderr, "Terminal error: {}", e.what());
+    PLOG_ERROR << "Terminal error: " << e.what();
+    return 1;
+  }
   return 0;
 }

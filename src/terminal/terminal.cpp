@@ -4,10 +4,15 @@
 #include <sys/poll.h>
 #include <unistd.h>
 
+#include <array>
+#include <cerrno>
 #include <csignal>
 #include <cstdio>
-#include <fstream>
+#include <format>
 #include <print>
+#include <system_error>
+
+#include "plog/Log.h"
 // set as 1 so terminal caches the dimensions on startup
 volatile sig_atomic_t Terminal::window_resized = 2;
 volatile sig_atomic_t Terminal::quit_requested = 0;
@@ -33,42 +38,42 @@ std::string_view reset_screen_and_cursor_string() {
   return "\033[H\033[J";  // avoid [2J since it deletes stored images
 }
 std::string_view save_cursor_string() { return "\0337"; }
-std::string_view restore_cursor_string() { return "\0337"; }
+std::string_view restore_cursor_string() { return "\0338"; }
 }  // namespace terminal
 
 Terminal::Terminal() = default;
 
-Terminal::~Terminal() {
+Terminal::~Terminal() noexcept {
   exit_raw_mode();
   terminal::exit_alt_screen();
   terminal::show_cursor();
 }
 
-void Terminal::handle_sigwinch(int sig) { window_resized = 1; }
-void Terminal::handle_sigterm(int sig) { quit_requested = 1; }
+void Terminal::handle_sigwinch(int /*sig*/) { window_resized = 1; }
+void Terminal::handle_sigterm(int /*sig*/) { quit_requested = 1; }
 
 void Terminal::setup_signal_handlers() {
-  struct sigaction sa_resize;
+  struct sigaction sa_resize{};
   sa_resize.sa_handler = handle_sigwinch;
   sigemptyset(&sa_resize.sa_mask);
   // Important: Force blocking calls like read to return -1 when a signal
   // arrives
   sa_resize.sa_flags = 0;
-  if (sigaction(SIGWINCH, &sa_resize, NULL) == -1) {
+  if (sigaction(SIGWINCH, &sa_resize, nullptr) == -1) {
     perror("sigaction");
   }
-  struct sigaction sa_quit;
+  struct sigaction sa_quit{};
   sa_quit.sa_handler = handle_sigterm;
   sigemptyset(&sa_quit.sa_mask);
   sa_quit.sa_flags = 0;
   // Register for SIGHUP(Tab Close), SIGTERM(kill), SIGINT(Ctrl-c)
-  if (sigaction(SIGHUP, &sa_quit, NULL) == -1) {
+  if (sigaction(SIGHUP, &sa_quit, nullptr) == -1) {
     perror("sigaction SIGHUP");
   }
-  if (sigaction(SIGTERM, &sa_quit, NULL) == -1) {
+  if (sigaction(SIGTERM, &sa_quit, nullptr) == -1) {
     perror("sigaction SIGTERM");
   }
-  if (sigaction(SIGINT, &sa_quit, NULL) == -1) {
+  if (sigaction(SIGINT, &sa_quit, nullptr) == -1) {
     perror("sigaction SIGINT");
   }
 }
@@ -85,99 +90,105 @@ bool Terminal::was_resized() {
 TermSize Terminal::get_terminal_size() {
   winsize ws{};
   if (window_resized == 0) {  // not resized, use cached
-    return TermSize(width, height, x_pixels, y_pixels, pixels_per_row, pixels_per_col);
+    return m_term_size;
   }
   if (ioctl(STDIN_FILENO, TIOCGWINSZ, &ws) == 0) {
-    width = ws.ws_col;
-    height = ws.ws_row;
-    x_pixels = ws.ws_xpixel;
-    y_pixels = ws.ws_ypixel;
+    const int columns = static_cast<int>(ws.ws_col);
+    const int rows = static_cast<int>(ws.ws_row);
+    const int pixel_width = static_cast<int>(ws.ws_xpixel);
+    const int pixel_height = static_cast<int>(ws.ws_ypixel);
+    // guard against divide by zero
+    if (columns <= 0 || rows <= 0 || pixel_width <= 0 || pixel_height <= 0) {
+      PLOG_ERROR << "Terminal reported invalid dimensions";
+      return m_term_size;
+    }
     // account dead spacing
-    drawable_x_pixels = ws.ws_xpixel - (ws.ws_xpixel % ws.ws_col);
-    drawable_y_pixels = ws.ws_ypixel - (ws.ws_ypixel % ws.ws_row);
-    pixels_per_row = drawable_y_pixels / ws.ws_row;
-    pixels_per_col = drawable_x_pixels / ws.ws_col;
+    const int drawable_x_pixels = ws.ws_xpixel - (ws.ws_xpixel % ws.ws_col);
+    const int drawable_y_pixels = ws.ws_ypixel - (ws.ws_ypixel % ws.ws_row);
+    const int cell_pixel_width = drawable_x_pixels / ws.ws_col;
+    const int cell_pixel_height = drawable_y_pixels / ws.ws_row;
 
-    return TermSize(
-        ws.ws_col, ws.ws_row, ws.ws_xpixel, ws.ws_ypixel, pixels_per_row, pixels_per_col);
+    m_term_size = TermSize{
+        .columns = columns,
+        .rows = rows,
+        .pixel_width = pixel_width,
+        .pixel_height = pixel_height,
+        .cell_pixel_width = cell_pixel_width,
+        .cell_pixel_height = cell_pixel_height,
+    };
+    return m_term_size;
   }
-  std::println(stderr, "Failed to get terminal size");
-  return TermSize(24, 80, 0, 0, 0, 0);
+
+  PLOG_ERROR << "Failed to get terminal size";
+  return m_term_size;
 }
 
 void Terminal::enter_raw_mode() {
-  if (tcgetattr(STDIN_FILENO, &orig_termios) == -1) {
-    die("tctgetattr");
-  };  // get original state
-
-  struct termios raw = orig_termios;
-  // TURN OFF: ECHO(printing), ICANON(enter key), ISIG(ctrl-c/z signals)
-  // Keep ISIG for debugging
-  raw.c_lflag &= ~(ECHO | ICANON | ISIG);
-
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) {
-    die("tctsetattr");
-  }
-  raw_mode = true;
-}
-
-void Terminal::exit_raw_mode() {
-  // restore original terminal state
-  if (!raw_mode) {
+  if (m_raw_mode) {
     return;
   }
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1) {
-    die("tctsetattr");
+
+  termios original{};
+  if (tcgetattr(STDIN_FILENO, &original) == -1) {
+    const int error = errno;
+    throw std::system_error(error, std::generic_category(), "Failed to read terminal attributes");
+  };  // get original state
+
+  termios raw = original;
+  // TURN OFF: ECHO(printing), ICANON(enter key)
+  raw.c_lflag &= ~static_cast<tcflag_t>(ECHO | ICANON);
+
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) {
+    const int error = errno;
+    throw std::system_error(error, std::generic_category(), "Failed to enable terminal raw mode");
   }
+
+  m_orig_termios = original;
+  m_raw_mode = true;
 }
 
-void Terminal::die(const char* s) {
-  // cleanup
-  exit_raw_mode();
-  terminal::exit_alt_screen();
-  terminal::show_cursor();
-  // print error message
-  perror(s);
-  exit(1);
+void Terminal::exit_raw_mode() noexcept {
+  // restore original terminal state
+  if (!m_raw_mode) {
+    return;
+  }
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &m_orig_termios) == -1) {
+    std::perror("Failed to restore terminal attributes");
+    return;
+  }
+  m_raw_mode = false;
 }
 
 InputEvent Terminal::read_input(int timeout_ms) {
-  pollfd pfd;
-  pfd.fd = STDIN_FILENO;
-  pfd.events = POLLIN;
+  pollfd stdin_poll{
+      .fd = STDIN_FILENO,
+      .events = POLLIN,
+      .revents = 0,
+  };
 
-  int ret = poll(&pfd, 1, timeout_ms);
-  if (ret <= 0) {
-    return InputEvent{key_none};
+  const int input_result = poll(&stdin_poll, 1, timeout_ms);
+  if (input_result <= 0) {
+    return InputEvent{.key = key_none};
   }
 
   char c;
-  int nread = read(STDIN_FILENO, &c, 1);
+  ssize_t nread = read(STDIN_FILENO, &c, 1);
   if (nread == -1) {
-    if (errno == EINTR) {
-      return InputEvent{key_none};
+    if (errno == EINTR || errno == EAGAIN) {
+      return InputEvent{.key = key_none};
     }
-    if (errno == EAGAIN) {
-      die("read");
-    }
-    return InputEvent{key_none};
   }
 
   if (nread != 1) {
-    return InputEvent{key_none};
+    return InputEvent{.key = key_none};
   }
 
-  if (c == '\x1b') {  // escape key and arrow keys
-    pollfd pfd;
-    pfd.fd = STDIN_FILENO;
-    pfd.events = POLLIN;
-
-    int ret = poll(&pfd, 1, 10);  // wait 10ms for next byte
-    if (ret == 0) {
+  if (c == '\x1b') {                                     // escape key and arrow keys
+    const int escape_result = poll(&stdin_poll, 1, 10);  // wait 10ms for next byte
+    if (escape_result == 0) {
       return InputEvent{.key = key_escape};
     }
-    if (ret > 0) {
-      // char seq[3];
+    if (escape_result > 0) {
       std::array<char, 3> seq;
       if (read(STDIN_FILENO, &seq[0], 1) != 1) return InputEvent{.key = key_escape};
 

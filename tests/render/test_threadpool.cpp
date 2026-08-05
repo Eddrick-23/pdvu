@@ -1,6 +1,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <cstddef>
 #include <filesystem>
 #include <latch>
 
@@ -57,8 +58,8 @@ TEST(TheadPoolTest, EnqueueTaskSingleThreadMultipleTasks) {
   }
   std::vector<std::function<std::string(Parser&)>> tasks;
   tasks.reserve(10);
-  for (int i = 0; i < 10; i++) {
-    auto task = [i, &results](Parser& parser) {  // takes in a Parser reference
+  for (std::size_t i = 0; i < 10; i++) {
+    auto task = [i, &results](Parser& /*parser*/) {  // takes in a Parser reference
       return results.at(i);
     };
     tasks.emplace_back(task);
@@ -69,12 +70,12 @@ TEST(TheadPoolTest, EnqueueTaskSingleThreadMultipleTasks) {
   // enqueue the tasks and get their results
   std::vector<std::future<std::string>> futures;
   futures.reserve(10);
-  for (int i = 0; i < 10; i++) {
+  for (std::size_t i = 0; i < 10; i++) {
     auto fut = pool.enqueue_with_future(tasks.at(i));
     futures.push_back(std::move(fut));  // futures are move only
   }
   // check the results
-  for (int i = 0; i < 10; i++) {
+  for (std::size_t i = 0; i < 10; i++) {
     EXPECT_EQ(futures.at(i).get(), results.at(i));
   }
 }
@@ -112,8 +113,8 @@ TEST(ThreadPoolTest, EnqueueTaskMultipleThreadsMultipleTasks) {
   std::vector<std::function<std::string(Parser&)>> tasks;
   tasks.reserve(n_tasks);
   std::latch sync_point(n_tasks);
-  for (int i = 0; i < n_tasks; i++) {
-    auto task = [i, &results, &sync_point](Parser& parser) {  // takes in a Parser reference
+  for (std::size_t i = 0; i < n_tasks; i++) {
+    auto task = [i, &results, &sync_point](Parser& /*parser*/) {  // takes in a Parser reference
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
       sync_point.count_down();
       return results.at(i);
@@ -126,14 +127,14 @@ TEST(ThreadPoolTest, EnqueueTaskMultipleThreadsMultipleTasks) {
   // enqueue the tasks and get their results
   std::vector<std::future<std::string>> futures;
   futures.reserve(n_tasks);
-  for (int i = 0; i < n_tasks; i++) {
+  for (std::size_t i = 0; i < n_tasks; i++) {
     auto fut = pool.enqueue_with_future(tasks.at(i));
     futures.push_back(std::move(fut));  // futures are move only
   }
   // check the results
   sync_point.wait();
 
-  for (int i = 0; i < n_tasks; i++) {
+  for (std::size_t i = 0; i < n_tasks; i++) {
     EXPECT_EQ(futures.at(i).get(), results.at(i));
   }
 }

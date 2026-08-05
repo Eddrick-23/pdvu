@@ -49,7 +49,9 @@ MutexLocks global_mu_locks;
  * @param user Opaque pointer to the user-provided lock state (our MutexLocks instance).
  * @param lock The internal ID of the mutex to lock (0 to FZ_LOCK_MAX - 1).
  */
-void lock_callback(void* user, int lock) { static_cast<MutexLocks*>(user)->mutexes[lock].lock(); }
+void lock_callback(void* user, int lock) {
+  static_cast<MutexLocks*>(user)->mutexes[static_cast<size_t>(lock)].lock();
+}
 
 /**
  * @brief MuPDF callback invoked when the library needs to release a lock.
@@ -58,7 +60,7 @@ void lock_callback(void* user, int lock) { static_cast<MutexLocks*>(user)->mutex
  * @param lock The internal ID of the mutex to unlock.
  */
 void unlock_callback(void* user, int lock) {
-  static_cast<MutexLocks*>(user)->mutexes[lock].unlock();
+  static_cast<MutexLocks*>(user)->mutexes[static_cast<size_t>(lock)].unlock();
 }
 
 /**
@@ -308,7 +310,7 @@ std::optional<PageSpecs> MuPDFParser::page_specs(int page_num) const {
   // dimensions
   const int w = bbox.x1 - bbox.x0;
   const int h = bbox.y1 - bbox.y0;
-  const size_t size = static_cast<size_t>(w) * g_pad * h;
+  const size_t size = static_cast<size_t>(w) * g_pad * static_cast<size_t>(h);
   const float acc_height = raw_bounds.y1 - raw_bounds.y0;
   const float acc_width = raw_bounds.x1 - raw_bounds.x0;
 
@@ -326,6 +328,7 @@ std::optional<PageSpecs> MuPDFParser::page_specs(int page_num) const {
       .size = size,
       .acc_width = acc_width,
       .acc_height = acc_height,
+      .rotation = 0,
   };
 }
 

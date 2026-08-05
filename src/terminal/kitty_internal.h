@@ -13,8 +13,8 @@ constexpr std::string base64_encode(const std::string& input) {
 
   int val = 0;
   int valb = -6;
-  for (unsigned char c : input) {
-    val = (val << 8) + c;
+  for (const char c : input) {
+    val = (val << 8) + static_cast<unsigned char>(c);
     valb += 8;
     while (valb >= 0) {
       out.push_back(lookup[(val >> valb) & 0x3F]);
@@ -32,7 +32,7 @@ inline std::string b64_black_pixel_3x3(int opacity) {
   pixel.push_back(0);
   pixel.push_back(0);
   const int alpha_channel = opacity * 255 / 100;  // map from 0 to 100%
-  pixel.push_back(alpha_channel);
+  pixel.push_back(static_cast<char>(alpha_channel));
   std::string image_data;
   for (int i = 0; i < 9; ++i) {
     image_data += pixel;

@@ -21,6 +21,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/SergiusTheBest/plog.git
     GIT_TAG 1.1.11
     GIT_SHALLOW true
+    SYSTEM
 )
 FetchContent_MakeAvailable(plog)
 
@@ -33,7 +34,7 @@ if (ENABLE_TRACY)
     set(TRACY_CLIENT_SRC "${CMAKE_SOURCE_DIR}/external/tracy/public/TracyClient.cpp")
     add_library(TracyClient STATIC ${TRACY_CLIENT_SRC})
     target_compile_definitions(TracyClient PUBLIC TRACY_ENABLE)
-    target_include_directories(TracyClient PUBLIC "${CMAKE_SOURCE_DIR}/external/tracy/public")
+    target_include_directories(TracyClient SYSTEM PUBLIC "${CMAKE_SOURCE_DIR}/external/tracy/public")
 
     find_package(Threads REQUIRED)
     target_link_libraries(TracyClient PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
@@ -44,9 +45,9 @@ endif ()
 # --- GLOBAL COMPILER FLAGS ---
 add_library(pdvu_compiler_flags INTERFACE)
 set(BASE_COMPILER_FLAGS
-    $<$<CONFIG:Debug>:-fno-omit-frame-pointer -ggdb -O0>
-    $<$<CONFIG:RelWithDebInfo>:-O2 -ggdb -fno-omit-frame-pointer>
-    $<$<CONFIG:Release>:-O3>
+    "$<$<CONFIG:Debug>:-fno-omit-frame-pointer;-ggdb;-O0>"
+    "$<$<CONFIG:RelWithDebInfo>:-O2;-ggdb;-fno-omit-frame-pointer>"
+    "$<$<CONFIG:Release>:-O3>"
 )
 target_compile_options(pdvu_compiler_flags INTERFACE
     ${BASE_COMPILER_FLAGS}
