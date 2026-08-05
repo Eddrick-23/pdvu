@@ -83,8 +83,8 @@ void Viewer::run() {
 
 Viewer::Dimensions Viewer::available_window() {
   const TermSize ts = m_term.get_terminal_size();
-  const int available_height_pixels = (ts.height - 2) * ts.pixels_per_row;
-  const int available_width_pixels = ts.width * ts.pixels_per_col;
+  const int available_height_pixels = (ts.rows - 2) * ts.cell_pixel_height;
+  const int available_width_pixels = ts.columns * ts.cell_pixel_width;
 
   return Dimensions{
       .width = available_width_pixels,
@@ -106,7 +106,7 @@ bool Viewer::fetch_latest_frame() {
     const int error_message_length = static_cast<int>(std::ssize(result.error_message));
     std::print(
         "{}",
-        TUI::add_centered(ts.height / 2, ts.width, result.error_message, error_message_length));
+        TUI::add_centered(ts.rows / 2, ts.columns, result.error_message, error_message_length));
     std::fflush(stdout);
     return false;
   }
@@ -129,8 +129,8 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
                                  target_width,
                                  target_height,
                                  {
-                                     .cols = ts.width,
-                                     .rows = ts.height - 2,
+                                     .cols = ts.columns,
+                                     .rows = ts.rows - 2,
                                      .start_row = 2,
                                      .start_col = 1,
                                  });
@@ -163,7 +163,7 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
     m_last_req_id = m_latest_frame.req_id;
   }
   // generate sequence to display image
-  const int target_rows = std::min(target_height / ts.pixels_per_row, ts.height - 2);
+  const int target_rows = std::min(target_height / ts.cell_pixel_height, ts.rows - 2);
   sequence += kitty::get_image_sequence(m_latest_frame.path_to_data,
                                         KITTY_SLOT_ID,
                                         existing_width,
@@ -219,8 +219,8 @@ void Viewer::request_page_render(int page_num) {
     const float zoom_factor = TUI::calculate_zoom_factor(ts,
                                                          m_target_page_specs,
                                                          {
-                                                             .cols = ts.width,
-                                                             .rows = ts.height - 2,
+                                                             .cols = ts.columns,
+                                                             .rows = ts.rows - 2,
                                                          },
                                                          m_page_view.current_zoom());
     m_target_page_specs = m_target_page_specs.scale(zoom_factor);
@@ -342,7 +342,7 @@ void Viewer::handle_help_page() {
     }
     if (resize_state == ResizeState::Settled) {
       was_resized = true;
-      std::print("{}", clear_overlay(1, last_terminal_size.height, last_terminal_size.width));
+      std::print("{}", clear_overlay(1, last_terminal_size.rows, last_terminal_size.columns));
       std::fflush(stdout);
       last_terminal_size = m_term.get_terminal_size();
       std::print("{}", TUI::help_overlay(last_terminal_size));
@@ -358,7 +358,7 @@ void Viewer::handle_help_page() {
     }
   }
   std::string sequence;
-  sequence += clear_overlay(2, last_terminal_size.height - 1, last_terminal_size.width);
+  sequence += clear_overlay(2, last_terminal_size.rows - 1, last_terminal_size.columns);
   if (was_resized) {
     request_page_render(m_current_page);
     std::print("{}", sequence);

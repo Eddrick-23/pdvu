@@ -6,9 +6,12 @@
 
 #include "viewer/keys.h"
 struct TermSize {
-  int width, height;
-  int x, y;  // (pixels)
-  int pixels_per_row, pixels_per_col;
+  int columns;
+  int rows;
+  int pixel_width;
+  int pixel_height;
+  int cell_pixel_width;
+  int cell_pixel_height;
 };
 
 namespace terminal {
@@ -37,14 +40,24 @@ class Terminal {
   void enter_raw_mode();
   void exit_raw_mode();
   void die(const char* s);
+  /**
+   * @brief query terminal dimensions using posix api
+   * @return TermSize struct which contains drawable terminal dimensions
+   * @Note Caches result if window is not resized, if query failed, we fallback to
+   * the last recorded TermSize.
+   */
   TermSize get_terminal_size();
   InputEvent read_input(int timeout_ms);
 
  private:
   termios orig_termios;
-  bool raw_mode = false;
-  int width, height;
-  int x_pixels, y_pixels;
-  int drawable_x_pixels, drawable_y_pixels;
-  int pixels_per_row, pixels_per_col;
+  bool raw_mode = false;  ///< Tracks if we are in raw mode
+  TermSize m_term_size{
+      .columns = 80,
+      .rows = 24,
+      .pixel_width = 0,
+      .pixel_height = 0,
+      .cell_pixel_width = 0,
+      .cell_pixel_height = 0,
+  };
 };

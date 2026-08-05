@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <fstream>
 #include <print>
+
+#include "plog/Log.h"
 // set as 1 so terminal caches the dimensions on startup
 volatile sig_atomic_t Terminal::window_resized = 2;
 volatile sig_atomic_t Terminal::quit_requested = 0;
@@ -86,24 +88,32 @@ bool Terminal::was_resized() {
 TermSize Terminal::get_terminal_size() {
   winsize ws{};
   if (window_resized == 0) {  // not resized, use cached
-    return TermSize(width, height, x_pixels, y_pixels, pixels_per_row, pixels_per_col);
+    return m_term_size;
   }
   if (ioctl(STDIN_FILENO, TIOCGWINSZ, &ws) == 0) {
-    width = ws.ws_col;
-    height = ws.ws_row;
-    x_pixels = ws.ws_xpixel;
-    y_pixels = ws.ws_ypixel;
+    const int columns = static_cast<int>(ws.ws_col);
+    const int rows = static_cast<int>(ws.ws_row);
+    const int pixel_width = static_cast<int>(ws.ws_xpixel);
+    const int pixel_height = static_cast<int>(ws.ws_ypixel);
     // account dead spacing
-    drawable_x_pixels = ws.ws_xpixel - (ws.ws_xpixel % ws.ws_col);
-    drawable_y_pixels = ws.ws_ypixel - (ws.ws_ypixel % ws.ws_row);
-    pixels_per_row = drawable_y_pixels / ws.ws_row;
-    pixels_per_col = drawable_x_pixels / ws.ws_col;
+    const int drawable_x_pixels = ws.ws_xpixel - (ws.ws_xpixel % ws.ws_col);
+    const int drawable_y_pixels = ws.ws_ypixel - (ws.ws_ypixel % ws.ws_row);
+    const int cell_pixel_width = drawable_x_pixels / ws.ws_col;
+    const int cell_pixel_height = drawable_y_pixels / ws.ws_row;
 
-    return TermSize(
-        ws.ws_col, ws.ws_row, ws.ws_xpixel, ws.ws_ypixel, pixels_per_row, pixels_per_col);
+    m_term_size = TermSize{
+        .columns = columns,
+        .rows = rows,
+        .pixel_width = pixel_width,
+        .pixel_height = pixel_height,
+        .cell_pixel_width = cell_pixel_width,
+        .cell_pixel_height = cell_pixel_height,
+    };
+    return m_term_size;
   }
-  std::println(stderr, "Failed to get terminal size");
-  return TermSize(24, 80, 0, 0, 0, 0);
+
+  PLOG_ERROR << "Failed to get terminal size";
+  return m_term_size;
 }
 
 void Terminal::enter_raw_mode() {
@@ -111,7 +121,7 @@ void Terminal::enter_raw_mode() {
     die("tctgetattr");
   };  // get original state
 
-  struct termios raw = orig_termios;
+  termios raw = orig_termios;
   // TURN OFF: ECHO(printing), ICANON(enter key), ISIG(ctrl-c/z signals)
   // Keep ISIG for debugging
   raw.c_lflag &= ~static_cast<tcflag_t>(ECHO | ICANON | ISIG);
@@ -143,42 +153,39 @@ void Terminal::die(const char* s) {
 }
 
 InputEvent Terminal::read_input(int timeout_ms) {
-  pollfd pfd;
-  pfd.fd = STDIN_FILENO;
-  pfd.events = POLLIN;
+  pollfd stdin_poll{
+      .fd = STDIN_FILENO,
+      .events = POLLIN,
+      .revents = 0,
+  };
 
-  int ret = poll(&pfd, 1, timeout_ms);
-  if (ret <= 0) {
-    return InputEvent{key_none};
+  const int input_result = poll(&stdin_poll, 1, timeout_ms);
+  if (input_result <= 0) {
+    return InputEvent{.key = key_none};
   }
 
   char c;
   ssize_t nread = read(STDIN_FILENO, &c, 1);
   if (nread == -1) {
     if (errno == EINTR) {
-      return InputEvent{key_none};
+      return InputEvent{.key = key_none};
     }
     if (errno == EAGAIN) {
       die("read");
     }
-    return InputEvent{key_none};
+    return InputEvent{.key = key_none};
   }
 
   if (nread != 1) {
-    return InputEvent{key_none};
+    return InputEvent{.key = key_none};
   }
 
-  if (c == '\x1b') {  // escape key and arrow keys
-    pollfd pfd;
-    pfd.fd = STDIN_FILENO;
-    pfd.events = POLLIN;
-
-    int ret = poll(&pfd, 1, 10);  // wait 10ms for next byte
-    if (ret == 0) {
+  if (c == '\x1b') {                                     // escape key and arrow keys
+    const int escape_result = poll(&stdin_poll, 1, 10);  // wait 10ms for next byte
+    if (escape_result == 0) {
       return InputEvent{.key = key_escape};
     }
-    if (ret > 0) {
-      // char seq[3];
+    if (escape_result > 0) {
       std::array<char, 3> seq;
       if (read(STDIN_FILENO, &seq[0], 1) != 1) return InputEvent{.key = key_escape};
 
