@@ -76,7 +76,7 @@ void Viewer::run() {
     }
 
     if (fetch_latest_frame()) {
-      draw_latest_frame(true, true);
+      draw_for_current_mode();
     }
   }
 }
@@ -257,6 +257,8 @@ void Viewer::handle_page_pan(char key) {
 }
 
 void Viewer::handle_go_to_page() {
+  // caller is in charge of restoring modes and redrawing
+  // we only handle redraws for resize events while mode is active
   bool running = true;
   bool page_change = false;
   auto is_whole_number = [](const std::string& s) {
@@ -268,12 +270,12 @@ void Viewer::handle_go_to_page() {
 
   auto on_idle = [&]() {
     if (fetch_latest_frame()) {
-      draw_latest_frame(true, false);
+      draw_for_current_mode();
     }
   };
 
   auto on_resize_settled = [&]() {
-    draw_latest_frame(true, false);
+    draw_for_current_mode();
     request_page_render(m_current_page);
   };
 
@@ -309,8 +311,6 @@ void Viewer::handle_go_to_page() {
   }
   if (page_change) {
     request_page_render(m_current_page);
-  } else {
-    draw_latest_frame(true, true);
   }
 }
 
@@ -376,7 +376,25 @@ void Viewer::handle_help_page() {
   std::fflush(stdout);
 }
 
+void Viewer::draw_for_current_mode() {
+  switch (m_ui_mode) {
+    case UiMode::Browse:
+      draw_latest_frame(true, true);
+      break;
+    case UiMode::GoToPage:
+      draw_latest_frame(true, false);
+      break;
+    case UiMode::Help:
+      // Help loop renders its own overlay
+      break;
+  }
+}
+
 void Viewer::process_keypress() {
+  if (m_ui_mode != UiMode::Browse) {
+    return;
+  }
+
   static constexpr std::string_view pan_keys = "wWaAsSdD";
   auto [key, char_value] = m_term.read_input(INPUT_POLL_RATE_MS);  // 60fps
   // if guard message is being displayed, only allow q to quit
@@ -411,11 +429,23 @@ void Viewer::process_keypress() {
         break;
       }
       if (char_value == 'g') {  // go to page
+        m_ui_mode = UiMode::GoToPage;
         handle_go_to_page();
+        m_ui_mode = UiMode::Browse;
+
+        if (m_running) {  // avoid re-render if we quit directly
+          draw_for_current_mode();
+        }
         break;
       }
       if (char_value == '?') {
+        m_ui_mode = UiMode::Help;
         handle_help_page();
+        m_ui_mode = UiMode::Browse;
+
+        if (m_running) {  // avoid re-render if we quit directly
+          draw_for_current_mode();
+        }
         break;
       }
       if (char_value == 'z') {  // reset zoom and crop offsets

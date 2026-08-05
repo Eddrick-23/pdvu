@@ -11,7 +11,7 @@ class Viewer {
    * support.
    */
   Viewer(std::unique_ptr<pdf::Parser> main_parser, std::unique_ptr<RenderEngine> render_engine,
-      bool use_shm);
+         bool use_shm);
 
   /**
    * @brief Starts the primary application loop, puts the terminal into raw mode. This handles
@@ -20,6 +20,15 @@ class Viewer {
   void run();  // main loop
 
  private:
+  /**
+   * @brief Tracks current viewer ui state
+   */
+  enum class UiMode {
+    Browse,
+    GoToPage,
+    Help,
+  };
+
   /**
    * @brief Wraps standard 2D pixel or grid dimensions
    */
@@ -69,7 +78,7 @@ class Viewer {
 
   /**
    * @brief Prompts the user with an interactive input bar to jump to a specific page number,
-   * handling input parsing and triggering the page change.
+   * handling input parsing and sending request to render the new frame.
    */
   void handle_go_to_page();
 
@@ -78,6 +87,11 @@ class Viewer {
    * resizes and cleanly restoring the previous view if no rerender occurs.
    */
   void handle_help_page();
+
+  /**
+   * @brief handle ui drawing for current mode
+   */
+  void draw_for_current_mode();
 
   /**
    * @brief Reads raw terminal input and dispatches corresponding actions such as zooming, panning,
@@ -96,6 +110,7 @@ class Viewer {
   std::unique_ptr<pdf::Parser> m_parser;     // parsing pdfs
   std::unique_ptr<RenderEngine> m_renderer;  // loading page frames
   PageView m_page_view;                      // zoom and panning handling
+  UiMode m_ui_mode = UiMode::Browse;
 
   // current state
   int m_current_page = 0;
