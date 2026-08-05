@@ -1,5 +1,6 @@
 #include "tui.h"
 
+#include <cassert>
 #include <cstddef>
 #include <cstdio>
 #include <functional>
@@ -219,7 +220,8 @@ std::string create_box(const BoxBounds& box_bounds, bool fill) {
  *         width - the index that shows its tail, so text keeps appearing to
  *         scroll left as the user types past the right edge.
  */
-int scroll_window_start(int cursor_pos, int visible_pos, int buffer_len, int available_width) {
+std::size_t scroll_window_start(std::size_t cursor_pos, std::size_t visible_pos,
+                                std::size_t buffer_len, std::size_t available_width) {
   if (cursor_pos < visible_pos) {  // scrolled left off screen
     visible_pos = cursor_pos;
   } else if (cursor_pos >= visible_pos + available_width) {  // scrolled right off screen
@@ -408,8 +410,6 @@ InputBarResult bottom_input_bar(const std::string& prompt, const InputBarDeps& d
 
   bool showing_error = !error_prompt.empty();
 
-  auto len = [](std::string_view s) { return static_cast<int>(s.length()); };
-
   // redraw bar on every key action
   auto redraw = [&]() {
     std::string active_prompt;
@@ -428,9 +428,12 @@ InputBarResult bottom_input_bar(const std::string& prompt, const InputBarDeps& d
 
     // calculate correct substring start position
     // relative to current cursor and available width
-    const int available_width = current_term_size.columns - visible_length(active_prompt);
-    visible_pos = static_cast<std::size_t>(scroll_window_start(
-        static_cast<int>(cursor_pos), static_cast<int>(visible_pos), len(buffer), available_width));
+    const int available_columns = current_term_size.columns - visible_length(active_prompt);
+    if (available_columns <= 0) {
+      return;
+    }
+    const auto available_width = static_cast<std::size_t>(available_columns);
+    visible_pos = scroll_window_start(cursor_pos, visible_pos, buffer.size(), available_width);
 
     // clear line and draw prompt
     terminal::show_cursor();
@@ -519,7 +522,7 @@ InputBarResult bottom_input_bar(const std::string& prompt, const InputBarDeps& d
       showing_error = false;
       redraw();
     } else if (c.key == key_right_arrow) {
-      if (cursor_pos < static_cast<std::size_t>(len(buffer))) {
+      if (cursor_pos < buffer.size()) {
         cursor_pos++;
         redraw();
       }
@@ -530,7 +533,6 @@ InputBarResult bottom_input_bar(const std::string& prompt, const InputBarDeps& d
       }
     }
   }
-
   cleanup();
   return result;
 }
@@ -548,10 +550,14 @@ float calculate_zoom_factor(const TermSize& ts, const pdf::PageSpecs& ps, const 
   return std::min(h_scale, v_scale) * zoom;
 }
 std::string center_cursor(const TermSize& ts, int w_pixels, int h_pixels, const ContentArea& area) {
-  const int cols_used = static_cast<int>(
-      std::ceil(static_cast<float>(w_pixels) / static_cast<float>(ts.cell_pixel_width)));
-  const int rows_used = static_cast<int>(
-      std::ceil(static_cast<float>(h_pixels) / static_cast<float>(ts.cell_pixel_height)));
+  const auto ceil_div = [](int value, int divisor) {
+    assert(value >= 0);
+    assert(divisor > 0);
+
+    return (value / divisor) + (value % divisor != 0);
+  };
+  const int cols_used = ceil_div(w_pixels, ts.cell_pixel_width);
+  const int rows_used = ceil_div(h_pixels, ts.cell_pixel_height);
 
   int top_margin = (area.rows - rows_used) / 2;
   int left_margin = (area.cols - cols_used) / 2;
