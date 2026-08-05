@@ -8,6 +8,7 @@
 #include <print>
 
 #include "keys.h"
+#include "plog/Log.h"
 #include "render/parser.h"
 #include "terminal/kitty.h"
 #include "terminal/terminal.h"
@@ -20,7 +21,6 @@ namespace {  // utility functions and constants
 // UI and timing constants
 constexpr int RESIZE_DEBOUNCE_MS = 75;  // Milliseconds to wait after terminal resize
 constexpr int INPUT_POLL_RATE_MS = 16;  // ~60 FPS for responsive main loop input
-constexpr int HELP_POLL_RATE_MS = 50;   // Slower poll rate when idle in help menu
 constexpr float PAN_STEP_RATIO = 0.1F;  // 10% of viewport shifted per pan keypress
 
 std::string top_status_bar_with_stats(const TermSize& ts, const RenderResult& latest_frame,
@@ -58,27 +58,46 @@ void Viewer::run() {
   }
   m_term.was_resized();  // force fetch initial sizes and set flag to 0
   request_page_render(m_current_page);
-  draw_latest_frame(true, true);  // force draw guard message if start dimensions too small
+  draw_for_current_mode();  // force draw guard message if start dimensions too small
 
   auto debouncer = ResizeDebouncer(RESIZE_DEBOUNCE_MS);
   while (m_running && !static_cast<bool>(Terminal::quit_requested)) {
-    process_keypress();
+    bool need_redraw = false;
 
-    switch (debouncer.poll(m_term.was_resized(), std::chrono::steady_clock::now())) {
-      case ResizeState::Resizing:
-        draw_latest_frame(true, true);
-        continue;
-      case ResizeState::Settled:
-        request_page_render(m_current_page);
-        break;
-      case ResizeState::Idle:
-        break;
+    need_redraw |= process_keypress();
+    need_redraw |= handle_resize(debouncer);
+
+    if (!m_running) {
+      break;
     }
 
     if (fetch_latest_frame()) {
+      // store completed frames during Help, but don't redraw
+      need_redraw |= m_ui_mode == UiMode::Browse;
+    }
+
+    if (need_redraw) {
       draw_for_current_mode();
     }
   }
+}
+
+bool Viewer::handle_resize(ResizeDebouncer& debouncer) {
+  const ResizeState state = debouncer.poll(m_term.was_resized(), std::chrono::steady_clock::now());
+  switch (state) {
+    case ResizeState::Idle:
+      return false;
+    case ResizeState::Resizing:
+      // draw_latest_frame(true, true);
+      return true;
+    case ResizeState::Settled:
+      // keep mode independent. If help is open, render the resized page in the background
+      // so it is ready when the help page closes.
+      request_page_render(m_current_page);
+      return true;
+  }
+
+  return false;
 }
 
 Viewer::Dimensions Viewer::available_window() {
@@ -229,7 +248,7 @@ void Viewer::request_page_render(int page_num) {
   }
 }
 
-void Viewer::handle_page_pan(char key) {
+bool Viewer::handle_page_pan(char key) {
   bool viewport_changed = false;
   const float factor = (std::isupper(key) != 0) ? 2 : 1;
   key = static_cast<char>(std::tolower(static_cast<unsigned char>(key)));
@@ -250,10 +269,7 @@ void Viewer::handle_page_pan(char key) {
       break;
   }
 
-  // only re-display if viewport offset changed
-  if (viewport_changed) {
-    draw_latest_frame(true, true);
-  }
+  return viewport_changed;
 }
 
 void Viewer::handle_go_to_page() {
@@ -300,6 +316,7 @@ void Viewer::handle_go_to_page() {
       running = false;
     } else if (is_whole_number(input)) {
       running = false;
+      // TODO fix crash if input is super large (out of range)
       int new_page = std::stoi(input) - 1;  // we start counting from 1
       new_page = new_page < 0 ? 0 : new_page;
       new_page = new_page >= m_total_pages ? m_total_pages - 1 : new_page;
@@ -314,66 +331,117 @@ void Viewer::handle_go_to_page() {
   }
 }
 
-void Viewer::handle_help_page() {
-  auto clear_overlay = [](int start_row, int end_row, int width) {
-    std::string sequence;
-    sequence += terminal::reset_screen_and_cursor_string();
-    sequence += kitty::clear_dim_layer();
-    const std::string blank_line = std::string(static_cast<size_t>(width), ' ');
-    for (int row = start_row; row <= end_row; row++) {
-      sequence += terminal::move_cursor(row, 1);
-      sequence += blank_line;
-    }
-    sequence += terminal::move_cursor(1, 1);
-    return sequence;
-  };
+bool Viewer::handle_help_input(const InputEvent& event) {
+  if (m_ui_mode != UiMode::Help) {
+    PLOG_ERROR << "handle_help_input called when ui_mode is not Help";
+    return false;
+  }
 
-  TermSize last_terminal_size = m_term.get_terminal_size();
-  std::print("{}", TUI::help_overlay(last_terminal_size));
-  std::fflush(stdout);
-  auto debouncer = ResizeDebouncer(RESIZE_DEBOUNCE_MS);
-  bool was_resized = false;  // track if window was resized at all
-  while (true) {
-    InputEvent input = m_term.read_input(HELP_POLL_RATE_MS);
-    const auto resize_state =
-        debouncer.poll(m_term.was_resized(), std::chrono::steady_clock::now());
-    if (resize_state == ResizeState::Resizing) {
-      was_resized = true;
-    }
-    if (resize_state == ResizeState::Settled) {
-      was_resized = true;
-      std::print("{}", clear_overlay(1, last_terminal_size.rows, last_terminal_size.columns));
-      std::fflush(stdout);
-      last_terminal_size = m_term.get_terminal_size();
-      std::print("{}", TUI::help_overlay(last_terminal_size));
-      std::fflush(stdout);
-    }
+  if (event.key == key_char && event.char_value == 'q') {
+    m_running = false;
+    return true;
+  }
 
-    if (input.key == key_escape && !TUI::is_window_too_small(last_terminal_size)) {
-      break;
-    }
-    if (input.key == key_char && input.char_value == 'q') {  // allow quit
+  if (event.key == key_escape && !TUI::is_window_too_small(m_term.get_terminal_size())) {
+    m_ui_mode = UiMode::Browse;
+    // Clear the dim layer here, or schedule as part of a subsequent browse draw?
+    std::print("{}", kitty::clear_dim_layer());
+    return true;
+  }
+  return false;
+}
+
+bool Viewer::handle_browse_input(const InputEvent& event) {
+  static constexpr std::string_view pan_keys = "wWaAsSdD";
+  if (m_ui_mode != UiMode::Browse) {
+    PLOG_ERROR << "handle_browse_input being called when ui_mode is not browse";
+    return false;
+  }
+
+  auto [key, char_value] = event;
+  if (key == key_none) {
+    return false;
+  }
+
+  if (TUI::is_window_too_small(m_term.get_terminal_size())) {
+    if (key == key_char && char_value == 'q') {  // quit
       m_running = false;
-      return;
+      return m_running;
     }
+    return false;
   }
-  std::string sequence;
-  sequence += clear_overlay(2, last_terminal_size.rows - 1, last_terminal_size.columns);
-  if (was_resized) {
-    request_page_render(m_current_page);
-    std::print("{}", sequence);
-    fflush(stdout);
-    return;
+
+  switch (key) {
+    case key_right_arrow:
+      if (m_current_page >= m_total_pages - 1) {
+        m_current_page = m_total_pages - 1;
+      } else {
+        m_current_page++;
+        request_page_render(m_current_page);
+        return true;
+      }
+      return false;
+    case key_left_arrow:
+      if (m_current_page <= 0) {
+        m_current_page = 0;
+      } else {
+        m_current_page--;
+        request_page_render(m_current_page);
+        return true;
+      }
+      return false;
+    case key_char:
+      if (char_value == 'q') {  // quit
+        m_running = false;
+        return false;
+      }
+      if (char_value == '?') {
+        m_ui_mode = UiMode::Help;
+        return true;
+      }
+      if (char_value == 'g') {
+        // go to page
+        m_ui_mode = UiMode::GoToPage;
+        handle_go_to_page();
+        m_ui_mode = UiMode::Browse;
+
+        // redraw through main loop
+        return m_running;
+      }
+      if (char_value == 'z') {  // reset zoom and crop offsets
+        if (m_page_view.current_zoom() != 1.0) {
+          m_page_view.reset_offsets_to_default();
+          m_page_view.reset_zoom_to_default();
+          request_page_render(m_current_page);
+          return true;
+        }
+        return false;
+      }
+      if (char_value == '=' || char_value == '+') {  // zoom in
+        if (m_page_view.change_zoom_index(1)) {
+          request_page_render(m_current_page);
+          return true;
+        }
+        return false;
+      }
+      if (char_value == '-' || char_value == '_') {  // zoom out
+        if (m_page_view.change_zoom_index(-1)) {
+          request_page_render(m_current_page);
+          return true;
+        }
+        return false;
+      }
+      if (char_value == 'r') {
+        m_rotation_degrees = (m_rotation_degrees + 90) % 360;
+        request_page_render(m_current_page);
+        return false;
+      }
+      if (pan_keys.contains(char_value)) {  // handle panning
+        return handle_page_pan(char_value);
+      }
+    default:  // do nothing for the rest
+      return false;
   }
-  // redraw top and bottom bar
-  sequence += top_status_bar_with_stats(last_terminal_size,
-                                        m_latest_frame,
-                                        m_parser->get_document_name(),
-                                        m_current_page,
-                                        m_total_pages);
-  sequence += bottom_bar(last_terminal_size, m_page_view.current_zoom(), m_rotation_degrees);
-  std::print("{}", sequence);
-  std::fflush(stdout);
 }
 
 void Viewer::draw_for_current_mode() {
@@ -385,99 +453,27 @@ void Viewer::draw_for_current_mode() {
       draw_latest_frame(true, false);
       break;
     case UiMode::Help:
-      // Help loop renders its own overlay
+      std::string sequence;
+      sequence += terminal::reset_screen_and_cursor_string();
+      sequence += kitty::clear_dim_layer();
+      sequence += TUI::help_overlay(m_term.get_terminal_size());
+
+      std::print("{}", sequence);
+      std::fflush(stdout);
       break;
   }
 }
 
-void Viewer::process_keypress() {
-  if (m_ui_mode != UiMode::Browse) {
-    return;
+bool Viewer::process_keypress() {
+  const auto event = m_term.read_input(INPUT_POLL_RATE_MS);  // 60fps
+  switch (m_ui_mode) {
+    case UiMode::Browse:
+      return handle_browse_input(event);
+    case UiMode::Help:
+      return handle_help_input(event);
+    case UiMode::GoToPage:
+      // currently handled by tui
+      return false;
   }
-
-  static constexpr std::string_view pan_keys = "wWaAsSdD";
-  auto [key, char_value] = m_term.read_input(INPUT_POLL_RATE_MS);  // 60fps
-  // if guard message is being displayed, only allow q to quit
-  if (TUI::is_window_too_small(m_term.get_terminal_size())) {
-    if (key == key_char && char_value == 'q') {  // quit
-      m_running = false;
-      return;
-    }
-  }
-
-  if (key == key_none) return;  // handle interrupt, do nothing
-  switch (key) {
-    case key_right_arrow:
-      if (m_current_page >= m_total_pages - 1) {
-        m_current_page = m_total_pages - 1;
-      } else {
-        m_current_page++;
-        request_page_render(m_current_page);
-      }
-      break;
-    case key_left_arrow:
-      if (m_current_page <= 0) {
-        m_current_page = 0;
-      } else {
-        m_current_page--;
-        request_page_render(m_current_page);
-      }
-      break;
-    case key_char:
-      if (char_value == 'q') {  // quit
-        m_running = false;
-        break;
-      }
-      if (char_value == 'g') {  // go to page
-        m_ui_mode = UiMode::GoToPage;
-        handle_go_to_page();
-        m_ui_mode = UiMode::Browse;
-
-        if (m_running) {  // avoid re-render if we quit directly
-          draw_for_current_mode();
-        }
-        break;
-      }
-      if (char_value == '?') {
-        m_ui_mode = UiMode::Help;
-        handle_help_page();
-        m_ui_mode = UiMode::Browse;
-
-        if (m_running) {  // avoid re-render if we quit directly
-          draw_for_current_mode();
-        }
-        break;
-      }
-      if (char_value == 'z') {  // reset zoom and crop offsets
-        if (m_page_view.current_zoom() != 1.0) {
-          m_page_view.reset_offsets_to_default();
-          m_page_view.reset_zoom_to_default();
-          request_page_render(m_current_page);
-        }
-      }
-      if (char_value == '=' || char_value == '+') {  // zoom in
-        if (m_page_view.change_zoom_index(1)) {
-          request_page_render(m_current_page);
-          draw_latest_frame(true, true);
-        }
-        break;
-      }
-      if (char_value == '-' || char_value == '_') {  // zoom out
-        if (m_page_view.change_zoom_index(-1)) {
-          request_page_render(m_current_page);
-          draw_latest_frame(true, true);
-        }
-        break;
-      }
-      if (char_value == 'r') {
-        m_rotation_degrees = (m_rotation_degrees + 90) % 360;
-        request_page_render(m_current_page);
-        break;
-      }
-      if (pan_keys.contains(char_value)) {  // handle panning
-        handle_page_pan(char_value);
-      }
-    default:  // do nothing for the rest
-      break;
-  }
+  return false;
 }

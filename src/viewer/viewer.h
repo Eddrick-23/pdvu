@@ -3,6 +3,7 @@
 #include "render/parser.h"
 #include "render/render_engine.h"
 #include "terminal/terminal.h"
+#include "utils/resize_debouncer.h"
 
 class Viewer {
  public:
@@ -46,6 +47,8 @@ class Viewer {
   };
 
   // helper functions
+  bool handle_resize(ResizeDebouncer& debouncer);
+
   /**
    * @brief Retrieves the most recent rendered frame from the background engine, returning true if a
    * new frame is successfully fetched.
@@ -71,10 +74,10 @@ class Viewer {
   void request_page_render(int page_num);
 
   /**
-   * @brief Translates directional keypresses (w, a, s, d) into viewport offsets and updates the
-   * display if the view bounds change.
+   * @brief Translates directional keypresses (w, a, s, d) into viewport offsets
+   * @return true if bounds changed else false
    */
-  void handle_page_pan(char key);
+  bool handle_page_pan(char key);
 
   /**
    * @brief Prompts the user with an interactive input bar to jump to a specific page number,
@@ -83,10 +86,21 @@ class Viewer {
   void handle_go_to_page();
 
   /**
-   * @brief Displays the help overlay and traps input in a sub-loop until dismissed, handling
-   * resizes and cleanly restoring the previous view if no rerender occurs.
+   * @brief Inputs should be routed here if m_ui_mode = Help
+   * - quit directly if q is pressed
+   * - return to browse mode if esc is pressed while window size is valid
+   *   and clears dim-layer on exit
+   * @return true if quit or leaving help mode, else false
    */
-  void handle_help_page();
+  bool handle_help_input(const InputEvent& event);
+
+  /**
+   * @brief Inputs should be routed here if m_ui_mode = browse
+   * - for inputs `g` or `?`, changes mode to GoToPage or Help respectively
+   * - for zoom and page pan events, call handlers and return true if redraw needed
+   * @return true if redraw needed
+   */
+  bool handle_browse_input(const InputEvent& event);
 
   /**
    * @brief handle ui drawing for current mode
@@ -96,8 +110,10 @@ class Viewer {
   /**
    * @brief Reads raw terminal input and dispatches corresponding actions such as zooming, panning,
    * rotation, navigation, and quitting.
+   *
+   * @bool true if redraw is needed
    */
-  void process_keypress();
+  bool process_keypress();
 
   /**
    * @brief Calculates the usable pixel dimensions of the terminal window, reserving two rows for
