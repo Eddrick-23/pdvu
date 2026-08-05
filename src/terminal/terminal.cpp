@@ -8,10 +8,9 @@
 #include <cerrno>
 #include <csignal>
 #include <cstdio>
-#include <cstdlib>
 #include <format>
-#include <fstream>
 #include <print>
+#include <system_error>
 
 #include "plog/Log.h"
 // set as 1 so terminal caches the dimensions on startup
@@ -44,7 +43,7 @@ std::string_view restore_cursor_string() { return "\0338"; }
 
 Terminal::Terminal() = default;
 
-Terminal::~Terminal() {
+Terminal::~Terminal() noexcept {
   exit_raw_mode();
   terminal::exit_alt_screen();
   terminal::show_cursor();
@@ -125,39 +124,39 @@ TermSize Terminal::get_terminal_size() {
 }
 
 void Terminal::enter_raw_mode() {
-  if (tcgetattr(STDIN_FILENO, &orig_termios) == -1) {
-    die("tctgetattr");
-  };  // get original state
-
-  termios raw = orig_termios;
-  // TURN OFF: ECHO(printing), ICANON(enter key), ISIG(ctrl-c/z signals)
-  // Keep ISIG for debugging
-  raw.c_lflag &= ~static_cast<tcflag_t>(ECHO | ICANON | ISIG);
-
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) {
-    die("tctsetattr");
-  }
-  raw_mode = true;
-}
-
-void Terminal::exit_raw_mode() {
-  // restore original terminal state
-  if (!raw_mode) {
+  if (m_raw_mode) {
     return;
   }
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1) {
-    die("tctsetattr");
+
+  termios original{};
+  if (tcgetattr(STDIN_FILENO, &original) == -1) {
+    const int error = errno;
+    throw std::system_error(error, std::generic_category(), "Failed to read terminal attributes");
+  };  // get original state
+
+  termios raw = original;
+  // TURN OFF: ECHO(printing), ICANON(enter key)
+  raw.c_lflag &= ~static_cast<tcflag_t>(ECHO | ICANON);
+
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) {
+    const int error = errno;
+    throw std::system_error(error, std::generic_category(), "Failed to enable terminal raw mode");
   }
+
+  m_orig_termios = original;
+  m_raw_mode = true;
 }
 
-void Terminal::die(const char* s) {
-  // cleanup
-  exit_raw_mode();
-  terminal::exit_alt_screen();
-  terminal::show_cursor();
-  // print error message
-  perror(s);
-  exit(1);
+void Terminal::exit_raw_mode() noexcept {
+  // restore original terminal state
+  if (!m_raw_mode) {
+    return;
+  }
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &m_orig_termios) == -1) {
+    std::perror("Failed to restore terminal attributes");
+    return;
+  }
+  m_raw_mode = false;
 }
 
 InputEvent Terminal::read_input(int timeout_ms) {
