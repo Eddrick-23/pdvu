@@ -5,7 +5,9 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
+#include <optional>
 #include <print>
+#include <string_view>
 
 #include "keys.h"
 #include "plog/Log.h"
@@ -34,6 +36,29 @@ std::string top_status_bar_with_stats(const TermSize& ts, const RenderResult& la
 }
 std::string bottom_bar(const TermSize& ts, float current_zoom_level, int rotation) {
   return TUI::bottom_status_bar(ts, current_zoom_level, rotation);
+}
+
+std::optional<int> parse_page_index(std::string_view input, int total_pages) {
+  if (input.empty() || total_pages <= 0) {
+    return std::nullopt;
+  }
+  unsigned int page_number = 0;
+
+  const auto [ptr, error] = std::from_chars(input.data(), input.data() + input.size(), page_number);
+
+  if (error == std::errc::result_out_of_range) {  // clamp to last page of document
+    return total_pages - 1;
+  }
+
+  if (error != std::errc{} ||
+      ptr != input.data() + input.size()) {  // whole string must be a number
+    return std::nullopt;
+  }
+
+  const unsigned int bounded_page =
+      std::clamp(page_number, 1U, static_cast<unsigned int>(total_pages));
+
+  return static_cast<int>(bounded_page) - 1;
 }
 }  // namespace
 
@@ -277,12 +302,6 @@ void Viewer::handle_go_to_page() {
   // we only handle redraws for resize events while mode is active
   bool running = true;
   bool page_change = false;
-  auto is_whole_number = [](const std::string& s) {
-    unsigned long value;
-    auto result = std::from_chars(s.data(), s.data() + s.size(), value);
-    // no error code + ptr reach end of string
-    return result.ec == std::errc() && result.ptr == s.data() + s.size();
-  };
 
   auto on_idle = [&]() {
     if (fetch_latest_frame()) {
@@ -314,14 +333,10 @@ void Viewer::handle_go_to_page() {
       running = false;
     } else if (cancelled || input.empty()) {
       running = false;
-    } else if (is_whole_number(input)) {
+    } else if (auto new_page = parse_page_index(input, m_total_pages)) {
       running = false;
-      // TODO fix crash if input is super large (out of range)
-      int new_page = std::stoi(input) - 1;  // we start counting from 1
-      new_page = new_page < 0 ? 0 : new_page;
-      new_page = new_page >= m_total_pages ? m_total_pages - 1 : new_page;
-      page_change = new_page != m_current_page;
-      m_current_page = new_page;
+      page_change = *new_page != m_current_page;
+      m_current_page = *new_page;
     } else {
       error_prompt = "INVALID PAGE: ";
     }
