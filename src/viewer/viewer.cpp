@@ -5,9 +5,12 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
+#include <optional>
 #include <print>
+#include <string_view>
 
 #include "keys.h"
+#include "plog/Log.h"
 #include "render/parser.h"
 #include "terminal/kitty.h"
 #include "terminal/terminal.h"
@@ -20,7 +23,6 @@ namespace {  // utility functions and constants
 // UI and timing constants
 constexpr int RESIZE_DEBOUNCE_MS = 75;  // Milliseconds to wait after terminal resize
 constexpr int INPUT_POLL_RATE_MS = 16;  // ~60 FPS for responsive main loop input
-constexpr int HELP_POLL_RATE_MS = 50;   // Slower poll rate when idle in help menu
 constexpr float PAN_STEP_RATIO = 0.1F;  // 10% of viewport shifted per pan keypress
 
 std::string top_status_bar_with_stats(const TermSize& ts, const RenderResult& latest_frame,
@@ -34,6 +36,29 @@ std::string top_status_bar_with_stats(const TermSize& ts, const RenderResult& la
 }
 std::string bottom_bar(const TermSize& ts, float current_zoom_level, int rotation) {
   return TUI::bottom_status_bar(ts, current_zoom_level, rotation);
+}
+
+std::optional<int> parse_page_index(std::string_view input, int total_pages) {
+  if (input.empty() || total_pages <= 0) {
+    return std::nullopt;
+  }
+  unsigned int page_number = 0;
+
+  const auto [ptr, error] = std::from_chars(input.data(), input.data() + input.size(), page_number);
+
+  if (error == std::errc::result_out_of_range) {  // clamp to last page of document
+    return total_pages - 1;
+  }
+
+  if (error != std::errc{} ||
+      ptr != input.data() + input.size()) {  // whole string must be a number
+    return std::nullopt;
+  }
+
+  const unsigned int bounded_page =
+      std::clamp(page_number, 1U, static_cast<unsigned int>(total_pages));
+
+  return static_cast<int>(bounded_page) - 1;
 }
 }  // namespace
 
@@ -58,27 +83,46 @@ void Viewer::run() {
   }
   m_term.was_resized();  // force fetch initial sizes and set flag to 0
   request_page_render(m_current_page);
-  draw_latest_frame(true, true);  // force draw guard message if start dimensions too small
+  draw_for_current_mode();  // force draw guard message if start dimensions too small
 
   auto debouncer = ResizeDebouncer(RESIZE_DEBOUNCE_MS);
   while (m_running && !static_cast<bool>(Terminal::quit_requested)) {
-    process_keypress();
+    bool need_redraw = false;
 
-    switch (debouncer.poll(m_term.was_resized(), std::chrono::steady_clock::now())) {
-      case ResizeState::Resizing:
-        draw_latest_frame(true, true);
-        continue;
-      case ResizeState::Settled:
-        request_page_render(m_current_page);
-        break;
-      case ResizeState::Idle:
-        break;
+    need_redraw |= process_keypress();
+    need_redraw |= handle_resize(debouncer);
+
+    if (!m_running) {
+      break;
     }
 
     if (fetch_latest_frame()) {
-      draw_latest_frame(true, true);
+      // store completed frames during Help, but don't redraw
+      need_redraw |= m_ui_mode == UiMode::Browse;
+    }
+
+    if (need_redraw) {
+      draw_for_current_mode();
     }
   }
+}
+
+bool Viewer::handle_resize(ResizeDebouncer& debouncer) {
+  const ResizeState state = debouncer.poll(m_term.was_resized(), std::chrono::steady_clock::now());
+  switch (state) {
+    case ResizeState::Idle:
+      return false;
+    case ResizeState::Resizing:
+      // draw_latest_frame(true, true);
+      return true;
+    case ResizeState::Settled:
+      // keep mode independent. If help is open, render the resized page in the background
+      // so it is ready when the help page closes.
+      request_page_render(m_current_page);
+      return true;
+  }
+
+  return false;
 }
 
 Viewer::Dimensions Viewer::available_window() {
@@ -98,7 +142,7 @@ bool Viewer::fetch_latest_frame() {
     return false;
   }
   auto& result = result_opt.value();
-  if (result.req_id == m_latest_frame.req_id) {  // check if frame is new
+  if (result.req_id == m_render.latest_frame.req_id) {  // check if frame is new
     return false;
   }
   if (!result.error_message.empty()) {  // check if there was a render error
@@ -110,7 +154,7 @@ bool Viewer::fetch_latest_frame() {
     std::fflush(stdout);
     return false;
   }
-  m_latest_frame = std::move(result_opt.value());  // store latest frame
+  m_render.latest_frame = std::move(result_opt.value());  // store latest frame
   return true;
 }
 
@@ -147,7 +191,8 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
           target_width, target_height, {.max_width_pixels = width, .max_height_pixels = height});
   // if latest frame dimensions match target, don't need to scale crop
   // if latest frame dimensions don't match target, scale the crop window
-  if (m_latest_frame.page_width != target_width || m_latest_frame.page_height != target_height) {
+  if (m_render.latest_frame.page_width != target_width ||
+      m_render.latest_frame.page_height != target_height) {
     const float scale_factor_x =
         static_cast<float>(target_width) / static_cast<float>(existing_width);
     const float scale_factor_y =
@@ -158,13 +203,13 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
     crop_height = static_cast<int>(static_cast<float>(crop_height) / scale_factor_y);
   }
 
-  const bool need_transmit = m_last_req_id != m_latest_frame.req_id;
+  const bool need_transmit = m_render.last_transmitted_req_id != m_render.latest_frame.req_id;
   if (need_transmit) {
-    m_last_req_id = m_latest_frame.req_id;
+    m_render.last_transmitted_req_id = m_render.latest_frame.req_id;
   }
   // generate sequence to display image
   const int target_rows = std::min(target_height / ts.cell_pixel_height, ts.rows - 2);
-  sequence += kitty::get_image_sequence(m_latest_frame.path_to_data,
+  sequence += kitty::get_image_sequence(m_render.latest_frame.path_to_data,
                                         KITTY_SLOT_ID,
                                         existing_width,
                                         existing_height,
@@ -190,13 +235,21 @@ void Viewer::draw_latest_frame(bool with_top_bar, bool with_bottom_bar) {
   }
 
   std::string sequence = latest_frame_sequence({
-      .existing = {.width = m_latest_frame.page_width, .height = m_latest_frame.page_height},
-      .target = {.width = m_target_page_specs.width, .height = m_target_page_specs.height},
+      .existing =
+          {
+              .width = m_render.latest_frame.page_width,
+              .height = m_render.latest_frame.page_height,
+          },
+      .target =
+          {
+              .width = m_render.target_page_specs.width,
+              .height = m_render.target_page_specs.height,
+          },
   });
 
   if (with_top_bar) {
     sequence += top_status_bar_with_stats(
-        ts, m_latest_frame, m_parser->get_document_name(), m_current_page, m_total_pages);
+        ts, m_render.latest_frame, m_parser->get_document_name(), m_current_page, m_total_pages);
   }
 
   if (with_bottom_bar) {
@@ -214,22 +267,22 @@ void Viewer::request_page_render(int page_num) {
     return;  // draw_latest_frame handles showing of the guard message
   }
   if (const auto specs = m_parser->page_specs(page_num)) {
-    m_target_page_specs = specs->rotate_quarter_clockwise(m_rotation_degrees / 90);
+    m_render.target_page_specs = specs->rotate_quarter_clockwise(m_rotation_degrees / 90);
     // ts.height - 2 due to rows taken by top and bottom bar
     const float zoom_factor = TUI::calculate_zoom_factor(ts,
-                                                         m_target_page_specs,
+                                                         m_render.target_page_specs,
                                                          {
                                                              .cols = ts.columns,
                                                              .rows = ts.rows - 2,
                                                          },
                                                          m_page_view.current_zoom());
-    m_target_page_specs = m_target_page_specs.scale(zoom_factor);
+    m_render.target_page_specs = m_render.target_page_specs.scale(zoom_factor);
     m_renderer->request_page(
-        page_num, zoom_factor, m_target_page_specs, m_shm_supported ? "shm" : "tempfile");
+        page_num, zoom_factor, m_render.target_page_specs, m_shm_supported ? "shm" : "tempfile");
   }
 }
 
-void Viewer::handle_page_pan(char key) {
+bool Viewer::handle_page_pan(char key) {
   bool viewport_changed = false;
   const float factor = (std::isupper(key) != 0) ? 2 : 1;
   key = static_cast<char>(std::tolower(static_cast<unsigned char>(key)));
@@ -250,30 +303,23 @@ void Viewer::handle_page_pan(char key) {
       break;
   }
 
-  // only re-display if viewport offset changed
-  if (viewport_changed) {
-    draw_latest_frame(true, true);
-  }
+  return viewport_changed;
 }
 
 void Viewer::handle_go_to_page() {
+  // caller is in charge of restoring modes and redrawing
+  // we only handle redraws for resize events while mode is active
   bool running = true;
   bool page_change = false;
-  auto is_whole_number = [](const std::string& s) {
-    unsigned long value;
-    auto result = std::from_chars(s.data(), s.data() + s.size(), value);
-    // no error code + ptr reach end of string
-    return result.ec == std::errc() && result.ptr == s.data() + s.size();
-  };
 
   auto on_idle = [&]() {
     if (fetch_latest_frame()) {
-      draw_latest_frame(true, false);
+      draw_for_current_mode();
     }
   };
 
   auto on_resize_settled = [&]() {
-    draw_latest_frame(true, false);
+    draw_for_current_mode();
     request_page_render(m_current_page);
   };
 
@@ -296,98 +342,59 @@ void Viewer::handle_go_to_page() {
       running = false;
     } else if (cancelled || input.empty()) {
       running = false;
-    } else if (is_whole_number(input)) {
+    } else if (auto new_page = parse_page_index(input, m_total_pages)) {
       running = false;
-      int new_page = std::stoi(input) - 1;  // we start counting from 1
-      new_page = new_page < 0 ? 0 : new_page;
-      new_page = new_page >= m_total_pages ? m_total_pages - 1 : new_page;
-      page_change = new_page != m_current_page;
-      m_current_page = new_page;
+      page_change = *new_page != m_current_page;
+      m_current_page = *new_page;
     } else {
       error_prompt = "INVALID PAGE: ";
     }
   }
   if (page_change) {
     request_page_render(m_current_page);
-  } else {
-    draw_latest_frame(true, true);
   }
 }
 
-void Viewer::handle_help_page() {
-  auto clear_overlay = [](int start_row, int end_row, int width) {
-    std::string sequence;
-    sequence += terminal::reset_screen_and_cursor_string();
-    sequence += kitty::clear_dim_layer();
-    const std::string blank_line = std::string(static_cast<size_t>(width), ' ');
-    for (int row = start_row; row <= end_row; row++) {
-      sequence += terminal::move_cursor(row, 1);
-      sequence += blank_line;
-    }
-    sequence += terminal::move_cursor(1, 1);
-    return sequence;
-  };
-
-  TermSize last_terminal_size = m_term.get_terminal_size();
-  std::print("{}", TUI::help_overlay(last_terminal_size));
-  std::fflush(stdout);
-  auto debouncer = ResizeDebouncer(RESIZE_DEBOUNCE_MS);
-  bool was_resized = false;  // track if window was resized at all
-  while (true) {
-    InputEvent input = m_term.read_input(HELP_POLL_RATE_MS);
-    const auto resize_state =
-        debouncer.poll(m_term.was_resized(), std::chrono::steady_clock::now());
-    if (resize_state == ResizeState::Resizing) {
-      was_resized = true;
-    }
-    if (resize_state == ResizeState::Settled) {
-      was_resized = true;
-      std::print("{}", clear_overlay(1, last_terminal_size.rows, last_terminal_size.columns));
-      std::fflush(stdout);
-      last_terminal_size = m_term.get_terminal_size();
-      std::print("{}", TUI::help_overlay(last_terminal_size));
-      std::fflush(stdout);
-    }
-
-    if (input.key == key_escape && !TUI::is_window_too_small(last_terminal_size)) {
-      break;
-    }
-    if (input.key == key_char && input.char_value == 'q') {  // allow quit
-      m_running = false;
-      return;
-    }
+bool Viewer::handle_help_input(const InputEvent& event) {
+  if (m_ui_mode != UiMode::Help) {
+    PLOG_ERROR << "handle_help_input called when ui_mode is not Help";
+    return false;
   }
-  std::string sequence;
-  sequence += clear_overlay(2, last_terminal_size.rows - 1, last_terminal_size.columns);
-  if (was_resized) {
-    request_page_render(m_current_page);
-    std::print("{}", sequence);
-    fflush(stdout);
-    return;
+
+  if (event.key == key_char && event.char_value == 'q') {
+    m_running = false;
+    return true;
   }
-  // redraw top and bottom bar
-  sequence += top_status_bar_with_stats(last_terminal_size,
-                                        m_latest_frame,
-                                        m_parser->get_document_name(),
-                                        m_current_page,
-                                        m_total_pages);
-  sequence += bottom_bar(last_terminal_size, m_page_view.current_zoom(), m_rotation_degrees);
-  std::print("{}", sequence);
-  std::fflush(stdout);
+
+  if (event.key == key_escape && !TUI::is_window_too_small(m_term.get_terminal_size())) {
+    m_ui_mode = UiMode::Browse;
+    // Clear the dim layer here, or schedule as part of a subsequent browse draw?
+    std::print("{}", kitty::clear_dim_layer());
+    return true;
+  }
+  return false;
 }
 
-void Viewer::process_keypress() {
+bool Viewer::handle_browse_input(const InputEvent& event) {
   static constexpr std::string_view pan_keys = "wWaAsSdD";
-  auto [key, char_value] = m_term.read_input(INPUT_POLL_RATE_MS);  // 60fps
-  // if guard message is being displayed, only allow q to quit
+  if (m_ui_mode != UiMode::Browse) {
+    PLOG_ERROR << "handle_browse_input being called when ui_mode is not browse";
+    return false;
+  }
+
+  auto [key, char_value] = event;
+  if (key == key_none) {
+    return false;
+  }
+
   if (TUI::is_window_too_small(m_term.get_terminal_size())) {
     if (key == key_char && char_value == 'q') {  // quit
       m_running = false;
-      return;
+      return m_running;
     }
+    return false;
   }
 
-  if (key == key_none) return;  // handle interrupt, do nothing
   switch (key) {
     case key_right_arrow:
       if (m_current_page >= m_total_pages - 1) {
@@ -395,59 +402,103 @@ void Viewer::process_keypress() {
       } else {
         m_current_page++;
         request_page_render(m_current_page);
+        return true;
       }
-      break;
+      return false;
     case key_left_arrow:
       if (m_current_page <= 0) {
         m_current_page = 0;
       } else {
         m_current_page--;
         request_page_render(m_current_page);
+        return true;
       }
-      break;
+      return false;
     case key_char:
       if (char_value == 'q') {  // quit
         m_running = false;
-        break;
-      }
-      if (char_value == 'g') {  // go to page
-        handle_go_to_page();
-        break;
+        return false;
       }
       if (char_value == '?') {
-        handle_help_page();
-        break;
+        m_ui_mode = UiMode::Help;
+        return true;
+      }
+      if (char_value == 'g') {
+        // go to page
+        m_ui_mode = UiMode::GoToPage;
+        handle_go_to_page();
+        m_ui_mode = UiMode::Browse;
+
+        // redraw through main loop
+        return m_running;
       }
       if (char_value == 'z') {  // reset zoom and crop offsets
         if (m_page_view.current_zoom() != 1.0) {
           m_page_view.reset_offsets_to_default();
           m_page_view.reset_zoom_to_default();
           request_page_render(m_current_page);
+          return true;
         }
+        return false;
       }
       if (char_value == '=' || char_value == '+') {  // zoom in
         if (m_page_view.change_zoom_index(1)) {
           request_page_render(m_current_page);
-          draw_latest_frame(true, true);
+          return true;
         }
-        break;
+        return false;
       }
       if (char_value == '-' || char_value == '_') {  // zoom out
         if (m_page_view.change_zoom_index(-1)) {
           request_page_render(m_current_page);
-          draw_latest_frame(true, true);
+          return true;
         }
-        break;
+        return false;
       }
       if (char_value == 'r') {
         m_rotation_degrees = (m_rotation_degrees + 90) % 360;
         request_page_render(m_current_page);
-        break;
+        return false;
       }
       if (pan_keys.contains(char_value)) {  // handle panning
-        handle_page_pan(char_value);
+        return handle_page_pan(char_value);
       }
+      return false; // any un-supported key return false;
     default:  // do nothing for the rest
+      return false;
+  }
+}
+
+void Viewer::draw_for_current_mode() {
+  switch (m_ui_mode) {
+    case UiMode::Browse:
+      draw_latest_frame(true, true);
+      break;
+    case UiMode::GoToPage:
+      draw_latest_frame(true, false);
+      break;
+    case UiMode::Help:
+      std::string sequence;
+      sequence += terminal::reset_screen_and_cursor_string();
+      sequence += kitty::clear_dim_layer();
+      sequence += TUI::help_overlay(m_term.get_terminal_size());
+
+      std::print("{}", sequence);
+      std::fflush(stdout);
       break;
   }
+}
+
+bool Viewer::process_keypress() {
+  const auto event = m_term.read_input(INPUT_POLL_RATE_MS);  // 60fps
+  switch (m_ui_mode) {
+    case UiMode::Browse:
+      return handle_browse_input(event);
+    case UiMode::Help:
+      return handle_help_input(event);
+    case UiMode::GoToPage:
+      // currently handled by tui
+      return false;
+  }
+  return false;
 }
