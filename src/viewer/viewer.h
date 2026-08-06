@@ -1,4 +1,6 @@
 #pragma once
+#include <cstddef>
+
 #include "pageview.h"
 #include "render/parser.h"
 #include "render/render_engine.h"
@@ -27,15 +29,6 @@ class Viewer {
   void run();  // main loop
 
  private:
-  /**
-   * @brief Identifies the active UI mode and determines input routing and drawing.
-   */
-  enum class UiMode {
-    Browse,    ///< Normal document controls
-    GoToPage,  ///< Currently delegates input blocking to TUI::bottom_input_bar
-    Help,      ///< Viewing help ui page
-  };
-
   /**
    * @brief Wraps standard 2D pixel or grid dimensions
    */
@@ -190,24 +183,41 @@ class Viewer {
    */
   [[nodiscard]] Dimensions available_window();
 
-  // sub systems
+  // subsystems
   Terminal m_term;                           // terminal data and raw mode
   std::unique_ptr<pdf::Parser> m_parser;     // parsing pdfs
   std::unique_ptr<RenderEngine> m_renderer;  // loading page frames
   PageView m_page_view;                      // zoom and panning handling
-  UiMode m_ui_mode = UiMode::Browse;
+
+  /**
+   * @brief Identifies the active UI mode and determines input routing and drawing.
+   */
+  enum class UiMode {
+    Browse,    ///< Normal document controls
+    GoToPage,  ///< Currently delegates input blocking to TUI::bottom_input_bar
+    Help,      ///< Viewing help ui page
+  };
+
+  struct RenderState {
+    std::size_t last_transmitted_req_id =
+        0;  ///< Render generation most recently transmitted to terminal
+    pdf::PageSpecs target_page_specs = {};
+    // Scaled and rotated dimensions currently requested from the render engine.
+    // These may differ from m_latest_frame while a render is pending.
+    RenderResult latest_frame = RenderResult{};
+    // Most recently accepted successful render available for display.
+  };
 
   // current state
-  int m_current_page = 0;        ///< Desired zero-based page number
-  int m_total_pages = 0;         ///< Number of pages in loaded document
-  int m_rotation_degrees = 0;    ///< Desired clockwise rotation
-  bool m_running = false;        ///< Controls main application loop
-  bool m_shm_supported = false;  ///< Whether shared-memory transmission is enabled
-  size_t m_last_req_id = 0;      ///< Render generation most recently transmitted to terminal
-  pdf::PageSpecs m_target_page_specs = {};
-  // Scaled and rotated dimensions currently requested from the render engine.
-  // These may differ from m_latest_frame while a render is pending.
+  UiMode m_ui_mode = UiMode::Browse;
+  int m_current_page = 0;      ///< Desired zero-based page number
+  int m_total_pages = 0;       ///< Number of pages in loaded document
+  int m_rotation_degrees = 0;  ///< Desired clockwise rotation
+  bool m_running = false;      ///< Controls main application loop
 
-  RenderResult m_latest_frame = RenderResult{};
-  // Most recently accepted successful render available for display.
+  // configuration
+  bool m_shm_supported = false;  ///< Whether shared-memory transmission is enabled
+
+  // Rendering state
+  RenderState m_render;
 };

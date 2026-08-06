@@ -142,7 +142,7 @@ bool Viewer::fetch_latest_frame() {
     return false;
   }
   auto& result = result_opt.value();
-  if (result.req_id == m_latest_frame.req_id) {  // check if frame is new
+  if (result.req_id == m_render.latest_frame.req_id) {  // check if frame is new
     return false;
   }
   if (!result.error_message.empty()) {  // check if there was a render error
@@ -154,7 +154,7 @@ bool Viewer::fetch_latest_frame() {
     std::fflush(stdout);
     return false;
   }
-  m_latest_frame = std::move(result_opt.value());  // store latest frame
+  m_render.latest_frame = std::move(result_opt.value());  // store latest frame
   return true;
 }
 
@@ -191,7 +191,8 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
           target_width, target_height, {.max_width_pixels = width, .max_height_pixels = height});
   // if latest frame dimensions match target, don't need to scale crop
   // if latest frame dimensions don't match target, scale the crop window
-  if (m_latest_frame.page_width != target_width || m_latest_frame.page_height != target_height) {
+  if (m_render.latest_frame.page_width != target_width ||
+      m_render.latest_frame.page_height != target_height) {
     const float scale_factor_x =
         static_cast<float>(target_width) / static_cast<float>(existing_width);
     const float scale_factor_y =
@@ -202,13 +203,13 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
     crop_height = static_cast<int>(static_cast<float>(crop_height) / scale_factor_y);
   }
 
-  const bool need_transmit = m_last_req_id != m_latest_frame.req_id;
+  const bool need_transmit = m_render.last_transmitted_req_id != m_render.latest_frame.req_id;
   if (need_transmit) {
-    m_last_req_id = m_latest_frame.req_id;
+    m_render.last_transmitted_req_id = m_render.latest_frame.req_id;
   }
   // generate sequence to display image
   const int target_rows = std::min(target_height / ts.cell_pixel_height, ts.rows - 2);
-  sequence += kitty::get_image_sequence(m_latest_frame.path_to_data,
+  sequence += kitty::get_image_sequence(m_render.latest_frame.path_to_data,
                                         KITTY_SLOT_ID,
                                         existing_width,
                                         existing_height,
@@ -234,13 +235,21 @@ void Viewer::draw_latest_frame(bool with_top_bar, bool with_bottom_bar) {
   }
 
   std::string sequence = latest_frame_sequence({
-      .existing = {.width = m_latest_frame.page_width, .height = m_latest_frame.page_height},
-      .target = {.width = m_target_page_specs.width, .height = m_target_page_specs.height},
+      .existing =
+          {
+              .width = m_render.latest_frame.page_width,
+              .height = m_render.latest_frame.page_height,
+          },
+      .target =
+          {
+              .width = m_render.target_page_specs.width,
+              .height = m_render.target_page_specs.height,
+          },
   });
 
   if (with_top_bar) {
     sequence += top_status_bar_with_stats(
-        ts, m_latest_frame, m_parser->get_document_name(), m_current_page, m_total_pages);
+        ts, m_render.latest_frame, m_parser->get_document_name(), m_current_page, m_total_pages);
   }
 
   if (with_bottom_bar) {
@@ -258,18 +267,18 @@ void Viewer::request_page_render(int page_num) {
     return;  // draw_latest_frame handles showing of the guard message
   }
   if (const auto specs = m_parser->page_specs(page_num)) {
-    m_target_page_specs = specs->rotate_quarter_clockwise(m_rotation_degrees / 90);
+    m_render.target_page_specs = specs->rotate_quarter_clockwise(m_rotation_degrees / 90);
     // ts.height - 2 due to rows taken by top and bottom bar
     const float zoom_factor = TUI::calculate_zoom_factor(ts,
-                                                         m_target_page_specs,
+                                                         m_render.target_page_specs,
                                                          {
                                                              .cols = ts.columns,
                                                              .rows = ts.rows - 2,
                                                          },
                                                          m_page_view.current_zoom());
-    m_target_page_specs = m_target_page_specs.scale(zoom_factor);
+    m_render.target_page_specs = m_render.target_page_specs.scale(zoom_factor);
     m_renderer->request_page(
-        page_num, zoom_factor, m_target_page_specs, m_shm_supported ? "shm" : "tempfile");
+        page_num, zoom_factor, m_render.target_page_specs, m_shm_supported ? "shm" : "tempfile");
   }
 }
 
