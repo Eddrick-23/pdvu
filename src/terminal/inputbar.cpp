@@ -53,44 +53,44 @@ std::size_t scroll_window_start(std::size_t cursor_pos, std::size_t visible_pos,
 namespace TUI {
 InputBar::InputBar(std::string_view prompt) : m_prompt(prompt) {}
 
-InputBarAction InputBar::handle(const InputEvent& event) {
+InputBar::Action InputBar::handle(const InputEvent& event) {
   switch (event.key) {
     case key_enter:
-      return InputBarAction::Submitted;
+      return Action::Submitted;
     case key_escape:
-      return InputBarAction::Cancelled;
+      return Action::Cancelled;
     case key_backspace:
       if (m_cursor_pos > 0) {
         m_buffer.erase(m_cursor_pos - 1, 1);
         --m_cursor_pos;
-        return InputBarAction::Changed;
+        return Action::Changed;
       }
-      return InputBarAction::None;
+      return Action::None;
     case key_alt_backspace:
       if (m_cursor_pos > 0) {
         m_buffer.erase(0, m_cursor_pos);
         m_cursor_pos = 0;
-        return InputBarAction::Changed;
+        return Action::Changed;
       }
-      return InputBarAction::None;
+      return Action::None;
     case key_left_arrow:
       if (m_cursor_pos > 0) {
         --m_cursor_pos;
-        return InputBarAction::Changed;
+        return Action::Changed;
       }
-      return InputBarAction::None;
+      return Action::None;
     case key_right_arrow:
       if (m_cursor_pos < m_buffer.size()) {
         ++m_cursor_pos;
-        return InputBarAction::Changed;
+        return Action::Changed;
       }
-      return InputBarAction::None;
+      return Action::None;
     case key_char:
       m_buffer.insert(m_cursor_pos, 1, event.char_value);
       ++m_cursor_pos;
-      return InputBarAction::Changed;
+      return Action::Changed;
     default:
-      return InputBarAction::None;
+      return Action::None;
   }
 }
 

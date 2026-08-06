@@ -315,17 +315,17 @@ bool Viewer::handle_go_to_page_input(const InputEvent& event) {
   }
 
   switch (m_go_to_page.input.handle(event)) {
-    case TUI::InputBarAction::None:
+    case TUI::InputBar::Action::None:
       return false;
-    case TUI::InputBarAction::Changed:
+    case TUI::InputBar::Action::Changed:
       m_go_to_page.input.clear_error();
       return true;
-    case TUI::InputBarAction::Cancelled:
+    case TUI::InputBar::Action::Cancelled:
       m_ui_mode = UiMode::Browse;
       m_go_to_page.reset();
       terminal::hide_cursor();
       return true;
-    case TUI::InputBarAction::Submitted:
+    case TUI::InputBar::Action::Submitted:
       if (m_go_to_page.input.value().empty()) {  // do nothing on empty inputs
         m_go_to_page.reset();
         m_ui_mode = UiMode::Browse;

@@ -117,19 +117,16 @@ class Viewer {
   bool handle_page_pan(char key);
 
   /**
-   * @brief Runs the blocking go-to-page input mode.
+   * @brief Handles one input event while GoToPage is active.
    *
-   * Delegates editing and terminal input to TUI::bottom_input_bar(), validates
-   * and bounds the submitted one-based page number, updates m_current_page, and
-   * requests a render when the page changes.
+   * Initialises TUI::InputBar component to track buffer state.
+   * Modifies state per keypress. When the minimum-size guard is visible, only
+   * q is accepted and requests application shutdown
    *
-   * While active, injected callbacks keep completed frames and resize behavior
-   * responsive. The caller owns transitions into and out of UiMode::GoToPage
-   * and schedules the final Browse redraw.
-   *
-   * @note This is currently the only UI handler that owns a nested input loop.
+   * @param event Decoded terminal input event.
+   * @return true when the current mode should be redrawn immediately.
    */
-  bool handle_go_to_page_input(const InputEvent& event);  // TODO
+  bool handle_go_to_page_input(const InputEvent& event);
 
   /**
    * @brief Handles one input event while Help is active.
