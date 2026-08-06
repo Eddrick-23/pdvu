@@ -4,6 +4,7 @@ set(CORE_SOURCES
     terminal/terminal.cpp
     terminal/kitty.cpp
     terminal/tui.cpp
+    terminal/inputbar.cpp
     render/parser.cpp
     render/bounds.cpp
     render/render_engine.cpp

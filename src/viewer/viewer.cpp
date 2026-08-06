@@ -98,7 +98,7 @@ void Viewer::run() {
 
     if (fetch_latest_frame()) {
       // store completed frames during Help, but don't redraw
-      need_redraw |= m_ui_mode == UiMode::Browse;
+      need_redraw |= m_ui_mode == UiMode::Browse || m_ui_mode == UiMode::GoToPage;
     }
 
     if (need_redraw) {
@@ -306,53 +306,56 @@ bool Viewer::handle_page_pan(char key) {
   return viewport_changed;
 }
 
-void Viewer::handle_go_to_page() {
-  // caller is in charge of restoring modes and redrawing
-  // we only handle redraws for resize events while mode is active
-  bool running = true;
-  bool page_change = false;
-
-  auto on_idle = [&]() {
-    if (fetch_latest_frame()) {
-      draw_for_current_mode();
+bool Viewer::handle_go_to_page_input(const InputEvent& event) {
+  if (TUI::is_window_too_small(m_term.get_terminal_size())) {
+    if (event.key == key_char && event.char_value == 'q') {
+      m_running = false;
     }
-  };
-
-  auto on_resize_settled = [&]() {
-    draw_for_current_mode();
-    request_page_render(m_current_page);
-  };
-
-  const TUI::InputBarDeps deps{
-      .window_dimensions = [this]() { return m_term.get_terminal_size(); },
-      .was_resized = [this]() { return m_term.was_resized(); },
-      .read_input = [this](int timeout_ms) { return m_term.read_input(timeout_ms); },
-      .on_idle = on_idle,
-      .on_resize_settled = on_resize_settled,
-      .debounce_ms = RESIZE_DEBOUNCE_MS,
-  };
-
-  std::string error_prompt;
-  while (running) {
-    const auto [input, cancelled, quit_requested] =
-        TUI::bottom_input_bar("GO TO PAGE: ", deps, error_prompt);
-    error_prompt.clear();
-    if (quit_requested) {
-      m_running = false;  // quit viewer entirely
-      running = false;
-    } else if (cancelled || input.empty()) {
-      running = false;
-    } else if (auto new_page = parse_page_index(input, m_total_pages)) {
-      running = false;
-      page_change = *new_page != m_current_page;
-      m_current_page = *new_page;
-    } else {
-      error_prompt = "INVALID PAGE: ";
-    }
+    return false;
   }
-  if (page_change) {
-    request_page_render(m_current_page);
+
+  switch (m_go_to_page.input.handle(event)) {
+    case TUI::InputBar::Action::None:
+      return false;
+    case TUI::InputBar::Action::Changed:
+      m_go_to_page.input.clear_error();
+      return true;
+    case TUI::InputBar::Action::Cancelled:
+      m_ui_mode = UiMode::Browse;
+      m_go_to_page.reset();
+      terminal::hide_cursor();
+      return true;
+    case TUI::InputBar::Action::Submitted:
+      if (m_go_to_page.input.value().empty()) {  // do nothing on empty inputs
+        m_go_to_page.reset();
+        m_ui_mode = UiMode::Browse;
+        terminal::hide_cursor();
+        return true;
+      }
+
+      // non empty inputs, validate first
+      const auto page = parse_page_index(m_go_to_page.input.value(), m_total_pages);
+      if (!page) {             // invalid input, set error and re-prompt
+        m_go_to_page.reset();  // clear any existing inputs
+        m_go_to_page.input.set_error("INVALID PAGE: ");
+        return true;
+      }
+
+      // valid input check for page change and request new frame if needed
+      const bool page_changed = *page != m_current_page;
+      m_current_page = *page;
+      m_ui_mode = UiMode::Browse;
+
+      if (page_changed) {
+        request_page_render(m_current_page);
+      }
+
+      m_go_to_page.reset();
+      terminal::hide_cursor();
+      return true;
   }
+
+  return false;
 }
 
 bool Viewer::handle_help_input(const InputEvent& event) {
@@ -425,10 +428,8 @@ bool Viewer::handle_browse_input(const InputEvent& event) {
       }
       if (char_value == 'g') {
         // go to page
+        m_go_to_page.reset();
         m_ui_mode = UiMode::GoToPage;
-        handle_go_to_page();
-        m_ui_mode = UiMode::Browse;
-
         // redraw through main loop
         return m_running;
       }
@@ -463,8 +464,8 @@ bool Viewer::handle_browse_input(const InputEvent& event) {
       if (pan_keys.contains(char_value)) {  // handle panning
         return handle_page_pan(char_value);
       }
-      return false; // any un-supported key return false;
-    default:  // do nothing for the rest
+      return false;  // any un-supported key return false;
+    default:         // do nothing for the rest
       return false;
   }
 }
@@ -476,6 +477,11 @@ void Viewer::draw_for_current_mode() {
       break;
     case UiMode::GoToPage:
       draw_latest_frame(true, false);
+      if (!TUI::is_window_too_small(m_term.get_terminal_size())) {
+        terminal::show_cursor();
+        std::print("{}", m_go_to_page.input.render_sequence(m_term.get_terminal_size()));
+        std::fflush(stdout);
+      }
       break;
     case UiMode::Help:
       std::string sequence;
@@ -497,8 +503,7 @@ bool Viewer::process_keypress() {
     case UiMode::Help:
       return handle_help_input(event);
     case UiMode::GoToPage:
-      // currently handled by tui
-      return false;
+      return handle_go_to_page_input(event);
   }
   return false;
 }

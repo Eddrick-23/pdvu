@@ -4,6 +4,7 @@
 #include "pageview.h"
 #include "render/parser.h"
 #include "render/render_engine.h"
+#include "terminal/inputbar.h"
 #include "terminal/terminal.h"
 #include "utils/resize_debouncer.h"
 
@@ -22,9 +23,6 @@ class Viewer {
    * Initializes the terminal session, polls and routes input according to the
    * active UI mode, handles debounced terminal resizing, collects asynchronous
    * page-render results, and redraws the active mode when invalidated.
-   *
-   * @Note GoToPage currently remains a blocking modal input loop; Browse and Help are
-   * handled directly by this main loop.
    */
   void run();  // main loop
 
@@ -116,19 +114,17 @@ class Viewer {
   bool handle_page_pan(char key);
 
   /**
-   * @brief Runs the blocking go-to-page input mode.
+   * @brief Handles one input event while GoToPage is active.
    *
-   * Delegates editing and terminal input to TUI::bottom_input_bar(), validates
-   * and bounds the submitted one-based page number, updates m_current_page, and
-   * requests a render when the page changes.
+   * Updates a m_go_to_page which holds a TUI::InputBar component.
+   * The component tracks buffer and cursor state.
+   * When the minimum-size guard is visible, only q is accepted and
+   * requests application shutdown.
    *
-   * While active, injected callbacks keep completed frames and resize behavior
-   * responsive. The caller owns transitions into and out of UiMode::GoToPage
-   * and schedules the final Browse redraw.
-   *
-   * @note This is currently the only UI handler that owns a nested input loop.
+   * @param event Decoded terminal input event.
+   * @return true when the current mode should be redrawn immediately.
    */
-  void handle_go_to_page();
+  bool handle_go_to_page_input(const InputEvent& event);
 
   /**
    * @brief Handles one input event while Help is active.
@@ -170,8 +166,7 @@ class Viewer {
    * @brief Reads and routes one terminal input event.
    *
    * Waits up to INPUT_POLL_RATE_MS for an event, then forwards it to the input handler
-   * for the active mode. GoToPage input is currently consumed by its blocking TUI
-   * loop rather than through this function.
+   * for the active mode.
    *
    * @return true when the active mode should be redrawn immediately.
    */
@@ -208,12 +203,18 @@ class Viewer {
     // Most recently accepted successful render available for display.
   };
 
+  struct GoToPageState {
+    TUI::InputBar input{"GO TO PAGE: "};
+    void reset() { input.reset(); }
+  };
+
   // current state
   UiMode m_ui_mode = UiMode::Browse;
-  int m_current_page = 0;      ///< Desired zero-based page number
-  int m_total_pages = 0;       ///< Number of pages in loaded document
-  int m_rotation_degrees = 0;  ///< Desired clockwise rotation
-  bool m_running = false;      ///< Controls main application loop
+  int m_current_page = 0;           ///< Desired zero-based page number
+  int m_total_pages = 0;            ///< Number of pages in loaded document
+  int m_rotation_degrees = 0;       ///< Desired clockwise rotation
+  bool m_running = false;           ///< Controls main application loop
+  GoToPageState m_go_to_page = {};  ///< Track Go To Page Ui state
 
   // configuration
   bool m_shm_supported = false;  ///< Whether shared-memory transmission is enabled
