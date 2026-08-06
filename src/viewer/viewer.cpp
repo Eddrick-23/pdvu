@@ -463,6 +463,7 @@ bool Viewer::handle_browse_input(const InputEvent& event) {
       if (pan_keys.contains(char_value)) {  // handle panning
         return handle_page_pan(char_value);
       }
+      return false; // any un-supported key return false;
     default:  // do nothing for the rest
       return false;
   }
