@@ -503,7 +503,6 @@ bool Viewer::process_keypress() {
     case UiMode::Help:
       return handle_help_input(event);
     case UiMode::GoToPage:
-      // currently handled by tui
       return handle_go_to_page_input(event);
   }
   return false;

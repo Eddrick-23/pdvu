@@ -1,5 +1,6 @@
 #include "inputbar.h"
 
+#include <algorithm>
 #include <format>
 
 #include "ansi.h"

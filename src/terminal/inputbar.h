@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <string_view>
 
 #include "terminal.h"
 #include "viewer/keys.h"
@@ -28,10 +29,10 @@ class InputBar {
    * submit its value, leave the current UI mode, or take no action.
    */
   enum class Action {
-    None,
-    Changed,
-    Submitted,
-    Cancelled,
+    None, ///< The event was unsupported or produced no state change.
+    Changed, ///< The buffer or cursor position changed and should be redrawn.
+    Submitted, ///< User requested submission of the current value.
+    Cancelled, ///< User requested cancellation of the input operation.
   };
 
   /**

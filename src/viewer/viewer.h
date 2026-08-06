@@ -23,9 +23,6 @@ class Viewer {
    * Initializes the terminal session, polls and routes input according to the
    * active UI mode, handles debounced terminal resizing, collects asynchronous
    * page-render results, and redraws the active mode when invalidated.
-   *
-   * @Note GoToPage currently remains a blocking modal input loop; Browse and Help are
-   * handled directly by this main loop.
    */
   void run();  // main loop
 
@@ -119,9 +116,10 @@ class Viewer {
   /**
    * @brief Handles one input event while GoToPage is active.
    *
-   * Initialises TUI::InputBar component to track buffer state.
-   * Modifies state per keypress. When the minimum-size guard is visible, only
-   * q is accepted and requests application shutdown
+   * Updates a m_go_to_page which holds a TUI::InputBar component.
+   * The component tracks buffer and cursor state.
+   * When the minimum-size guard is visible, only q is accepted and
+   * requests application shutdown.
    *
    * @param event Decoded terminal input event.
    * @return true when the current mode should be redrawn immediately.
@@ -168,8 +166,7 @@ class Viewer {
    * @brief Reads and routes one terminal input event.
    *
    * Waits up to INPUT_POLL_RATE_MS for an event, then forwards it to the input handler
-   * for the active mode. GoToPage input is currently consumed by its blocking TUI
-   * loop rather than through this function.
+   * for the active mode.
    *
    * @return true when the active mode should be redrawn immediately.
    */
