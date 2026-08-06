@@ -4,6 +4,7 @@
 #include "pageview.h"
 #include "render/parser.h"
 #include "render/render_engine.h"
+#include "terminal/inputbar.h"
 #include "terminal/terminal.h"
 #include "utils/resize_debouncer.h"
 
@@ -128,7 +129,7 @@ class Viewer {
    *
    * @note This is currently the only UI handler that owns a nested input loop.
    */
-  void handle_go_to_page();
+  bool handle_go_to_page_input(const InputEvent& event);  // TODO
 
   /**
    * @brief Handles one input event while Help is active.
@@ -208,12 +209,18 @@ class Viewer {
     // Most recently accepted successful render available for display.
   };
 
+  struct GoToPageState {
+    TUI::InputBar input{"GO TO PAGE: "};
+    void reset() { input.reset(); }
+  };
+
   // current state
   UiMode m_ui_mode = UiMode::Browse;
-  int m_current_page = 0;      ///< Desired zero-based page number
-  int m_total_pages = 0;       ///< Number of pages in loaded document
-  int m_rotation_degrees = 0;  ///< Desired clockwise rotation
-  bool m_running = false;      ///< Controls main application loop
+  int m_current_page = 0;           ///< Desired zero-based page number
+  int m_total_pages = 0;            ///< Number of pages in loaded document
+  int m_rotation_degrees = 0;       ///< Desired clockwise rotation
+  bool m_running = false;           ///< Controls main application loop
+  GoToPageState m_go_to_page = {};  ///< Track Go To Page Ui state
 
   // configuration
   bool m_shm_supported = false;  ///< Whether shared-memory transmission is enabled

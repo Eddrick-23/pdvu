@@ -60,8 +60,8 @@ std::string add_centered(int row, int term_width, const std::string& text, int t
 /// Returns the sequence to produce an inverted-colour top bar: `left` flush left,
 /// `mid` centred, `right` flush right, each truncated with "..." if it would overlap
 /// the others.
-std::string top_status_bar(
-    const TermSize& ts, const std::string& left, const std::string& mid, const std::string& right);
+std::string top_status_bar(const TermSize& ts, const std::string& left, const std::string& mid,
+                           const std::string& right);
 
 /// Returns the sequence to produce inverted-colour bottom bar showing the
 /// key-binding hints, current rotation, and current zoom level.
@@ -74,68 +74,6 @@ std::string guard_message(const TermSize& ts);
 /// Renders the full-screen help overlay (key-binding reference). Falls back
 /// to guard_message() if the terminal is currently too small to fit it.
 std::string help_overlay(const TermSize& ts);
-
-/**
- * @brief Dependencies bottom_input_bar needs from the caller's terminal and
- * render loop.
- *
- * on_idle and on_resize_settled are both "nothing to type, do your own
- * housekeeping" hooks, but fire for different reasons - keep them separate
- * rather than reusing one for both. A settled resize is usually the one
- * moment worth doing expensive work (e.g. re-requesting a fresh render at current
- * resolution), while idle ticks are for cheap, frequent checks (e.g. picking
- * up a frame that finished rendering in the background).
- */
-struct InputBarDeps {
-  std::function<TermSize()> window_dimensions;           ///< Current Terminal Size.
-  std::function<bool()> was_resized;                     ///< Raw per-tick resize signal.
-  std::function<InputEvent(int timeout_ms)> read_input;  ///< Blocking read with timeout.
-  std::function<void()> on_idle;            ///< Called on ticks with no input and no resize
-  std::function<void()> on_resize_settled;  ///< Called once, when a resize just settled.
-  int debounce_ms;                          ///< debounce interval in milliseconds
-};
-
-/**
- * @brief Outcome of a bottom_input_bar() call.
- */
-struct InputBarResult {
-  std::string value;            ///< stored value in input buffer
-  bool cancelled = false;       ///< Esc pressed to exit ui
-  bool quit_requested = false;  ///< 'q' or 'esc' pressed while quard message showing
-};
-
-/**
- * @brief Runs a single-row text input UI on the bottom line of the terminal
- * until the user presses Enter or Escape, or requests to quit.
- *
- * Draws `prompt` followed by an editable text buffer, supporting cursor
- * movement, backspace (character-at-a-time and alt-backspace to clear
- * everything before the cursor), and horizontal scrolling when the buffer
- * exceeds the available width.
- *
- * While running, this function also drives its own resize-debounce loop:
- * every tick a resize is in progress it refreshes the cached terminal size
- * and redraws; once the resize settles it invokes `deps.on_resize_settled()`
- * (exactly once per resize) before redrawing again. On ticks with no input
- * at all, it invokes `deps.on_idle()` instead - callers typically use this
- * to pick up newly-rendered frames without blocking the input loop.
- *
- * If the terminal is smaller than TUI::MIN_COLS x TUI::MIN_ROWS, typing is
- * blocked and a guard message is shown in place of the prompt; the only
- * accepted key in that state is 'q' or 'esc', which exits immediately with
- * `quit_requested = true` so the caller can propagate the quit up rather
- * than treating it as a normal cancel.
- *
- * @param prompt Text shown before the editable buffer, e.g. "Go to page: ".
- * @param deps Callbacks and terminal queries this function needs - see
- *             InputBarDeps. None of the std::function members may be empty.
- * @param error_prompt Optional error prompt to pass in if user gives invalid input. Empty strings
- *                     are taken as no error_prompt
- * @return An InputBarResult - see its field docs for how to distinguish
- *         a submitted value from a cancel or a quit request.
- */
-InputBarResult bottom_input_bar(
-    const std::string& prompt, const InputBarDeps& deps, const std::string& error_prompt);
 
 /// True if the terminal is smaller than MIN_COLS x MIN_ROWS, i.e. too small
 /// to draw normal UI.
@@ -177,8 +115,8 @@ struct ContentArea {
  *             beyond fit, <1.0 = zoomed out).
  * @return Combined scale factor to multiply the page's pixel dimensions by.
  */
-float calculate_zoom_factor(
-    const TermSize& ts, const pdf::PageSpecs& ps, const ContentArea& area, float zoom);
+float calculate_zoom_factor(const TermSize& ts, const pdf::PageSpecs& ps, const ContentArea& area,
+                            float zoom);
 
 /**
  * @brief Returns the escape sequence that moves the cursor to wherever an
