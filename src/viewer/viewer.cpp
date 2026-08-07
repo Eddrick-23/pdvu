@@ -142,7 +142,8 @@ bool Viewer::fetch_latest_frame() {
     return false;
   }
   auto& result = result_opt.value();
-  if (result.req_id == m_render.latest_frame.req_id) {  // check if frame is new
+  // ignore results superseded by a newer render request
+  if (result.req_id != m_render.target_req_id) {
     return false;
   }
   if (!result.error_message.empty()) {  // check if there was a render error
@@ -277,7 +278,7 @@ void Viewer::request_page_render(int page_num) {
                                                          },
                                                          m_page_view.current_zoom());
     m_render.target_page_specs = m_render.target_page_specs.scale(zoom_factor);
-    m_renderer->request_page(
+    m_render.target_req_id = m_renderer->request_page(
         page_num, zoom_factor, m_render.target_page_specs, m_shm_supported ? "shm" : "tempfile");
   }
 }

@@ -194,6 +194,7 @@ class Viewer {
   };
 
   struct RenderState {
+    std::size_t target_req_id = 0;  ///< expected id from latest page request
     std::size_t last_transmitted_req_id =
         0;  ///< Render generation most recently transmitted to terminal
     pdf::PageSpecs target_page_specs = {};

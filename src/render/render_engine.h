@@ -59,7 +59,8 @@ class RenderEngine {
   ~RenderEngine();
 
   // main thread calls to request a page
-  void request_page(int page_num, float zoom, pdf::PageSpecs, const std::string& transmission);
+  std::size_t request_page(int page_num, float zoom, pdf::PageSpecs,
+                           const std::string& transmission);
   // main thread calls to check if a result is ready
   std::optional<RenderResult> get_result();
 
@@ -67,18 +68,19 @@ class RenderEngine {
   void coordinator_loop();
   void dispatch_page_write(const RenderRequest& req);
   void cache_page(int page_num, float zoom, int rotation, const std::shared_ptr<SharedMemory>& shm,
-      const std::shared_ptr<Tempfile>& tempfile, const std::string& transmission, int page_width,
-      int page_height);
+                  const std::shared_ptr<Tempfile>& tempfile, const std::string& transmission,
+                  int page_width, int page_height);
 
   std::optional<PageCacheData> try_page_cache(const RenderRequest& req,
-      std::shared_ptr<SharedMemory>& shm_ptr, std::shared_ptr<Tempfile>& tempfile_ptr);
+                                              std::shared_ptr<SharedMemory>& shm_ptr,
+                                              std::shared_ptr<Tempfile>& tempfile_ptr);
 
   std::optional<pdf::DisplayListHandle> fetch_display_list(int page_num);
 
   // core
-  std::unique_ptr<pdf::Parser> parser;  // thread local parser
-  std::vector<std::unique_ptr<pdf::Parser>> worker_parsers; // separate parsers for rendering work
-  std::thread worker; // coordinator thread
+  std::unique_ptr<pdf::Parser> parser;                       // thread local parser
+  std::vector<std::unique_ptr<pdf::Parser>> worker_parsers;  // separate parsers for rendering work
+  std::thread worker;                                        // coordinator thread
   std::atomic<bool> running = true;
   std::atomic<size_t> current_req_id = 0;
 

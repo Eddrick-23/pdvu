@@ -26,14 +26,22 @@ RenderEngine::~RenderEngine() {
   if (worker.joinable()) worker.join();  // join back to main loop
 }
 
-void RenderEngine::request_page(int page_num, float zoom, pdf::PageSpecs ps,
-                                const std::string& transmission) {
+std::size_t RenderEngine::request_page(int page_num, float zoom, pdf::PageSpecs ps,
+                                       const std::string& transmission) {
+  std::size_t id;
   {
-    std::lock_guard<std::mutex> lock(state_mutex);
-    ++current_req_id;
-    pending_request = RenderRequest{page_num, zoom, ps, current_req_id, transmission};
+    std::scoped_lock lock(state_mutex);
+    id = ++current_req_id;
+    pending_request = RenderRequest{
+        .page_num = page_num,
+        .zoom = zoom,
+        .scaled_page_specs = ps,
+        .req_id = id,
+        .transmission = transmission,
+    };
   }
   cv_worker.notify_one();  // wake worker to render page
+  return id;
 }
 
 std::optional<RenderResult> RenderEngine::get_result() {  // get the most recently created image
