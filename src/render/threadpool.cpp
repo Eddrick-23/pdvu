@@ -1,8 +1,12 @@
 #include "threadpool.h"
 
+#include <algorithm>
+#include <thread>
+
 #include "utils/profiling.h"
 
-ThreadPool::ThreadPool(const pdf::Parser& prototype_parser, const int n) {
+ThreadPool::ThreadPool(const pdf::Parser& prototype_parser, int n) {
+  n = std::clamp(n, 1, static_cast<int>(std::thread::hardware_concurrency()));
   ZoneScopedN("threadpool setup");
   for (int i = 0; i < n; i++) {
     // use fresh parser classes so they don't share caches

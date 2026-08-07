@@ -91,7 +91,6 @@ int main(int argc, char** argv) {
   }
 
   // 2) setup render engine
-  n_threads = n_threads <= 0 ? 1 : n_threads;
   std::unique_ptr<RenderEngine> render_engine = nullptr;
   {
     ZoneScopedN("Render engine setup");
@@ -101,8 +100,8 @@ int main(int argc, char** argv) {
   // 3) set up viewer and run
   try {
     Viewer viewer(std::move(parser), std::move(render_engine), use_shm);
-    PLOG_INFO << "Start up complete, starting loop";
     viewer.run();  // start main loop
+    PLOG_INFO << "Start up complete, starting loop";
     PLOG_INFO << "Shutdown session";
   } catch (const std::system_error& e) {
     std::println(stderr, "Terminal error: {}", e.what());
