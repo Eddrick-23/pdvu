@@ -10,17 +10,23 @@
 
 class ThreadPool {
  public:
-  ThreadPool(const pdf::Parser& prototype_parser, int n);
+  explicit ThreadPool(int n);
   ~ThreadPool();
 
-  void worker_loop(pdf::Parser& parser);
+  void worker_loop();
 
-  template <typename F>
-  auto enqueue_with_future(F&& f) -> std::future<std::invoke_result_t<F, pdf::Parser&>> {
-    using Result = std::invoke_result_t<F, pdf::Parser&>;
-    auto task = std::make_shared<std::packaged_task<Result(pdf::Parser&)>>(std::forward<F>(f));
-    std::future<Result> fut = task->get_future();
-    // acquire lock and enqueue
+  template <typename F, typename... Args>
+  auto enqueue_with_future(F&& f, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>> {
+    using result_type = std::invoke_result_t<F, Args...>;
+
+    // create function with bounded params
+    auto bound_task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
+
+    // wrap in a shared ptr to allow copy construct/assign
+    auto packaged = std::make_shared<std::packaged_task<result_type()>>(std::move(bound_task));
+
+    std::future<result_type> fut = packaged->get_future();
+    // acquire lock and enqueue packaged task
     {
       std::scoped_lock lock(queue_mutex_);
       // cannot store packaged task directly in queue
@@ -30,7 +36,7 @@ class ThreadPool {
       if (shutdown_) {
         throw std::runtime_error("enqueue on stopped ThreadPool");
       }
-      tasks_.emplace([task = std::move(task)](pdf::Parser& parser) mutable { (*task)(parser); });
+      tasks_.emplace([packaged]() mutable { (*packaged)(); });
     }
     queue_cv_.notify_one();
     return fut;
@@ -38,21 +44,15 @@ class ThreadPool {
 
   ThreadPool(const ThreadPool&) = delete;
   ThreadPool& operator=(const ThreadPool&) = delete;
+  ThreadPool(const ThreadPool&&) = delete;
+  ThreadPool& operator=(const ThreadPool&&) = delete;
 
  private:
-  struct Worker {
-    // custom wrapping of std::thread
-    // holds its own duplicated parser instance
-    std::thread thread;
-    std::unique_ptr<pdf::Parser> parser;
-  };
-  // flag to indicate whether we want to close the threadpool
-  bool shutdown_ = false;
-  // pool of workers
-  std::vector<Worker> workers_;
+  bool shutdown_ = false;             ///< flag to track threadpool shutdown
+  std::vector<std::thread> workers_;  ///< worker threads
   // tasks and synchronisation
-  using Task = std::function<void(pdf::Parser&)>;
-  std::queue<Task> tasks_;
+  using Task = std::function<void()>;
+  std::queue<Task> tasks_;  ///< queue containing pending tasks
   std::mutex queue_mutex_;
   std::condition_variable queue_cv_;
 };
