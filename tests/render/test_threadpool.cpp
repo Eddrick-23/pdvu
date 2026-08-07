@@ -1,140 +1,100 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <cstddef>
-#include <filesystem>
-#include <latch>
+#include <chrono>
+#include <future>
 
-#include "render/parser.h"
 #include "render/threadpool.h"
 
-using namespace pdf;
+TEST(ThreadPoolTest, ThrowsOnZeroInput) { EXPECT_THROW(ThreadPool(0), std::invalid_argument); }
+TEST(ThreadPoolTest, ThrowsOnNegativeInput) { EXPECT_THROW(ThreadPool(-2), std::invalid_argument); }
 
-class MockParser : public Parser {
- public:
-  MOCK_METHOD(void, clear_doc, (), (override));
-  MOCK_METHOD(bool, load_document, (const std::filesystem::path&), (override));
-  MOCK_METHOD(const std::string&, get_document_name, (), (const, override));
-  MOCK_METHOD(std::optional<PageSpecs>, page_specs, (int), (const, override));
-  MOCK_METHOD(int, num_pages, (), (const, override));
-  MOCK_METHOD(std::optional<DisplayListHandle>, get_display_list, (int), (override));
-  MOCK_METHOD(void, write_section,
-              (int, int, float, const pdf::PageSpecs&, DisplayListHandle, unsigned char*, Rect),
-              (override));
-  MOCK_METHOD(std::unique_ptr<Parser>, duplicate, (), (const, override));
-};
+TEST(ThreadPoolTest, ReturnsValuesThroughFutures) {
+  auto pool = ThreadPool(1);
+  auto fut = pool.submit([]() { return 10; });
 
-TEST(ThreadPoolTest, CreatePool) {
-  auto mock = std::make_unique<MockParser>();
-  EXPECT_CALL(*mock, duplicate()).Times(2).WillRepeatedly([]() {
-    return std::make_unique<MockParser>();
-  });
-  auto pool = ThreadPool(*mock, 2);
+  int res = 0;
+  ASSERT_NO_THROW(res = fut.get());
+  EXPECT_EQ(res, 10);
 }
 
-TEST(ThreadPoolTest, EnqueueTaskSingleThread) {
-  auto task = [](Parser& parser) {  // takes in an Parser reference
-    return parser.get_document_name();
+TEST(ThreadPoolTest, ExceptionsPropagateThroughFutures) {
+  auto pool = ThreadPool(1);
+  auto fut = pool.submit([]() { throw std::runtime_error("error in task"); });
+
+  ASSERT_THROW(fut.get(), std::runtime_error);
+}
+
+TEST(ThreadPoolTest, ExecuteMultipleQueuedTasks) {
+  constexpr int task_count = 5;
+  auto pool = ThreadPool(1);
+  std::vector<std::future<int>> futures;
+  futures.reserve(task_count);
+  for (int i = 0; i < task_count; i++) {
+    futures.push_back(pool.submit([i]() { return i; }));
+  }
+
+  for (int i = 0; i < task_count; i++) {
+    int res;
+    ASSERT_NO_THROW(res = futures[static_cast<std::size_t>(i)].get());
+    EXPECT_EQ(res, i);
+  }
+}
+
+TEST(ThreadPoolTest, DestructorDrainsAcceptedTasks) {
+  using namespace std::chrono_literals;
+  constexpr int task_count = 8;
+  std::vector<std::future<int>> futures;
+  futures.reserve(task_count);
+
+  {
+    ThreadPool pool{1};
+
+    for (int i = 0; i < task_count; ++i) {
+      futures.push_back(pool.submit([i] { return i; }));
+    }
+  }  // Pool destruction must drain every accepted task.
+  for (int i = 0; i < task_count; ++i) {
+    auto& future = futures[static_cast<std::size_t>(i)];
+    // all tasks should be drained so we should not need to wait
+    ASSERT_EQ(future.wait_for(0s), std::future_status::ready);
+    EXPECT_EQ(future.get(), i);
+  }
+}
+
+TEST(ThreadPoolTest, MultipleWorkersExecuteConcurrently) {
+  using namespace std::chrono_literals;
+  ThreadPool pool{2};
+
+  std::mutex mutex;
+  std::condition_variable cv;
+  int started_tasks = 0;
+  bool release_tasks = false;
+
+  auto blocking_task = [&] {
+    std::unique_lock lock(mutex);
+
+    ++started_tasks;
+    cv.notify_all();
+
+    cv.wait(lock, [&] { return release_tasks; });
   };
-  auto mock = std::make_unique<MockParser>();
-  EXPECT_CALL(*mock, duplicate()).WillRepeatedly([]() {
-    auto worker_mock = std::make_unique<MockParser>();
 
-    ON_CALL(*worker_mock, get_document_name())
-        .WillByDefault(testing::ReturnRefOfCopy(std::string("Mock Doc")));
-    return worker_mock;
-  });
-  auto pool = ThreadPool(*mock, 1);
+  auto first = pool.submit(blocking_task);
+  auto second = pool.submit(blocking_task);
 
-  auto fut = pool.enqueue_with_future(task);
-  EXPECT_EQ(fut.get(), "Mock Doc");
-}
+  bool both_started = false;
+  {
+    std::unique_lock lock(mutex);
 
-TEST(TheadPoolTest, EnqueueTaskSingleThreadMultipleTasks) {
-  std::vector<std::string> results;
-  results.reserve(10);
-  for (int i = 0; i < 10; i++) {
-    results.push_back(std::format("result from task:{}", i));
+    both_started = cv.wait_for(lock, 5s, [&] { return started_tasks == 2; });
+
+    // Always release tasks, including when the assertion will fail.
+    release_tasks = true;
   }
-  std::vector<std::function<std::string(Parser&)>> tasks;
-  tasks.reserve(10);
-  for (std::size_t i = 0; i < 10; i++) {
-    auto task = [i, &results](Parser& /*parser*/) {  // takes in a Parser reference
-      return results.at(i);
-    };
-    tasks.emplace_back(task);
-  }
-  auto mock = std::make_unique<MockParser>();
-  EXPECT_CALL(*mock, duplicate()).WillRepeatedly([]() { return std::make_unique<MockParser>(); });
-  auto pool = ThreadPool(*mock, 1);
-  // enqueue the tasks and get their results
-  std::vector<std::future<std::string>> futures;
-  futures.reserve(10);
-  for (std::size_t i = 0; i < 10; i++) {
-    auto fut = pool.enqueue_with_future(tasks.at(i));
-    futures.push_back(std::move(fut));  // futures are move only
-  }
-  // check the results
-  for (std::size_t i = 0; i < 10; i++) {
-    EXPECT_EQ(futures.at(i).get(), results.at(i));
-  }
-}
+  cv.notify_all();
 
-TEST(ThreadPoolTest, EnqueueTaskMultipleThreads) {
-  const int n_threads = 3;
-
-  auto task = [](Parser& parser) {  // takes in an Parser reference
-    return parser.get_document_name();
-  };
-  auto mock = std::make_unique<MockParser>();
-  EXPECT_CALL(*mock, duplicate()).WillRepeatedly([]() {
-    auto worker_mock = std::make_unique<MockParser>();
-
-    ON_CALL(*worker_mock, get_document_name())
-        .WillByDefault(testing::ReturnRefOfCopy(std::string("Mock Doc")));
-    return worker_mock;
-  });
-
-  auto pool = ThreadPool(*mock, n_threads);
-
-  auto fut = pool.enqueue_with_future(task);
-
-  EXPECT_EQ(fut.get(), "Mock Doc");
-}
-
-TEST(ThreadPoolTest, EnqueueTaskMultipleThreadsMultipleTasks) {
-  const int n_threads = 3;
-  const int n_tasks = 3;
-  std::vector<std::string> results;
-  results.reserve(n_tasks);
-  for (int i = 0; i < n_tasks; i++) {
-    results.push_back(std::format("result from task:{}", i));
-  }
-  std::vector<std::function<std::string(Parser&)>> tasks;
-  tasks.reserve(n_tasks);
-  std::latch sync_point(n_tasks);
-  for (std::size_t i = 0; i < n_tasks; i++) {
-    auto task = [i, &results, &sync_point](Parser& /*parser*/) {  // takes in a Parser reference
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
-      sync_point.count_down();
-      return results.at(i);
-    };
-    tasks.emplace_back(task);
-  }
-  auto mock = std::make_unique<MockParser>();
-  EXPECT_CALL(*mock, duplicate()).WillRepeatedly([]() { return std::make_unique<MockParser>(); });
-  auto pool = ThreadPool(*mock, n_threads);
-  // enqueue the tasks and get their results
-  std::vector<std::future<std::string>> futures;
-  futures.reserve(n_tasks);
-  for (std::size_t i = 0; i < n_tasks; i++) {
-    auto fut = pool.enqueue_with_future(tasks.at(i));
-    futures.push_back(std::move(fut));  // futures are move only
-  }
-  // check the results
-  sync_point.wait();
-
-  for (std::size_t i = 0; i < n_tasks; i++) {
-    EXPECT_EQ(futures.at(i).get(), results.at(i));
-  }
+  EXPECT_TRUE(both_started);
+  EXPECT_NO_THROW(first.get());
+  EXPECT_NO_THROW(second.get());
 }
