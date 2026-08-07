@@ -6,8 +6,6 @@
 #include <thread>
 #include <vector>
 
-#include "parser.h"
-
 class ThreadPool {
  public:
   explicit ThreadPool(int n);
@@ -16,7 +14,7 @@ class ThreadPool {
   void worker_loop();
 
   template <typename F, typename... Args>
-  auto enqueue_with_future(F&& f, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>> {
+  auto submit(F&& f, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>> {
     using result_type = std::invoke_result_t<F, Args...>;
 
     // create function with bounded params
@@ -44,8 +42,8 @@ class ThreadPool {
 
   ThreadPool(const ThreadPool&) = delete;
   ThreadPool& operator=(const ThreadPool&) = delete;
-  ThreadPool(const ThreadPool&&) = delete;
-  ThreadPool& operator=(const ThreadPool&&) = delete;
+  ThreadPool(ThreadPool&&) = delete;
+  ThreadPool& operator=(ThreadPool&&) = delete;
 
  private:
   bool shutdown_ = false;             ///< flag to track threadpool shutdown

@@ -136,7 +136,7 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
     // This is also because we maintain that n_bounds <= n_parsers
     for (std::size_t idx = 0; idx < bounds.size(); idx++) {
       auto h_bound = bounds[idx];
-      auto fut = thread_pool->enqueue_with_future([h_bound, req, dlist, buffer, idx, this]() {
+      auto fut = thread_pool->submit([h_bound, req, dlist, buffer, idx, this]() {
         worker_parsers[idx]->write_section(h_bound.width,
                                            h_bound.height,
                                            req.zoom,
@@ -157,7 +157,9 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
       try {
         fut.get();
       } catch (...) {
-        first_error = std::current_exception();
+        if (!first_error) {
+          first_error = std::current_exception();
+        }
       }
     }
 
@@ -183,6 +185,7 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
     update_frame(ps.width, ps.height, static_cast<int>(full_duration.count()));
   } catch (const std::exception& e) {
     result.error_message = e.what();
+    update_frame(req.scaled_page_specs.width, req.scaled_page_specs.height, 0);
   }
 }
 
