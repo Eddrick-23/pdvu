@@ -7,7 +7,6 @@
 #include "render/threadpool.h"
 
 TEST(ThreadPoolTest, ThrowsOnZeroInput) { EXPECT_THROW(ThreadPool(0), std::invalid_argument); }
-TEST(ThreadPoolTest, ThrowsOnNegativeInput) { EXPECT_THROW(ThreadPool(-2), std::invalid_argument); }
 
 TEST(ThreadPoolTest, ReturnsValuesThroughFutures) {
   auto pool = ThreadPool(1);

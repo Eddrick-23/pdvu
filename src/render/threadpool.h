@@ -1,14 +1,20 @@
 #pragma once
+#include <condition_variable>
+#include <cstddef>
 #include <functional>
 #include <future>
+#include <memory>
 #include <mutex>
 #include <queue>
+#include <stdexcept>
 #include <thread>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 class ThreadPool {
  public:
-  explicit ThreadPool(int n);
+  explicit ThreadPool(std::size_t n);
   ~ThreadPool();
 
   void worker_loop();
@@ -46,6 +52,11 @@ class ThreadPool {
   ThreadPool& operator=(ThreadPool&&) = delete;
 
  private:
+  /**
+   * @brief helper that sets flips shutdown flag, wakes all worker threads
+   * and joins them.
+   */
+  void shutdown_and_join();
   bool shutdown_ = false;             ///< flag to track threadpool shutdown
   std::vector<std::thread> workers_;  ///< worker threads
   // tasks and synchronisation

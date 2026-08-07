@@ -105,8 +105,8 @@ int main(int argc, char** argv) {
   // 3) set up viewer and run
   try {
     Viewer viewer(std::move(parser), std::move(render_engine), use_shm);
-    viewer.run();  // start main loop
     PLOG_INFO << "Start up complete, starting loop";
+    viewer.run();  // start main loop
     PLOG_INFO << "Shutdown session";
   } catch (const std::system_error& e) {
     std::println(stderr, "Terminal error: {}", e.what());

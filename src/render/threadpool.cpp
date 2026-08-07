@@ -1,21 +1,32 @@
 #include "threadpool.h"
 
+#include <cstddef>
 #include <thread>
 
 #include "utils/profiling.h"
 
-ThreadPool::ThreadPool(int n) {
+ThreadPool::ThreadPool(std::size_t n) {
   ZoneScopedN("threadpool setup");
-  if (n <= 0) {
-    throw std::invalid_argument("non positive thread count");
+  if (n == 0) {
+    throw std::invalid_argument("initialised with thread count 0");
   }
-  for (int i = 0; i < n; i++) {
-    auto thread = std::thread(&ThreadPool::worker_loop, this);
-    workers_.emplace_back(std::move(thread));
+
+  workers_.reserve(n);
+  try {
+    for (std::size_t i = 0; i < n; i++) {
+      auto thread = std::thread(&ThreadPool::worker_loop, this);
+      workers_.emplace_back(std::move(thread));
+    }
+  } catch (...) {
+    // if any thread creation throws
+    // clean up any already created threads.
+    shutdown_and_join();
   }
 }
 
-ThreadPool::~ThreadPool() {
+ThreadPool::~ThreadPool() { shutdown_and_join(); }
+
+void ThreadPool::shutdown_and_join() {
   // wrap flag update to prevent race conditions during shutdown
   {
     std::scoped_lock lock(queue_mutex_);

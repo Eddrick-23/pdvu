@@ -1,5 +1,7 @@
 #include "render_engine.h"
 
+#include <cstddef>
+
 #include "bounds.h"
 #include "plog/Log.h"
 #include "utils/logging.h"
@@ -14,7 +16,7 @@ RenderEngine::RenderEngine(const pdf::Parser& prototype_parser, int n_threads, b
     worker_parsers.emplace_back(prototype_parser.duplicate());
   }
 
-  thread_pool = std::make_unique<ThreadPool>(n_threads);
+  thread_pool = std::make_unique<ThreadPool>(static_cast<std::size_t>(n_threads));
   worker = std::thread(&RenderEngine::coordinator_loop, this);
 }
 
