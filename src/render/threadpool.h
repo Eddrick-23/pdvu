@@ -12,38 +12,58 @@
 #include <utility>
 #include <vector>
 
+/**
+ * @brief Fixed-size pool for asynchronously executing callable tasks.
+ *
+ * Submitted tasks expose their result or exception through a `std::future`.
+ * Destruction stops new submissions, drains all accepted tasks, and joins every
+ * worker thread.
+ */
 class ThreadPool {
  public:
-  explicit ThreadPool(std::size_t n);
+  /**
+   * @brief Starts a pool with the requested number of worker threads.
+   *
+   * @param thread_count Number of worker threads to create.
+   * @throws std::invalid_argument If `thread_count` is zero.
+   * @throws std::runtime_error If a worker thread cannot be created.
+   */
+  explicit ThreadPool(std::size_t thread_count);
+
+  /** @brief Drains all accepted tasks and joins every worker thread. */
   ~ThreadPool();
 
-  void worker_loop();
-
+  /**
+   * @brief Submits a callable for asynchronous execution.
+   *
+   * @tparam F Callable type.
+   * @tparam Args Argument types passed to the callable.
+   * @param callable Callable to execute.
+   * @param args Arguments to bind to the callable.
+   * @return A future containing the callable's result. Exceptions thrown by the
+   * callable are stored in the future and rethrown by `std::future::get()`.
+   * @throws std::runtime_error If the pool has begun shutting down.
+   */
   template <typename F, typename... Args>
-  auto submit(F&& f, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>> {
-    using result_type = std::invoke_result_t<F, Args...>;
+  auto submit(F&& callable, Args&&... args) -> std::future<std::invoke_result_t<F, Args...>> {
+    using Result = std::invoke_result_t<F, Args...>;
 
-    // create function with bounded params
-    auto bound_task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
+    auto bound_task = std::bind(std::forward<F>(callable), std::forward<Args>(args)...);
 
-    // wrap in a shared ptr to allow copy construct/assign
-    auto packaged = std::make_shared<std::packaged_task<result_type()>>(std::move(bound_task));
+    // std::function requires a copyable target, so share ownership of the
+    // move-only packaged task with the queued lambda.
+    auto packaged_task = std::make_shared<std::packaged_task<Result()>>(std::move(bound_task));
 
-    std::future<result_type> fut = packaged->get_future();
-    // acquire lock and enqueue packaged task
+    std::future<Result> future = packaged_task->get_future();
     {
-      std::scoped_lock lock(queue_mutex_);
-      // cannot store packaged task directly in queue
-      // wrap in a lambda for type erasure
-      // use mutable since task can change internal state but lambdas are const
-      // by default
-      if (shutdown_) {
-        throw std::runtime_error("enqueue on stopped ThreadPool");
+      std::scoped_lock lock(m_mutex);
+      if (m_shutdown) {
+        throw std::runtime_error("submit on stopped ThreadPool");
       }
-      tasks_.emplace([packaged]() mutable { (*packaged)(); });
+      m_tasks.emplace([packaged_task] { (*packaged_task)(); });
     }
-    queue_cv_.notify_one();
-    return fut;
+    m_condition_variable.notify_one();
+    return future;
   }
 
   ThreadPool(const ThreadPool&) = delete;
@@ -53,15 +73,19 @@ class ThreadPool {
 
  private:
   /**
-   * @brief helper that sets flips shutdown flag, wakes all worker threads
-   * and joins them.
+   * @brief Marks the pool as shutting down, drains queued tasks, and joins all
+   * worker threads.
    */
   void shutdown_and_join();
-  bool shutdown_ = false;             ///< flag to track threadpool shutdown
-  std::vector<std::thread> workers_;  ///< worker threads
-  // tasks and synchronisation
+
+  /** @brief Waits for and executes tasks until shutdown completes. */
+  void worker_loop();
+
   using Task = std::function<void()>;
-  std::queue<Task> tasks_;  ///< queue containing pending tasks
-  std::mutex queue_mutex_;
-  std::condition_variable queue_cv_;
+
+  bool m_shutdown = false;                       ///< Whether new submissions are rejected.
+  std::vector<std::thread> m_workers;            ///< Worker threads owned by the pool.
+  std::queue<Task> m_tasks;                      ///< Accepted tasks waiting to execute.
+  std::mutex m_mutex;                            ///< Protects m_shutdown and m_tasks.
+  std::condition_variable m_condition_variable;  ///< Notifies workers of tasks or shutdown.
 };
