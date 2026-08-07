@@ -1,18 +1,23 @@
 #include "render_engine.h"
 
+#include <cstddef>
+
 #include "bounds.h"
 #include "plog/Log.h"
 #include "utils/logging.h"
 #include "utils/profiling.h"
 
 RenderEngine::RenderEngine(const pdf::Parser& prototype_parser, int n_threads, bool use_cache)
-    : use_cache(use_cache) {
+    : n_threads_(n_threads), use_cache(use_cache) {
   // parser created first because during shutdown, any context from parser must
   // be cleared after threadpool shutdown
   parser = prototype_parser.duplicate();
+  for (auto i = 0; i < n_threads; i++) {
+    worker_parsers.emplace_back(prototype_parser.duplicate());
+  }
+
+  thread_pool = std::make_unique<ThreadPool>(static_cast<std::size_t>(n_threads));
   worker = std::thread(&RenderEngine::coordinator_loop, this);
-  n_threads_ = n_threads;
-  thread_pool = std::make_unique<ThreadPool>(prototype_parser, n_threads);
 }
 
 RenderEngine::~RenderEngine() {
@@ -41,7 +46,7 @@ std::optional<RenderResult> RenderEngine::get_result() {  // get the most recent
 }
 
 void RenderEngine::coordinator_loop() {
-  /* Main job is to wake on new request, then break down and equeue tasks to the
+  /* Main job is to wake on new request, then break down and enqueue tasks to the
    * threadpool to execute
    */
 
@@ -64,7 +69,7 @@ void RenderEngine::coordinator_loop() {
 void RenderEngine::dispatch_page_write(const RenderRequest& req) {
   ZoneScopedN("dispatch_page_write");
   using namespace std::chrono;
-  auto start = std::chrono::steady_clock::now();
+  auto start = steady_clock::now();
   RenderResult result;
   result.req_id = req.req_id;
   result.page_num = req.page_num;
@@ -112,7 +117,7 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
     pdf::PageSpecs ps = req.scaled_page_specs;
     auto bounds = pdf::split_bounds(ps, n_threads_);
     std::vector<std::future<void>> futures;
-    auto start_parse = std::chrono::steady_clock::now();
+    auto start_parse = steady_clock::now();
     void* buffer = nullptr;
 
     // set up pointers and buffers
@@ -127,22 +132,41 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
     }
 
     // enqueue jobs
-    for (auto h_bound : bounds) {
-      auto fut =
-          thread_pool->enqueue_with_future([h_bound, req, dlist, buffer](pdf::Parser& parser) {
-            parser.write_section(h_bound.width,
-                                 h_bound.height,
-                                 req.zoom,
-                                 req.scaled_page_specs,
-                                 dlist.value(),
-                                 static_cast<unsigned char*>(buffer) + h_bound.offset,
-                                 h_bound.rect);
-          });
+    // since the engine design is that we only ever render one page at once
+    // we can use batch-index borrowing where each h_bound uses a parser
+    // at a specific index.
+    // This is also because we maintain that n_bounds <= n_parsers
+    for (std::size_t idx = 0; idx < bounds.size(); idx++) {
+      auto h_bound = bounds[idx];
+      auto fut = thread_pool->submit([h_bound, req, dlist, buffer, idx, this]() {
+        worker_parsers[idx]->write_section(h_bound.width,
+                                           h_bound.height,
+                                           req.zoom,
+                                           req.scaled_page_specs,
+                                           dlist.value(),
+                                           static_cast<unsigned char*>(buffer) + h_bound.offset,
+                                           h_bound.rect);
+      });
       futures.push_back(std::move(fut));
     }
+
     // wait for future, then update result
+    // if an exception occurs, capture it and let all other futures drain
+    // this ensures we don't close the buffer while other threads
+    // are still writing to it.
+    std::exception_ptr first_error;
     for (auto& fut : futures) {
-      fut.get();
+      try {
+        fut.get();
+      } catch (...) {
+        if (!first_error) {
+          first_error = std::current_exception();
+        }
+      }
+    }
+
+    if (first_error) {
+      std::rethrow_exception(first_error);
     }
 
     result.transmission = req.transmission;
@@ -163,6 +187,7 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
     update_frame(ps.width, ps.height, static_cast<int>(full_duration.count()));
   } catch (const std::exception& e) {
     result.error_message = e.what();
+    update_frame(req.scaled_page_specs.width, req.scaled_page_specs.height, 0);
   }
 }
 

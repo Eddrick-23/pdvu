@@ -1,7 +1,9 @@
 #include <CLI11.hpp>
+#include <algorithm>
 #include <cstdio>
 #include <print>
 #include <system_error>
+#include <thread>
 
 #include "plog/Log.h"
 #include "utils/logging.h"
@@ -91,6 +93,9 @@ int main(int argc, char** argv) {
   }
 
   // 2) setup render engine
+  int max_cores = static_cast<int>(std::thread::hardware_concurrency());  // may return 0
+  max_cores = std::max(max_cores, 1);
+  n_threads = std::clamp(n_threads, 1, max_cores);
   std::unique_ptr<RenderEngine> render_engine = nullptr;
   {
     ZoneScopedN("Render engine setup");

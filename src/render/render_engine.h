@@ -77,7 +77,8 @@ class RenderEngine {
 
   // core
   std::unique_ptr<pdf::Parser> parser;  // thread local parser
-  std::thread worker;
+  std::vector<std::unique_ptr<pdf::Parser>> worker_parsers; // separate parsers for rendering work
+  std::thread worker; // coordinator thread
   std::atomic<bool> running = true;
   std::atomic<size_t> current_req_id = 0;
 
