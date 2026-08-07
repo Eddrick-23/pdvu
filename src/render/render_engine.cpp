@@ -147,9 +147,22 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
       });
       futures.push_back(std::move(fut));
     }
+
     // wait for future, then update result
+    // if an exception occurs, capture it and let all other futures drain
+    // this ensures we don't close the buffer while other threads
+    // are still writing to it.
+    std::exception_ptr first_error;
     for (auto& fut : futures) {
-      fut.get();
+      try {
+        fut.get();
+      } catch (...) {
+        first_error = std::current_exception();
+      }
+    }
+
+    if (first_error) {
+      std::rethrow_exception(first_error);
     }
 
     result.transmission = req.transmission;
