@@ -2,6 +2,8 @@
 
 #include <array>
 
+#include "utils/geometry.h"
+
 class PageView {
  public:
   static constexpr std::array<float, 11> m_zoom_levels{
@@ -15,18 +17,6 @@ class PageView {
   struct ViewportBounds {
     int max_width_pixels;
     int max_height_pixels;
-  };
-
-  /**
-   * @brief Defines the crop rectangle to crop an image.
-   *
-   * The origin (0, 0) is taken to be the top-left corner of the image.
-   */
-  struct CropRect {
-    int x_offset_pixels;  ///< Horizontal offset from the left edge.
-    int y_offset_pixels;  ///< Vertical offset from the top edge.
-    int width;            ///< The final width of the cropped area in pixels.
-    int height;           ///< The final height of the cropped area in pixels.
   };
 
   PageView() = default;
@@ -45,10 +35,10 @@ class PageView {
    * @param width The original width of the image in pixels.
    * @param height The original height of the image in pixels.
    * @param vBounds The maximum available pixel boundaries this view is allowed to draw in.
-   * @return CropRect containing the pixel offsets and final dimensions to crop.
+   * @return geometry::PixelRect containing the pixel offsets and final dimensions to crop.
    */
-  [[nodiscard]] CropRect calculate_crop_window(
-      int width, int height, const ViewportBounds& vBounds) const;
+  [[nodiscard]] geometry::PixelRect calculate_crop_window(int width, int height,
+                                                          const ViewportBounds& vBounds) const;
 
   /**
    * @brief Update x and y offset multipliers

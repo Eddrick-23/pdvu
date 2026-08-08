@@ -144,7 +144,7 @@ struct CropWindowTestCase {
   PageView::ViewportBounds bounds;
   float rel_x;
   float rel_y;
-  PageView::CropRect expected;
+  geometry::PixelRect expected;
 };
 
 class CalculateCropWindowTest : public ::testing::TestWithParam<CropWindowTestCase> {};
@@ -159,8 +159,8 @@ TEST_P(CalculateCropWindowTest, ComputesCorrectCrop) {
   const auto result =
       pageview.calculate_crop_window(param.img_width, param.img_height, param.bounds);
 
-  EXPECT_EQ(param.expected.x_offset_pixels, result.x_offset_pixels);
-  EXPECT_EQ(param.expected.y_offset_pixels, result.y_offset_pixels);
+  EXPECT_EQ(param.expected.x, result.x);
+  EXPECT_EQ(param.expected.y, result.y);
   EXPECT_EQ(param.expected.width, result.width);
   EXPECT_EQ(param.expected.height, result.height);
 }
