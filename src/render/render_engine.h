@@ -27,26 +27,22 @@ struct PageCacheData {
   std::string transmission;
   std::shared_ptr<SharedMemory> shm_data;
   std::shared_ptr<Tempfile> tempfile_data;
-  int page_width;
-  int page_height;
-  int rotation_degrees;
+
+  pdf::PageSpecs rendered_page_specs{};
 };
 
 struct RenderRequest {
   int page_num;
   float zoom;
-  pdf::PageSpecs scaled_page_specs;
-  // We use a generation ID to ignore results from old requests if needed
-  size_t req_id;
+  pdf::PageSpecs scaled_page_specs;  ///< Geometry requested by viewer
+  size_t req_id;  ///< id tagged to this request. Matching result is tagged to same id.
   std::string transmission;
 };
 
 struct RenderResult {
   size_t req_id;
   int page_num;
-  float zoom;
-  int page_width;
-  int page_height;
+  pdf::PageSpecs rendered_page_specs;
   std::string error_message;  // empty if successful
   int render_time_ms;
   std::string path_to_data;
@@ -67,9 +63,9 @@ class RenderEngine {
  private:
   void coordinator_loop();
   void dispatch_page_write(const RenderRequest& req);
-  void cache_page(int page_num, float zoom, int rotation, const std::shared_ptr<SharedMemory>& shm,
-                  const std::shared_ptr<Tempfile>& tempfile, const std::string& transmission,
-                  int page_width, int page_height);
+  void cache_page(const RenderRequest& req, const RenderResult& res,
+                  const std::shared_ptr<SharedMemory>& shm,
+                  const std::shared_ptr<Tempfile>& tempfile);
 
   std::optional<PageCacheData> try_page_cache(const RenderRequest& req,
                                               std::shared_ptr<SharedMemory>& shm_ptr,

@@ -78,20 +78,17 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
   ZoneScopedN("dispatch_page_write");
   using namespace std::chrono;
   auto start = steady_clock::now();
-  RenderResult result;
+  RenderResult result{};
   result.req_id = req.req_id;
   result.page_num = req.page_num;
   result.transmission = req.transmission;
+  result.rendered_page_specs = req.scaled_page_specs;
   std::shared_ptr<SharedMemory> new_shm = nullptr;
   std::shared_ptr<Tempfile> new_temp = nullptr;
 
-  auto update_frame = [&](int page_width, int page_height, int render_time_ms) {
-    result.req_id = req.req_id;
-    result.zoom = req.zoom;
-    result.page_width = page_width;
-    result.page_height = page_height;
+  auto update_frame = [&](int render_time_ms) {
     result.render_time_ms = render_time_ms;
-    std::lock_guard<std::mutex> lock(state_mutex);
+    std::scoped_lock lock(state_mutex);
     if (new_shm) {
       current_shm = std::move(new_shm);
     }
@@ -105,10 +102,12 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
   auto cached = use_cache ? try_page_cache(req, new_shm, new_temp) : std::nullopt;
   if (cached.has_value()) {
     const auto& data = cached.value();
+    result.rendered_page_specs = data.rendered_page_specs;
     result.path_to_data = data.transmission == "shm" ? new_shm->name() : new_temp->path();
+    result.transmission = data.transmission;
     int duration_ms =
         static_cast<int>(duration_cast<milliseconds>(steady_clock::now() - start).count());
-    update_frame(data.page_width, data.page_height, duration_ms);
+    update_frame(duration_ms);
     return;
   }
   // prepare data then enqueue to threadpool
@@ -117,7 +116,7 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
     if (!dlist.has_value()) {
       result.error_message = "Failed to generate display list";
       {
-        std::lock_guard<std::mutex> lock(state_mutex);
+        std::scoped_lock lock(state_mutex);
         latest_result = std::move(result);
       }
       return;
@@ -178,24 +177,16 @@ void RenderEngine::dispatch_page_write(const RenderRequest& req) {
     }
 
     result.transmission = req.transmission;
-    result.zoom = req.zoom;
     auto end = steady_clock::now();
     auto write_duration = duration_cast<milliseconds>(end - start_parse);
     auto full_duration = duration_cast<milliseconds>(end - start);
     if (use_cache && write_duration > page_cache_time_limit) {
-      cache_page(req.page_num,
-                 req.zoom,
-                 req.scaled_page_specs.rotation,
-                 new_shm,
-                 new_temp,
-                 req.transmission,
-                 ps.width,
-                 ps.height);
+      cache_page(req, result, new_shm, new_temp);
     }
-    update_frame(ps.width, ps.height, static_cast<int>(full_duration.count()));
+    update_frame(static_cast<int>(full_duration.count()));
   } catch (const std::exception& e) {
     result.error_message = e.what();
-    update_frame(req.scaled_page_specs.width, req.scaled_page_specs.height, 0);
+    update_frame(0);
   }
 }
 
@@ -221,23 +212,20 @@ std::optional<pdf::DisplayListHandle> RenderEngine::fetch_display_list(int page_
   return {};
 }
 
-void RenderEngine::cache_page(int page_num, float zoom, int rotation,
+void RenderEngine::cache_page(const RenderRequest& req, const RenderResult& res,
                               const std::shared_ptr<SharedMemory>& shm,
-                              const std::shared_ptr<Tempfile>& tempfile,
-                              const std::string& transmission, int page_width, int page_height) {
+                              const std::shared_ptr<Tempfile>& tempfile) {
   page_cache.put(
       {
-          .page_num = page_num,
-          .zoom = zoom,
-          .rotation_degrees = rotation,
+          .page_num = req.page_num,
+          .zoom = req.zoom,
+          .rotation_degrees = req.scaled_page_specs.rotation,
       },
       {
-          .transmission = transmission,
+          .transmission = req.transmission,
           .shm_data = shm,
           .tempfile_data = tempfile,
-          .page_width = page_width,
-          .page_height = page_height,
-          .rotation_degrees = rotation,
+          .rendered_page_specs = res.rendered_page_specs,
       });
 }
 
