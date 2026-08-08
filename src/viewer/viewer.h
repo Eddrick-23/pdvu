@@ -28,7 +28,7 @@ class Viewer {
 
  private:
   /**
-   * @brief Wraps standard 2D pixel or grid dimensions
+   * @brief Wraps standard two-dimensional pixel or grid dimensions.
    */
   struct Dimensions {
     int width;
@@ -38,9 +38,10 @@ class Viewer {
   /**
    * @brief Dimensions used to place the currently available frame.
    *
-   * existing describes the rendered bitmap in m_latest_frame. target describes
-   * the dimensions currently requested by the viewer and may differ while a new
-   * render is pending.
+   * existing describes the source bitmap in RenderState::latest_frame. target
+   * describes the desired placement in RenderState::target_state. The dimensions
+   * may differ while a compatible same-page render is pending, allowing the
+   * existing bitmap to provide an immediate scaled preview.
    */
   struct FrameDisplayParams {
     Dimensions existing;
@@ -62,9 +63,10 @@ class Viewer {
   /**
    * @brief Polls the render engine for a newly completed page frame.
    *
-   * Stores a successful result in m_latest_frame. Duplicate results are ignored,
-   * while render errors are displayed and are not installed as the latest frame.
-   * The function does not decide whether the active UI mode should be redrawn.
+   * Results whose request ID does not match the current RenderTarget are discarded
+   * as superseded. A matching successful result replaces RenderState::latest_frame.
+   * Matching render errors are displayed but are not installed. The function does
+   * not decide whether the active UI mode should be redrawn.
    *
    * @return true when a new successful frame was stored; otherwise false.
    */
@@ -73,8 +75,13 @@ class Viewer {
   /**
    * @brief Builds the terminal sequence that places the latest page image.
    *
-   * Calculates cropping and placement from the currently rendered dimensions,
-   * requested target dimensions, terminal layout, and PageView offsets.
+   * Calculates source cropping and target placement from the displayed bitmap
+   * dimensions, desired target dimensions, terminal layout, and PageView offsets.
+   * When the dimensions differ, the target crop is mapped back into source-bitmap
+   * coordinates so Kitty can scale the existing image as a preview.
+   *
+   * @pre The caller has verified that the displayed frame and render target are
+   * preview-compatible.
    *
    * @param params Existing bitmap dimensions and currently requested dimensions.
    * @return ANSI and Kitty protocol sequence for the page image.
@@ -85,8 +92,11 @@ class Viewer {
    * @brief Draws the latest page frame with the requested status bars.
    *
    * Displays the minimum-size guard instead when the terminal is too small.
-   * Otherwise, composes the Kitty page placement with the selected bars, writes
-   * the complete sequence to stdout, and flushes it.
+   * While a newer compatible render is pending, draws the existing bitmap scaled
+   * to the target geometry for immediate visual feedback. If the pending target
+   * refers to another page or rotation, preserves the existing presentation until
+   * the target frame arrives. Otherwise, composes the Kitty page placement with
+   * the selected bars, writes the complete sequence to stdout, and flushes it.
    *
    * @param with_top_bar Whether to include the top status bar.
    * @param with_bottom_bar Whether to include the bottom status bar.
@@ -97,9 +107,10 @@ class Viewer {
    * @brief Requests an asynchronous render for the desired page state.
    *
    * Reads the current terminal dimensions, page rotation, and zoom state;
-   * calculates and stores m_target_page_specs; and dispatches a non-blocking
-   * request to the render engine. Does nothing if the terminal is too small or
-   * the page number is invalid.
+   * calculates the scaled target PageSpecs; dispatches a non-blocking request to
+   * the render engine; and stores the returned generation ID, page number, and
+   * specs together in RenderState::target_state. Does nothing if the terminal is
+   * too small or the page number is invalid.
    *
    * @param page_num Zero-based page number to render.
    */
@@ -149,15 +160,18 @@ class Viewer {
    * @return true when the current mode should be redrawn immediately.
    *
    * @note Rotation intentionally returns false so the old frame is not placed
-   * using the newly rotated target geometry; the completed render triggers the
-   * redraw instead.
+   * immediately. The preview-compatibility guard also prevents incidental redraws
+   * from combining the old bitmap with the rotated target geometry; the completed
+   * render triggers the redraw instead.
    */
   bool handle_browse_input(const InputEvent& event);
 
   /**
    * @brief Draws the complete presentation for the active UI mode.
+   *
    * - Browse draws the page and both status bars.
-   * - GoToPage draws the page and top bar while reserving the bottom row for its input component.
+   * - GoToPage draws the page and top bar while reserving the bottom row for its
+   * input component.
    * - Help clears and redraws its overlay using the current terminal dimensions.
    */
   void draw_for_current_mode();
@@ -178,6 +192,18 @@ class Viewer {
    */
   [[nodiscard]] Dimensions available_window();
 
+  /**
+   * @brief Checks whether the displayed bitmap may be scaled as a preview of the target.
+   *
+   * Preview scaling is safe when both states refer to the same page and rotation.
+   * Zoom level and pixel dimensions are intentionally not compared because those
+   * differences are what the preview is designed to bridge.
+   *
+   * @return true when the existing bitmap can represent the pending target through
+   * scaling and cropping; otherwise false.
+   */
+  [[nodiscard]] bool is_preview_compatible() const;
+
   // subsystems
   Terminal m_term;                           // terminal data and raw mode
   std::unique_ptr<pdf::Parser> m_parser;     // parsing pdfs
@@ -189,18 +215,37 @@ class Viewer {
    */
   enum class UiMode {
     Browse,    ///< Normal document controls
-    GoToPage,  ///< Currently delegates input blocking to TUI::bottom_input_bar
+    GoToPage,  ///< Page-number entry through TUI::InputBar
     Help,      ///< Viewing help ui page
   };
 
+  /**
+   * @brief Describes the most recently requested render generation.
+   *
+   * The fields are updated together after a render request is dispatched. They
+   * describe desired state and may differ from the bitmap in RenderState::latest_frame
+   * until the matching asynchronous result is accepted.
+   */
+  struct RenderTarget {
+    std::size_t req_id = 0;        ///< Generation ID returned for the request
+    int page_num = 0;              ///< Zero-based page requested
+    pdf::PageSpecs page_specs{};  ///< Scaled and rotated geometry requested
+  };
+
+  /**
+   * @brief Tracks desired render state and the most recently accepted bitmap.
+   *
+   * target_state represents what the viewer wants next. latest_frame represents
+   * the bitmap currently available to display. Their request IDs differ while a
+   * render is pending. last_transmitted_req_id records which accepted bitmap has
+   * already been sent to the terminal so redraws can reuse its Kitty image ID.
+   */
   struct RenderState {
+    RenderTarget target_state{};
     std::size_t last_transmitted_req_id =
         0;  ///< Render generation most recently transmitted to terminal
-    pdf::PageSpecs target_page_specs = {};
-    // Scaled and rotated dimensions currently requested from the render engine.
-    // These may differ from m_latest_frame while a render is pending.
-    RenderResult latest_frame = RenderResult{};
-    // Most recently accepted successful render available for display.
+    RenderResult latest_frame =
+        RenderResult{};  ///< Most recently accepted successful render available for display.
   };
 
   struct GoToPageState {

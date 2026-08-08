@@ -113,7 +113,6 @@ bool Viewer::handle_resize(ResizeDebouncer& debouncer) {
     case ResizeState::Idle:
       return false;
     case ResizeState::Resizing:
-      // draw_latest_frame(true, true);
       return true;
     case ResizeState::Settled:
       // keep mode independent. If help is open, render the resized page in the background
@@ -136,13 +135,22 @@ Viewer::Dimensions Viewer::available_window() {
   };
 }
 
+bool Viewer::is_preview_compatible() const {
+  const auto& displayed = m_render.latest_frame;
+  const auto& target = m_render.target_state;
+
+  return displayed.page_num == target.page_num &&
+         displayed.rendered_page_specs.rotation == target.page_specs.rotation;
+}
+
 bool Viewer::fetch_latest_frame() {
   std::optional<RenderResult> result_opt = m_renderer->get_result();
   if (!result_opt) {
     return false;
   }
   auto& result = result_opt.value();
-  if (result.req_id == m_render.latest_frame.req_id) {  // check if frame is new
+  // ignore results superseded by a newer render request
+  if (result.req_id != m_render.target_state.req_id) {
     return false;
   }
   if (!result.error_message.empty()) {  // check if there was a render error
@@ -191,8 +199,8 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
           target_width, target_height, {.max_width_pixels = width, .max_height_pixels = height});
   // if latest frame dimensions match target, don't need to scale crop
   // if latest frame dimensions don't match target, scale the crop window
-  if (m_render.latest_frame.page_width != target_width ||
-      m_render.latest_frame.page_height != target_height) {
+  if (m_render.latest_frame.rendered_page_specs.width != target_width ||
+      m_render.latest_frame.rendered_page_specs.height != target_height) {
     const float scale_factor_x =
         static_cast<float>(target_width) / static_cast<float>(existing_width);
     const float scale_factor_y =
@@ -234,16 +242,23 @@ void Viewer::draw_latest_frame(bool with_top_bar, bool with_bottom_bar) {
     return;
   }
 
+  const bool preview_pending = m_render.latest_frame.req_id != m_render.target_state.req_id;
+  if (preview_pending && !is_preview_compatible()) {
+    return;  // Keep existing frame until new frame arrives.
+  }
+
+  const auto& source_specs = m_render.latest_frame.rendered_page_specs;
+  const auto& target_specs = m_render.target_state.page_specs;
   std::string sequence = latest_frame_sequence({
       .existing =
           {
-              .width = m_render.latest_frame.page_width,
-              .height = m_render.latest_frame.page_height,
+              .width = source_specs.width,
+              .height = source_specs.height,
           },
       .target =
           {
-              .width = m_render.target_page_specs.width,
-              .height = m_render.target_page_specs.height,
+              .width = target_specs.width,
+              .height = target_specs.height,
           },
   });
 
@@ -267,18 +282,23 @@ void Viewer::request_page_render(int page_num) {
     return;  // draw_latest_frame handles showing of the guard message
   }
   if (const auto specs = m_parser->page_specs(page_num)) {
-    m_render.target_page_specs = specs->rotate_quarter_clockwise(m_rotation_degrees / 90);
+    auto target_specs = specs->rotate_quarter_clockwise(m_rotation_degrees / 90);
     // ts.height - 2 due to rows taken by top and bottom bar
     const float zoom_factor = TUI::calculate_zoom_factor(ts,
-                                                         m_render.target_page_specs,
+                                                         target_specs,
                                                          {
                                                              .cols = ts.columns,
                                                              .rows = ts.rows - 2,
                                                          },
                                                          m_page_view.current_zoom());
-    m_render.target_page_specs = m_render.target_page_specs.scale(zoom_factor);
-    m_renderer->request_page(
-        page_num, zoom_factor, m_render.target_page_specs, m_shm_supported ? "shm" : "tempfile");
+    target_specs = target_specs.scale(zoom_factor);
+    const std::size_t req_id = m_renderer->request_page(
+        page_num, zoom_factor, target_specs, m_shm_supported ? "shm" : "tempfile");
+    m_render.target_state = {
+        .req_id = req_id,
+        .page_num = page_num,
+        .page_specs = target_specs,
+    };
   }
 }
 
