@@ -9,6 +9,7 @@
 #include <print>
 #include <string_view>
 
+#include "frame_layout.h"
 #include "keys.h"
 #include "plog/Log.h"
 #include "render/parser.h"
@@ -166,53 +167,6 @@ bool Viewer::fetch_latest_frame() {
   return true;
 }
 
-Viewer::FrameLayout Viewer::calculate_frame_layout(geometry::PixelSize source,
-                                                   geometry::PixelSize target,
-                                                   geometry::PixelRect target_crop,
-                                                   const TermSize& ts,
-                                                   const TUI::ContentArea& content_area) const {
-  auto round_to_nearest_cell = [](int pixels, int pixels_per_cell, int max_cells) {
-    return std::clamp(static_cast<int>(std::lround(static_cast<double>(pixels) /
-                                                   static_cast<double>(pixels_per_cell))),
-                      1,
-                      max_cells);
-  };
-  const int placement_cols =
-      round_to_nearest_cell(target.width, ts.cell_pixel_width, content_area.cols);
-  const int placement_rows =
-      round_to_nearest_cell(target.height, ts.cell_pixel_height, content_area.rows);
-
-  auto [start_row, start_col] =
-      TUI::centered_cursor_position(ts, target.width, target.height, content_area);
-  FrameLayout result{
-      .target_crop_rect = target_crop,
-      .source_crop_rect = target_crop,
-      .placement_origin = {.row = start_row, .col = start_col},
-      .placement_cols = placement_cols,
-      .placement_rows = placement_rows,
-      .is_frame_native = true,
-  };
-
-  // scale crop window to fit existing bitmap if dimensions mismatch
-  if (source.width != target.width || source.height != target.height) {
-    const float scale_factor_x =
-        static_cast<float>(target.width) / static_cast<float>(source.width);
-    const float scale_factor_y =
-        static_cast<float>(target.height) / static_cast<float>(source.height);
-    result.source_crop_rect.x =
-        static_cast<int>(static_cast<float>(target_crop.x) / scale_factor_x);
-    result.source_crop_rect.y =
-        static_cast<int>(static_cast<float>(target_crop.y) / scale_factor_y);
-    result.source_crop_rect.width =
-        static_cast<int>(static_cast<float>(target_crop.width) / scale_factor_x);
-    result.source_crop_rect.height =
-        static_cast<int>(static_cast<float>(target_crop.height) / scale_factor_y);
-    result.is_frame_native = false;
-  }
-
-  return result;
-}
-
 std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
   constexpr int KITTY_SLOT_ID = 1;
   const auto [existing_width, existing_height] = params.existing;
@@ -238,19 +192,17 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
                                                                         .max_width_pixels = width,
                                                                         .max_height_pixels = height,
                                                                     });
-  const auto& source_specs = m_render.latest_frame.rendered_page_specs;
-  const auto& target_specs = m_render.target_state.page_specs;
-  const auto frame_layout = calculate_frame_layout(
+  const auto frame_layout = viewer::calculate_frame_layout(
       {
-          .width = source_specs.width,
-          .height = source_specs.height,
+          .width = existing_width,
+          .height = existing_height,
       },
       {
-          .width = target_specs.width,
-          .height = target_specs.height,
+          .width = target_width,
+          .height = target_height,
       },
       target_crop_window,
-      m_term.get_terminal_size(),
+      ts,
       area);
 
   const bool need_transmit = m_render.last_transmitted_req_id != m_render.latest_frame.req_id;
@@ -265,7 +217,7 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
   // we only use it for preview displays not native bitmaps
   int pin_cols = 0;  // no vertical bars so no need to pin
   int pin_rows = 0;  // pin due to top/bottom bars
-  if (!frame_layout.is_frame_native) {
+  if (!frame_layout.source_matches_target) {
     pin_rows = frame_layout.placement_rows;
   }
   sequence += kitty::get_image_sequence(m_render.latest_frame.path_to_data,
