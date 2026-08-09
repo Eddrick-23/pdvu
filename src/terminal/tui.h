@@ -4,6 +4,7 @@
 
 #include "render/parser.h"
 #include "terminal.h"
+#include "utils/geometry.h"
 
 namespace TUI::symbols {
 
@@ -119,9 +120,8 @@ float calculate_zoom_factor(const TermSize& ts, const pdf::PageSpecs& ps, const 
                             float zoom);
 
 /**
- * @brief Returns the escape sequence that moves the cursor to wherever an
- * image should start being drawn so it appears centred within a given cell
- * area, both horizontally and vertically.
+ * @brief Returns the target position cursor should be moved to such that an
+ * image being drawn appears centred within a given cell area, both horizontally and vertically.
  *
  * Converts the image's pixel dimensions into the number of cells they'll
  * occupy (rounding up, since a partially-filled trailing cell still needs to
@@ -141,5 +141,6 @@ float calculate_zoom_factor(const TermSize& ts, const pdf::PageSpecs& ps, const 
  * @return Escape sequence that moves the cursor to the computed
  *         top-left drawing position; does not draw anything itself.
  */
-std::string center_cursor(const TermSize& ts, int w_pixels, int h_pixels, const ContentArea& area);
+geometry::CellPosition centered_cursor_position(const TermSize& ts, int w_pixels, int h_pixels,
+                                                const ContentArea& area);
 }  // namespace TUI

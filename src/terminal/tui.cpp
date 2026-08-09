@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstddef>
 #include <functional>
+#include <ranges>
 #include <string>
 #include <string_view>
 
@@ -216,13 +217,16 @@ float calculate_zoom_factor(const TermSize& ts, const pdf::PageSpecs& ps, const 
 
   return std::min(h_scale, v_scale) * zoom;
 }
-std::string center_cursor(const TermSize& ts, int w_pixels, int h_pixels, const ContentArea& area) {
+
+geometry::CellPosition centered_cursor_position(const TermSize& ts, int w_pixels, int h_pixels,
+                                                const ContentArea& area) {
   const auto ceil_div = [](int value, int divisor) {
     assert(value >= 0);
     assert(divisor > 0);
 
     return (value / divisor) + (value % divisor != 0);
   };
+
   const int cols_used = ceil_div(w_pixels, ts.cell_pixel_width);
   const int rows_used = ceil_div(h_pixels, ts.cell_pixel_height);
 
@@ -231,6 +235,10 @@ std::string center_cursor(const TermSize& ts, int w_pixels, int h_pixels, const 
 
   top_margin = top_margin > 0 ? top_margin : 0;
   left_margin = left_margin > 0 ? left_margin : 0;
-  return terminal::move_cursor(top_margin + area.start_row, left_margin + area.start_col);
+
+  return geometry::CellPosition{
+      .row = top_margin + area.start_row,
+      .col = left_margin + area.start_col,
+  };
 }
 }  // namespace TUI

@@ -166,7 +166,55 @@ bool Viewer::fetch_latest_frame() {
   return true;
 }
 
+Viewer::FrameLayout Viewer::calculate_frame_layout(geometry::PixelSize source,
+                                                   geometry::PixelSize target,
+                                                   geometry::PixelRect target_crop,
+                                                   const TermSize& ts,
+                                                   const TUI::ContentArea& content_area) const {
+  auto round_to_nearest_cell = [](int pixels, int pixels_per_cell, int max_cells) {
+    return std::clamp(static_cast<int>(std::lround(static_cast<double>(pixels) /
+                                                   static_cast<double>(pixels_per_cell))),
+                      1,
+                      max_cells);
+  };
+  const int placement_cols =
+      round_to_nearest_cell(target.width, ts.cell_pixel_width, content_area.cols);
+  const int placement_rows =
+      round_to_nearest_cell(target.height, ts.cell_pixel_height, content_area.rows);
+
+  auto [start_row, start_col] =
+      TUI::centered_cursor_position(ts, target.width, target.height, content_area);
+  FrameLayout result{
+      .target_crop_rect = target_crop,
+      .source_crop_rect = target_crop,
+      .placement_origin = {.row = start_row, .col = start_col},
+      .placement_cols = placement_cols,
+      .placement_rows = placement_rows,
+      .is_frame_native = true,
+  };
+
+  // scale crop window to fit existing bitmap if dimensions mismatch
+  if (source.width != target.width || source.height != target.height) {
+    const float scale_factor_x =
+        static_cast<float>(target.width) / static_cast<float>(source.width);
+    const float scale_factor_y =
+        static_cast<float>(target.height) / static_cast<float>(source.height);
+    result.source_crop_rect.x =
+        static_cast<int>(static_cast<float>(target_crop.x) / scale_factor_x);
+    result.source_crop_rect.y =
+        static_cast<int>(static_cast<float>(target_crop.y) / scale_factor_y);
+    result.source_crop_rect.width =
+        static_cast<int>(static_cast<float>(target_crop.width) / scale_factor_x);
+    result.source_crop_rect.height =
+        static_cast<int>(static_cast<float>(target_crop.height) / scale_factor_y);
+    result.is_frame_native = false;
+  }
+
+  return result;
+}
+
 std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
+  constexpr int KITTY_SLOT_ID = 1;
   const auto [existing_width, existing_height] = params.existing;
   const auto [target_width, target_height] = params.target;
   const TermSize ts = m_term.get_terminal_size();
@@ -177,58 +225,61 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
 
   // 2 rows taken by top and bottom bar
   // start drawing from row 2 due to row 1 being taken by top bar.
-  sequence += TUI::center_cursor(ts,
-                                 target_width,
-                                 target_height,
-                                 {
-                                     .cols = ts.columns,
-                                     .rows = ts.rows - 2,
-                                     .start_row = 2,
-                                     .start_col = 1,
-                                 });
-
-  // Take into account cropping
-  // We always crop using the target dimensions
-  constexpr int KITTY_SLOT_ID = 1;
-
-  // update viewport in case image dimensions changed
+  const TUI::ContentArea area = {
+      .cols = ts.columns,
+      .rows = ts.rows - 2,
+      .start_row = 2,
+      .start_col = 1,
+  };
   const auto [width, height] = available_window();
-
-  auto [x_offset_pixels, y_offset_pixels, crop_width, crop_height] =
-      m_page_view.calculate_crop_window(
-          target_width, target_height, {.max_width_pixels = width, .max_height_pixels = height});
-  // if latest frame dimensions match target, don't need to scale crop
-  // if latest frame dimensions don't match target, scale the crop window
-  if (m_render.latest_frame.rendered_page_specs.width != target_width ||
-      m_render.latest_frame.rendered_page_specs.height != target_height) {
-    const float scale_factor_x =
-        static_cast<float>(target_width) / static_cast<float>(existing_width);
-    const float scale_factor_y =
-        static_cast<float>(target_height) / static_cast<float>(existing_height);
-    x_offset_pixels = static_cast<int>(static_cast<float>(x_offset_pixels) / scale_factor_x);
-    crop_width = static_cast<int>(static_cast<float>(crop_width) / scale_factor_x);
-    y_offset_pixels = static_cast<int>(static_cast<float>(y_offset_pixels) / scale_factor_y);
-    crop_height = static_cast<int>(static_cast<float>(crop_height) / scale_factor_y);
-  }
+  const auto target_crop_window = m_page_view.calculate_crop_window(target_width,
+                                                                    target_height,
+                                                                    {
+                                                                        .max_width_pixels = width,
+                                                                        .max_height_pixels = height,
+                                                                    });
+  const auto& source_specs = m_render.latest_frame.rendered_page_specs;
+  const auto& target_specs = m_render.target_state.page_specs;
+  const auto frame_layout = calculate_frame_layout(
+      {
+          .width = source_specs.width,
+          .height = source_specs.height,
+      },
+      {
+          .width = target_specs.width,
+          .height = target_specs.height,
+      },
+      target_crop_window,
+      m_term.get_terminal_size(),
+      area);
 
   const bool need_transmit = m_render.last_transmitted_req_id != m_render.latest_frame.req_id;
   if (need_transmit) {
     m_render.last_transmitted_req_id = m_render.latest_frame.req_id;
   }
   // generate sequence to display image
-  const int target_rows = std::min(target_height / ts.cell_pixel_height, ts.rows - 2);
+  sequence +=
+      terminal::move_cursor(frame_layout.placement_origin.row, frame_layout.placement_origin.col);
+
+  // kitty allows us to pin dimensions to cell count
+  // we only use it for preview displays not native bitmaps
+  int pin_cols = 0;  // no vertical bars so no need to pin
+  int pin_rows = 0;  // pin due to top/bottom bars
+  if (!frame_layout.is_frame_native) {
+    pin_rows = frame_layout.placement_rows;
+  }
   sequence += kitty::get_image_sequence(m_render.latest_frame.path_to_data,
                                         KITTY_SLOT_ID,
                                         existing_width,
                                         existing_height,
-                                        x_offset_pixels,
-                                        y_offset_pixels,
-                                        crop_width,
-                                        crop_height,
+                                        frame_layout.source_crop_rect.x,
+                                        frame_layout.source_crop_rect.y,
+                                        frame_layout.source_crop_rect.width,
+                                        frame_layout.source_crop_rect.height,
                                         m_shm_supported ? "shm" : "tempfile",
                                         need_transmit,
-                                        0,
-                                        target_rows);
+                                        pin_cols,
+                                        pin_rows);
 
   return sequence;
 }
