@@ -213,8 +213,8 @@ std::string Viewer::latest_frame_sequence(const FrameDisplayParams& params) {
   sequence +=
       terminal::move_cursor(frame_layout.placement_origin.row, frame_layout.placement_origin.col);
 
-  // kitty allows us to pin dimensions to cell count
-  // we only use it for preview displays not native bitmaps
+  // Pin only one axis so Kitty preserves the crop's aspect ratio.
+  // Native frames remain unpinned to avoid resampling.
   int pin_cols = 0;  // no vertical bars so no need to pin
   int pin_rows = 0;  // pin due to top/bottom bars
   if (!frame_layout.source_matches_target) {

@@ -1,6 +1,7 @@
 #include "frame_layout.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace viewer {
 FrameLayout calculate_frame_layout(geometry::PixelSize source, geometry::PixelSize target,

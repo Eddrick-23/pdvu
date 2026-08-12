@@ -7,7 +7,7 @@ namespace viewer {
  * @brief defines frame layout to pass to kitty for image rendering
  *
  * @note We hold two crop rectangles here and for a specific reason.
- * Kitty can perform image "upscaling" by taking an existing bitmap and specifying dimesions
+ * Kitty can perform image "upscaling" by taking an existing bitmap and specifying dimensions
  * larger than it. E.g. 200 * 200 native, but we specify 400 * 400 when rendering.
  * To support responsive zooming, we can use the current rendered image and "upscale" to
  * the target dimensions. However, if the target image needs to be cropped, we first calculate
