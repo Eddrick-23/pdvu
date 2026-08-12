@@ -387,19 +387,7 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
     PLOG_ERROR << "Cannot render with null display list or buffer";
     return;
   }
-
-  auto translate_matrix = [ps](fz_matrix& ctm) {
-    const int rot = ps.rotation;
-    const auto total_w = static_cast<float>(ps.width);
-    const auto total_h = static_cast<float>(ps.height);
-    if (rot == 90) {
-      ctm = fz_concat(ctm, fz_translate(total_w, 0));
-    } else if (rot == 180) {
-      ctm = fz_concat(ctm, fz_translate(total_w, total_h));
-    } else if (rot == 270) {
-      ctm = fz_concat(ctm, fz_translate(0, total_h));
-    }
-  };
+  // check clip and bitmap dimensions match
   if (static_cast<float>(w) != clip.x1 - clip.x0 || static_cast<float>(h) != clip.y1 - clip.y0) {
     PLOG_ERROR << std::format(
         "clip dimensions do not match w:{} and "
@@ -412,6 +400,12 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
         clip.y1);
     return;
   }
+  // check for valid rotation
+  const auto qt = PageRasterTransform::quarter_turn_from_degrees(ps.rotation);
+  if (!qt) {
+    PLOG_ERROR << "unsupported rotation angle: " << ps.rotation;
+    return;
+  }
 
   const auto rect = fz_rect(clip.x0, clip.y0, clip.x1, clip.y1);
   fz_context* ctx = m_context->borrow();
@@ -421,11 +415,9 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
   // required for locals modified inside fz_try
   fz_var(pix);
   fz_var(dev);
-
   fz_try(ctx) {
-    fz_matrix ctm = fz_scale(zoom, zoom);
-    ctm = fz_pre_rotate(ctm, static_cast<float>(ps.rotation));
-    translate_matrix(ctm);
+    const fz_matrix ctm =
+        to_mupdf_matrix(PageRasterTransform(zoom, *qt, {.width = ps.width, .height = ps.height}));
     pix = fz_new_pixmap_with_bbox_and_data(
         ctx, fz_device_rgb(ctx), fz_irect_from_rect(rect), nullptr, 0, buffer);
     pix->x = static_cast<int>(clip.x0);
@@ -446,6 +438,16 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
     }
   }
   fz_catch(ctx) { PLOG_ERROR << "Failed to draw page"; }
+}
+
+fz_matrix MuPDFParser::to_mupdf_matrix(const PageRasterTransform& transform) {
+  const auto coefficients = transform.coefficients();
+  return fz_make_matrix(coefficients.a,
+                        coefficients.b,
+                        coefficients.c,
+                        coefficients.d,
+                        coefficients.tx,
+                        coefficients.ty);
 }
 
 std::unique_ptr<Parser> MuPDFParser::duplicate() const {

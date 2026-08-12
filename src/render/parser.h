@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 
+#include "PageRasterTransform.h"
 #include "mupdf_resources.h"
 #include "page_specs.h"
 
@@ -167,6 +168,14 @@ class MuPDFParser : public Parser {
    * it is moved).
    */
   void ensure_valid_context() const;
+
+  /**
+   * @brief helper to create a mupdf matrix with zoom/rotation transformation applied
+   * based on pdvu viewer zoom.
+   * @param transform created PageRasterTransform instance
+   * @return mupdf fz_matrix
+   */
+  static fz_matrix to_mupdf_matrix(const PageRasterTransform& transform);
 
   std::shared_ptr<MuPDFContext> m_context;  ///< RAII wrapper over core MuPDF context.
   fz_document* m_doc;                       ///< Pointer to the currently opened document
