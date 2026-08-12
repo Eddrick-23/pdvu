@@ -3,7 +3,6 @@
 #include <cassert>
 #include <cstddef>
 #include <functional>
-#include <ranges>
 #include <string>
 #include <string_view>
 

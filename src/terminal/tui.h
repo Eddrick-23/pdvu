@@ -138,8 +138,6 @@ float calculate_zoom_factor(const TermSize& ts, const pdf::PageSpecs& ps, const 
  *             give the area's top-left cell (e.g. row 2 to sit just below a
  *             one-row top bar), added to the computed margin to get the
  *             final cursor position.
- * @return Escape sequence that moves the cursor to the computed
- *         top-left drawing position; does not draw anything itself.
  */
 geometry::CellPosition centered_cursor_position(const TermSize& ts, int w_pixels, int h_pixels,
                                                 const ContentArea& area);
