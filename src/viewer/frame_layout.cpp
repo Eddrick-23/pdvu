@@ -28,22 +28,31 @@ FrameLayout calculate_frame_layout(geometry::PixelSize source, geometry::PixelSi
       .placement_rows = placement_rows,
       .source_matches_target = true,
   };
+  auto map_floor = [](int value, int source_size, int target_size) {
+    return static_cast<int>(static_cast<std::int64_t>(value) * source_size / target_size);
+  };
+
+  auto map_ceil = [](int value, int source_size, int target_size) {
+    const auto numerator = static_cast<std::int64_t>(value) * source_size;
+
+    return static_cast<int>((numerator + target_size - 1) / target_size);
+  };
 
   // scale crop window to fit existing bitmap if dimensions mismatch
   if (source.width != target.width || source.height != target.height) {
-    const float scale_factor_x =
-        static_cast<float>(target.width) / static_cast<float>(source.width);
-    const float scale_factor_y =
-        static_cast<float>(target.height) / static_cast<float>(source.height);
-    result.source_crop_rect.x =
-        static_cast<int>(static_cast<float>(target_crop.x) / scale_factor_x);
-    result.source_crop_rect.y =
-        static_cast<int>(static_cast<float>(target_crop.y) / scale_factor_y);
-    result.source_crop_rect.width =
-        static_cast<int>(static_cast<float>(target_crop.width) / scale_factor_x);
-    result.source_crop_rect.height =
-        static_cast<int>(static_cast<float>(target_crop.height) / scale_factor_y);
+    // lower bounds are rounded down, upper bounds are rounded up.
+    const int source_x0 = map_floor(target_crop.x, source.width, target.width);
+    const int source_y0 = map_floor(target_crop.y, source.height, target.height);
+    const int source_x1 = map_ceil(target_crop.x + target_crop.width, source.width, target.width);
+    const int source_y1 =
+        map_ceil(target_crop.y + target_crop.height, source.height, target.height);
     result.source_matches_target = false;
+    result.source_crop_rect = {
+        .x = source_x0,
+        .y = source_y0,
+        .width = source_x1 - source_x0,
+        .height = source_y1 - source_y0,
+    };
   }
 
   return result;

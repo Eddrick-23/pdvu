@@ -133,3 +133,26 @@ TEST(FrameLayout, MapsTargetCropIntoLargerSourceBitmap) {
   EXPECT_EQ(layout.placement_origin.row, 7);
   EXPECT_EQ(layout.placement_origin.col, 31);
 }
+
+TEST(FrameLayout, RoundsPlacementDimensionsToNearestCell) {
+  // Cells are 10x20 pixels.
+  //
+  // Width:  104 / 10 = 10.4 cells -> rounds down to 10.
+  // Height: 211 / 20 = 10.55 cells -> rounds up to 11.
+  const geometry::PixelSize size{
+      .width = 104,
+      .height = 211,
+  };
+  const geometry::PixelRect crop{
+      .x = 0,
+      .y = 0,
+      .width = 104,
+      .height = 211,
+  };
+
+  const auto layout = viewer::calculate_frame_layout(size, size, crop, term_size, content_area);
+
+  EXPECT_TRUE(layout.source_matches_target);
+  EXPECT_EQ(layout.placement_cols, 10);
+  EXPECT_EQ(layout.placement_rows, 11);
+}

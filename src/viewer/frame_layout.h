@@ -2,6 +2,7 @@
 #include "terminal/terminal.h"
 #include "terminal/tui.h"
 #include "utils/geometry.h"
+
 namespace viewer {
 /**
  * @brief defines frame layout to pass to kitty for image rendering
@@ -37,9 +38,11 @@ struct FrameLayout {
  * @param target_crop crop window for target bitmap's image
  * @param ts current terminal size
  * @param content_area drawable content area
- * @return
+ * @return FrameLayout for viewer to pass drawing placements to kitty for image rendering.
  */
-FrameLayout calculate_frame_layout(geometry::PixelSize source, geometry::PixelSize target,
-                                   geometry::PixelRect target_crop, const TermSize& ts,
-                                   const TUI::ContentArea& content_area);
+[[nodiscard]] FrameLayout calculate_frame_layout(geometry::PixelSize source,
+                                                 geometry::PixelSize target,
+                                                 geometry::PixelRect target_crop,
+                                                 const TermSize& ts,
+                                                 const TUI::ContentArea& content_area);
 }  // namespace viewer
