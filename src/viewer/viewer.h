@@ -227,8 +227,8 @@ class Viewer {
    * until the matching asynchronous result is accepted.
    */
   struct RenderTarget {
-    std::size_t req_id = 0;        ///< Generation ID returned for the request
-    int page_num = 0;              ///< Zero-based page requested
+    std::size_t req_id = 0;       ///< Generation ID returned for the request
+    int page_num = 0;             ///< Zero-based page requested
     pdf::PageSpecs page_specs{};  ///< Scaled and rotated geometry requested
   };
 

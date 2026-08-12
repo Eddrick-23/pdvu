@@ -24,6 +24,7 @@ add_executable(unit_tests
     render/test_PageSpecs.cpp
     terminal/test_kitty.cpp
     viewer/test_pageview.cpp
+    viewer/test_frame_layout.cpp
     # Add new test files here
 )
 

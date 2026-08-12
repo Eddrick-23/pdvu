@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstddef>
 
+#include "utils/geometry.h"
+
 bool PageView::change_zoom_index(const int delta) {
   static constexpr int max_idx = m_zoom_levels.size() - 1;
   const int old_zoom_index = m_viewport.zoom_index;
@@ -11,8 +13,8 @@ bool PageView::change_zoom_index(const int delta) {
   return old_zoom_index != m_viewport.zoom_index;
 }
 
-PageView::CropRect PageView::calculate_crop_window(const int width, const int height,
-                                                   const ViewportBounds& vBounds) const {
+geometry::PixelRect PageView::calculate_crop_window(const int width, const int height,
+                                                    const ViewportBounds& vBounds) const {
   auto calculate_offset = [](int max_offset_pixels, float rel_offset) {
     return static_cast<int>(std::floor(static_cast<float>(max_offset_pixels) * rel_offset));
   };
@@ -24,9 +26,9 @@ PageView::CropRect PageView::calculate_crop_window(const int width, const int he
   const int y_offset_pixels = calculate_offset(max_y_offset_pixels, m_viewport.rel_y_offset);
   const int crop_w = std::min(vBounds.max_width_pixels, width - x_offset_pixels);
   const int crop_h = std::min(vBounds.max_height_pixels, height - y_offset_pixels);
-  return CropRect{
-      .x_offset_pixels = x_offset_pixels,
-      .y_offset_pixels = y_offset_pixels,
+  return geometry::PixelRect{
+      .x = x_offset_pixels,
+      .y = y_offset_pixels,
       .width = crop_w,
       .height = crop_h,
   };
