@@ -22,6 +22,7 @@ add_executable(unit_tests
     render/test_bounds.cpp
     render/test_parser.cpp
     render/test_PageSpecs.cpp
+    render/test_PageRasterTransform.cpp
     terminal/test_kitty.cpp
     viewer/test_pageview.cpp
     viewer/test_frame_layout.cpp
