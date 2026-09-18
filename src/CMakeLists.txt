@@ -8,6 +8,7 @@ set(CORE_SOURCES
     terminal/inputbar.cpp
     render/parser.cpp
     render/bounds.cpp
+    render/PageRasterTransform.cpp
     render/render_engine.cpp
     render/threadpool.cpp
     utils/tempfile.cpp
