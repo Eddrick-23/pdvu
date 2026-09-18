@@ -441,7 +441,7 @@ void MuPDFParser::write_section(int w, int h, float zoom, const PageSpecs& ps,
 }
 
 fz_matrix MuPDFParser::to_mupdf_matrix(const PageRasterTransform& transform) {
-  const auto coefficients = transform.coefficients();
+  const auto coefficients = transform.affine_coefficients();
   return fz_make_matrix(coefficients.a,
                         coefficients.b,
                         coefficients.c,

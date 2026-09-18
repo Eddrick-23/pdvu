@@ -2,7 +2,7 @@
 
 namespace pdf {
 PageRasterTransform::PageRasterTransform(float zoom, QuarterTurn rotation,
-                                         geometry::PixelSize output_size) {
+                                         geometry::PixelSize raster_size) {
   // a = s * cos(theta)
   // c = -s * sin(theta)
   // b = s * sin(theta)
@@ -28,7 +28,7 @@ PageRasterTransform::PageRasterTransform(float zoom, QuarterTurn rotation,
           .b = zoom,
           .c = -zoom,
           .d = 0,
-          .tx = static_cast<float>(output_size.width),
+          .tx = static_cast<float>(raster_size.width),
           .ty = 0,
       };
       break;
@@ -38,8 +38,8 @@ PageRasterTransform::PageRasterTransform(float zoom, QuarterTurn rotation,
           .b = 0,
           .c = 0,
           .d = -zoom,
-          .tx = static_cast<float>(output_size.width),
-          .ty = static_cast<float>(output_size.height),
+          .tx = static_cast<float>(raster_size.width),
+          .ty = static_cast<float>(raster_size.height),
       };
       break;
     case QuarterTurn::Deg270:
@@ -49,7 +49,7 @@ PageRasterTransform::PageRasterTransform(float zoom, QuarterTurn rotation,
           .c = zoom,
           .d = 0,
           .tx = 0,
-          .ty = static_cast<float>(output_size.height),
+          .ty = static_cast<float>(raster_size.height),
       };
       break;
   }
@@ -72,7 +72,7 @@ geometry::RasterQuad PageRasterTransform::to_raster(const geometry::PageQuad& qu
   };
 }
 
-PageRasterTransform::AffineCoefficients PageRasterTransform::coefficients() const {
+PageRasterTransform::AffineCoefficients PageRasterTransform::affine_coefficients() const {
   return m_coefficients;
 }
 
