@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "PageRasterTransform.h"
@@ -122,10 +123,18 @@ struct Parser {
                              unsigned char* buffer, Rect clip) = 0;
 
   /**
-   * @brief Search a specific page for a query string
-   * @param page_num zero indexed page number
-   * @param query string to search
-   * @return std::optional wrapping PageSearchResults
+   * @brief Searches one page and returns grouped matches in MuPDF page space.
+   *
+   * @param page_num The zero-based page index.
+   * @param query The text to search for. An empty query produces no matches.
+   * @return An engaged optional containing the matches, which may be empty; or
+   * `std::nullopt` if no document is loaded, the page index is invalid, or MuPDF
+   * cannot complete the search.
+   * @throws std::runtime_error If called on a moved-from parser.
+   * @throws std::bad_alloc If allocation of the query or search results fails.
+   *
+   * @note C++ exceptions captured by the search callback are rethrown after MuPDF
+   * returns. They are not converted to `std::nullopt`.
    */
   [[nodiscard]]
   virtual std::optional<PageSearchResults> search_page(int page_num, std::string_view query) = 0;

@@ -452,6 +452,11 @@ fz_matrix MuPDFParser::to_mupdf_matrix(const PageRasterTransform& transform) {
 }
 
 std::optional<PageSearchResults> MuPDFParser::search_page(int page_num, std::string_view query) {
+  ensure_valid_context();
+  if (m_doc == nullptr) {
+    return std::nullopt;
+  }
+
   struct SearchAccumulator {
     PageSearchResults results;
     std::exception_ptr error;
@@ -494,7 +499,6 @@ std::optional<PageSearchResults> MuPDFParser::search_page(int page_num, std::str
   }
   if (accumulator.error) {
     std::rethrow_exception(accumulator.error);
-    return std::nullopt;
   }
   return accumulator.results;
 }
