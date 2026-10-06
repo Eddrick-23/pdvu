@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "PageRasterTransform.h"
 #include "mupdf_resources.h"
@@ -28,6 +29,21 @@ namespace pdf {
  * concurrent operations finish.
  */
 using DisplayListHandle = std::shared_ptr<MuPDFDisplayList>;
+
+/**
+ * @brief A single search hit for a page
+ *
+ * Contains a vector of page quads which hold every highlightable region that
+ * covers this hit.
+ */
+struct SearchHit {
+  std::vector<geometry::PageQuad> quads;
+};
+
+/**
+ * @brief Every search hit for a specific page
+ */
+using PageSearchResults = std::vector<SearchHit>;
 
 /**
  * @brief Abstract interface defining the core operations of a PDF parser.
@@ -106,6 +122,15 @@ struct Parser {
                              unsigned char* buffer, Rect clip) = 0;
 
   /**
+   * @brief Search a specific page for a query string
+   * @param page_num zero indexed page number
+   * @param query string to search
+   * @return std::optional wrapping PageSearchResults
+   */
+  [[nodiscard]]
+  virtual std::optional<PageSearchResults> search_page(int page_num, std::string_view query) = 0;
+
+  /**
    * @brief Clones the MuPDF context and reopens the currently loaded document.
    *
    * @return A unique pointer to the duplicated parser.
@@ -151,6 +176,7 @@ class MuPDFParser : public Parser {
   [[nodiscard]] std::optional<DisplayListHandle> get_display_list(int page_num) override;
   void write_section(int w, int h, float zoom, const PageSpecs& ps, DisplayListHandle dlist,
                      unsigned char* buffer, Rect clip) override;
+  std::optional<PageSearchResults> search_page(int page_num, std::string_view query) override;
   [[nodiscard]] std::unique_ptr<Parser> duplicate() const override;
 
  private:

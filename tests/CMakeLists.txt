@@ -21,6 +21,7 @@ add_executable(unit_tests
     render/test_threadpool.cpp
     render/test_bounds.cpp
     render/test_parser.cpp
+    render/test_parser_search.cpp
     render/test_PageSpecs.cpp
     render/test_PageRasterTransform.cpp
     terminal/test_kitty.cpp
