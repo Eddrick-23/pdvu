@@ -344,15 +344,11 @@ bool Viewer::handle_go_to_page_input(const InputEvent& event) {
       m_go_to_page.input.clear_error();
       return true;
     case TUI::InputBar::Action::Cancelled:
-      m_ui_mode = UiMode::Browse;
-      m_go_to_page.reset();
-      terminal::hide_cursor();
+      transition_to(UiMode::Browse);
       return true;
     case TUI::InputBar::Action::Submitted:
       if (m_go_to_page.input.value().empty()) {  // do nothing on empty inputs
-        m_go_to_page.reset();
-        m_ui_mode = UiMode::Browse;
-        terminal::hide_cursor();
+        transition_to(UiMode::Browse);
         return true;
       }
 
@@ -367,14 +363,12 @@ bool Viewer::handle_go_to_page_input(const InputEvent& event) {
       // valid input check for page change and request new frame if needed
       const bool page_changed = *page != m_current_page;
       m_current_page = *page;
-      m_ui_mode = UiMode::Browse;
+      transition_to(UiMode::Browse);
 
       if (page_changed) {
         request_page_render(m_current_page);
       }
 
-      m_go_to_page.reset();
-      terminal::hide_cursor();
       return true;
   }
 
@@ -393,9 +387,7 @@ bool Viewer::handle_help_input(const InputEvent& event) {
   }
 
   if (event.key == key_escape && !TUI::is_window_too_small(m_term.get_terminal_size())) {
-    m_ui_mode = UiMode::Browse;
-    // Clear the dim layer here, or schedule as part of a subsequent browse draw?
-    std::print("{}", kitty::clear_dim_layer());
+    transition_to(UiMode::Browse);
     return true;
   }
   return false;
@@ -446,13 +438,12 @@ bool Viewer::handle_browse_input(const InputEvent& event) {
         return false;
       }
       if (char_value == '?') {
-        m_ui_mode = UiMode::Help;
+        transition_to(UiMode::Help);
         return true;
       }
       if (char_value == 'g') {
         // go to page
-        m_go_to_page.reset();
-        m_ui_mode = UiMode::GoToPage;
+        transition_to(UiMode::GoToPage);
         // redraw through main loop
         return m_running;
       }
@@ -490,6 +481,37 @@ bool Viewer::handle_browse_input(const InputEvent& event) {
       return false;  // any un-supported key return false;
     default:         // do nothing for the rest
       return false;
+  }
+}
+
+void Viewer::transition_to(UiMode next) {
+  if (m_ui_mode == next) {
+    return;
+  }
+
+  switch (m_ui_mode) {
+    case UiMode::Browse:
+      break;
+    case UiMode::GoToPage:
+      m_go_to_page.reset();
+      terminal::hide_cursor();
+      break;
+    case UiMode::Help:
+      std::print("{}", kitty::clear_dim_layer());
+      break;
+    default:
+  }
+
+  m_ui_mode = next;
+
+  switch (next) {
+    case UiMode::Browse:
+    case UiMode::Help:
+      break;
+    case UiMode::GoToPage:
+      m_go_to_page.reset();
+      break;
+    default:
   }
 }
 

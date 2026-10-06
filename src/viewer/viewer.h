@@ -220,6 +220,14 @@ class Viewer {
   };
 
   /**
+   * Handles ui state transitions
+   * like closing and opening input bars, cleaning up overlays
+   * Updates the m_ui_mode member variable.
+   * @param next the next UiMode to transition to
+   */
+  void transition_to(UiMode next);
+
+  /**
    * @brief Describes the most recently requested render generation.
    *
    * The fields are updated together after a render request is dispatched. They
