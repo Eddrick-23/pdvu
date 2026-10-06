@@ -4,6 +4,8 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include "PageRasterTransform.h"
 #include "mupdf_resources.h"
@@ -28,6 +30,21 @@ namespace pdf {
  * concurrent operations finish.
  */
 using DisplayListHandle = std::shared_ptr<MuPDFDisplayList>;
+
+/**
+ * @brief A single search hit for a page
+ *
+ * Contains a vector of page quads which hold every highlightable region that
+ * covers this hit.
+ */
+struct SearchHit {
+  std::vector<geometry::PageQuad> quads;
+};
+
+/**
+ * @brief Every search hit for a specific page
+ */
+using PageSearchResults = std::vector<SearchHit>;
 
 /**
  * @brief Abstract interface defining the core operations of a PDF parser.
@@ -106,6 +123,23 @@ struct Parser {
                              unsigned char* buffer, Rect clip) = 0;
 
   /**
+   * @brief Searches one page and returns grouped matches in MuPDF page space.
+   *
+   * @param page_num The zero-based page index.
+   * @param query The text to search for. An empty query produces no matches.
+   * @return An engaged optional containing the matches, which may be empty; or
+   * `std::nullopt` if no document is loaded, the page index is invalid, or MuPDF
+   * cannot complete the search.
+   * @throws std::runtime_error If called on a moved-from parser.
+   * @throws std::bad_alloc If allocation of the query or search results fails.
+   *
+   * @note C++ exceptions captured by the search callback are rethrown after MuPDF
+   * returns. They are not converted to `std::nullopt`.
+   */
+  [[nodiscard]]
+  virtual std::optional<PageSearchResults> search_page(int page_num, std::string_view query) = 0;
+
+  /**
    * @brief Clones the MuPDF context and reopens the currently loaded document.
    *
    * @return A unique pointer to the duplicated parser.
@@ -151,6 +185,7 @@ class MuPDFParser : public Parser {
   [[nodiscard]] std::optional<DisplayListHandle> get_display_list(int page_num) override;
   void write_section(int w, int h, float zoom, const PageSpecs& ps, DisplayListHandle dlist,
                      unsigned char* buffer, Rect clip) override;
+  std::optional<PageSearchResults> search_page(int page_num, std::string_view query) override;
   [[nodiscard]] std::unique_ptr<Parser> duplicate() const override;
 
  private:

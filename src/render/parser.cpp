@@ -1,6 +1,7 @@
 #include "parser.h"
 
 #include <array>
+#include <exception>
 #include <filesystem>
 #include <format>
 #include <memory>
@@ -448,6 +449,58 @@ fz_matrix MuPDFParser::to_mupdf_matrix(const PageRasterTransform& transform) {
                         coefficients.d,
                         coefficients.tx,
                         coefficients.ty);
+}
+
+std::optional<PageSearchResults> MuPDFParser::search_page(int page_num, std::string_view query) {
+  ensure_valid_context();
+  if (m_doc == nullptr) {
+    return std::nullopt;
+  }
+
+  struct SearchAccumulator {
+    PageSearchResults results;
+    std::exception_ptr error;
+  };
+
+  fz_search_callback_fn* callback =
+      [](fz_context*, void* opaque, int num_quads, fz_quad* hit_bbox) noexcept -> int {
+    auto& acc = *static_cast<SearchAccumulator*>(opaque);  // cast back to original
+    try {
+      SearchHit hit{};
+      hit.quads.reserve(static_cast<std::size_t>(num_quads));
+
+      for (int i = 0; i < num_quads; ++i) {
+        const fz_quad& quad = hit_bbox[i];
+        hit.quads.push_back({
+            .upper_left = {.x = quad.ul.x, .y = quad.ul.y},
+            .upper_right = {.x = quad.ur.x, .y = quad.ur.y},
+            .lower_left = {.x = quad.ll.x, .y = quad.ll.y},
+            .lower_right = {.x = quad.lr.x, .y = quad.lr.y},
+        });
+      }
+      acc.results.push_back(std::move(hit));
+      return 0;
+    } catch (...) {
+      acc.error = std::current_exception();
+      return 1;
+    }
+  };
+
+  fz_context* ctx = m_context->borrow();
+  const std::string needle{query};
+  SearchAccumulator accumulator{};
+
+  fz_try(ctx) {
+    fz_search_page_number_cb(ctx, m_doc, page_num, needle.c_str(), callback, &accumulator);
+  }
+  fz_catch(ctx) {
+    PLOG_ERROR << "Search failed: " << fz_caught_message(ctx);
+    return std::nullopt;
+  }
+  if (accumulator.error) {
+    std::rethrow_exception(accumulator.error);
+  }
+  return accumulator.results;
 }
 
 std::unique_ptr<Parser> MuPDFParser::duplicate() const {
