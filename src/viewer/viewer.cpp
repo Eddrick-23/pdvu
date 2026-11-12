@@ -499,7 +499,6 @@ void Viewer::transition_to(UiMode next) {
     case UiMode::Help:
       std::print("{}", kitty::clear_dim_layer());
       break;
-    default:
   }
 
   m_ui_mode = next;
@@ -511,7 +510,6 @@ void Viewer::transition_to(UiMode next) {
     case UiMode::GoToPage:
       m_go_to_page.reset();
       break;
-    default:
   }
 }
 
