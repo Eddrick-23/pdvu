@@ -101,7 +101,6 @@ std::string bottom_status_bar(const TermSize& ts, float current_zoom_level, int 
 }
 
 std::string guard_message(const TermSize& ts) {
-  terminal::hide_cursor();
   std::string result;
   result.reserve(256);  // preallocate rough estimate
   result += TermColor::Reset;

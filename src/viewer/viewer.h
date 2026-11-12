@@ -6,6 +6,7 @@
 #include "render/render_engine.h"
 #include "terminal/inputbar.h"
 #include "terminal/terminal.h"
+#include "ui_mode.h"
 #include "utils/resize_debouncer.h"
 
 class Viewer {
@@ -211,21 +212,12 @@ class Viewer {
   PageView m_page_view;                      // zoom and panning handling
 
   /**
-   * @brief Identifies the active UI mode and determines input routing and drawing.
-   */
-  enum class UiMode {
-    Browse,    ///< Normal document controls
-    GoToPage,  ///< Page-number entry through TUI::InputBar
-    Help,      ///< Viewing help ui page
-  };
-
-  /**
    * Handles ui state transitions
    * like closing and opening input bars, cleaning up overlays
    * Updates the m_ui_mode member variable.
    * @param next the next UiMode to transition to
    */
-  void transition_to(UiMode next);
+  void transition_to(viewer::UiMode next);
 
   /**
    * @brief Describes the most recently requested render generation.
@@ -262,7 +254,7 @@ class Viewer {
   };
 
   // current state
-  UiMode m_ui_mode = UiMode::Browse;
+  viewer::UiMode m_ui_mode = viewer::UiMode::Browse;
   int m_current_page = 0;           ///< Desired zero-based page number
   int m_total_pages = 0;            ///< Number of pages in loaded document
   int m_rotation_degrees = 0;       ///< Desired clockwise rotation

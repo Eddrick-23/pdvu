@@ -98,8 +98,8 @@ void Viewer::run() {
     }
 
     if (fetch_latest_frame()) {
-      // store completed frames during Help, but don't redraw
-      need_redraw |= m_ui_mode == UiMode::Browse || m_ui_mode == UiMode::GoToPage;
+      const auto policy = viewer::presentation_for(m_ui_mode);
+      need_redraw |= policy.redraw_on_page_frame;
     }
 
     if (need_redraw) {
@@ -344,11 +344,11 @@ bool Viewer::handle_go_to_page_input(const InputEvent& event) {
       m_go_to_page.input.clear_error();
       return true;
     case TUI::InputBar::Action::Cancelled:
-      transition_to(UiMode::Browse);
+      transition_to(viewer::UiMode::Browse);
       return true;
     case TUI::InputBar::Action::Submitted:
       if (m_go_to_page.input.value().empty()) {  // do nothing on empty inputs
-        transition_to(UiMode::Browse);
+        transition_to(viewer::UiMode::Browse);
         return true;
       }
 
@@ -363,7 +363,7 @@ bool Viewer::handle_go_to_page_input(const InputEvent& event) {
       // valid input check for page change and request new frame if needed
       const bool page_changed = *page != m_current_page;
       m_current_page = *page;
-      transition_to(UiMode::Browse);
+      transition_to(viewer::UiMode::Browse);
 
       if (page_changed) {
         request_page_render(m_current_page);
@@ -376,7 +376,7 @@ bool Viewer::handle_go_to_page_input(const InputEvent& event) {
 }
 
 bool Viewer::handle_help_input(const InputEvent& event) {
-  if (m_ui_mode != UiMode::Help) {
+  if (m_ui_mode != viewer::UiMode::Help) {
     PLOG_ERROR << "handle_help_input called when ui_mode is not Help";
     return false;
   }
@@ -387,7 +387,7 @@ bool Viewer::handle_help_input(const InputEvent& event) {
   }
 
   if (event.key == key_escape && !TUI::is_window_too_small(m_term.get_terminal_size())) {
-    transition_to(UiMode::Browse);
+    transition_to(viewer::UiMode::Browse);
     return true;
   }
   return false;
@@ -395,7 +395,7 @@ bool Viewer::handle_help_input(const InputEvent& event) {
 
 bool Viewer::handle_browse_input(const InputEvent& event) {
   static constexpr std::string_view pan_keys = "wWaAsSdD";
-  if (m_ui_mode != UiMode::Browse) {
+  if (m_ui_mode != viewer::UiMode::Browse) {
     PLOG_ERROR << "handle_browse_input being called when ui_mode is not browse";
     return false;
   }
@@ -438,12 +438,12 @@ bool Viewer::handle_browse_input(const InputEvent& event) {
         return false;
       }
       if (char_value == '?') {
-        transition_to(UiMode::Help);
+        transition_to(viewer::UiMode::Help);
         return true;
       }
       if (char_value == 'g') {
         // go to page
-        transition_to(UiMode::GoToPage);
+        transition_to(viewer::UiMode::GoToPage);
         // redraw through main loop
         return m_running;
       }
@@ -484,19 +484,18 @@ bool Viewer::handle_browse_input(const InputEvent& event) {
   }
 }
 
-void Viewer::transition_to(UiMode next) {
+void Viewer::transition_to(viewer::UiMode next) {
   if (m_ui_mode == next) {
     return;
   }
 
   switch (m_ui_mode) {
-    case UiMode::Browse:
+    case viewer::UiMode::Browse:
       break;
-    case UiMode::GoToPage:
+    case viewer::UiMode::GoToPage:
       m_go_to_page.reset();
-      terminal::hide_cursor();
       break;
-    case UiMode::Help:
+    case viewer::UiMode::Help:
       std::print("{}", kitty::clear_dim_layer());
       break;
   }
@@ -504,48 +503,57 @@ void Viewer::transition_to(UiMode next) {
   m_ui_mode = next;
 
   switch (next) {
-    case UiMode::Browse:
-    case UiMode::Help:
+    case viewer::UiMode::Browse:
+    case viewer::UiMode::Help:
       break;
-    case UiMode::GoToPage:
+    case viewer::UiMode::GoToPage:
       m_go_to_page.reset();
       break;
   }
 }
 
 void Viewer::draw_for_current_mode() {
+  const auto policy = viewer::presentation_for(m_ui_mode);
+  const auto ts = m_term.get_terminal_size();
+  const bool window_too_small = TUI::is_window_too_small(ts);
+
   switch (m_ui_mode) {
-    case UiMode::Browse:
-      draw_latest_frame(true, true);
+    case viewer::UiMode::Browse:
+      draw_latest_frame(true, policy.show_bottom_status_bar);
       break;
-    case UiMode::GoToPage:
-      draw_latest_frame(true, false);
-      if (!TUI::is_window_too_small(m_term.get_terminal_size())) {
-        terminal::show_cursor();
-        std::print("{}", m_go_to_page.input.render_sequence(m_term.get_terminal_size()));
+    case viewer::UiMode::GoToPage:
+      draw_latest_frame(true, policy.show_bottom_status_bar);
+      if (!window_too_small) {
+        std::print("{}", m_go_to_page.input.render_sequence(ts));
         std::fflush(stdout);
       }
       break;
-    case UiMode::Help:
+    case viewer::UiMode::Help:
       std::string sequence;
       sequence += terminal::reset_screen_and_cursor_string();
       sequence += kitty::clear_dim_layer();
-      sequence += TUI::help_overlay(m_term.get_terminal_size());
+      sequence += TUI::help_overlay(ts);
 
       std::print("{}", sequence);
       std::fflush(stdout);
       break;
+  }
+
+  if (policy.show_input_cursor && !window_too_small) {
+    terminal::show_cursor();
+  } else {
+    terminal::hide_cursor();
   }
 }
 
 bool Viewer::process_keypress() {
   const auto event = m_term.read_input(INPUT_POLL_RATE_MS);  // 60fps
   switch (m_ui_mode) {
-    case UiMode::Browse:
+    case viewer::UiMode::Browse:
       return handle_browse_input(event);
-    case UiMode::Help:
+    case viewer::UiMode::Help:
       return handle_help_input(event);
-    case UiMode::GoToPage:
+    case viewer::UiMode::GoToPage:
       return handle_go_to_page_input(event);
   }
   return false;
