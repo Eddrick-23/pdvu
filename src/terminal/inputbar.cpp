@@ -122,7 +122,8 @@ std::string InputBar::render_sequence(const TermSize& ts) {
   const int screen_col = static_cast<int>(m_cursor_pos) - static_cast<int>(m_visible_pos) +
                          helpers::visible_length(active_prompt) + 1;
   std::string move_cursor_to_correct_position = terminal::move_cursor(ts.rows, screen_col);
-  return std::format("{}{}", clear_line_and_draw_prompt, move_cursor_to_correct_position);
+  return std::format(
+      "{}{}{}", clear_line_and_draw_prompt, TermColor::Reset, move_cursor_to_correct_position);
 }
 
 std::string_view InputBar::value() const { return m_buffer; }
